@@ -1,0 +1,19 @@
+{
+	"name": "xcode build server",
+	"version": "0.2",
+	"bspVersion": "2.0",
+	"languages": [
+		"c",
+		"cpp",
+		"objective-c",
+		"objective-cpp",
+		"swift"
+	],
+	"argv": [
+		"/opt/homebrew/bin/xcode-build-server"
+	],
+	"workspace": "/Users/ddemidov/Desktop/FSense_2/FSense_2.xcodeproj/project.xcworkspace",
+	"build_root": "/Users/ddemidov/Library/Developer/Xcode/DerivedData/FSense_2-fsesvhzimnnsxyazihllzlrvcaxg",
+	"scheme": "FSense_2",
+	"kind": "xcode"
+}
