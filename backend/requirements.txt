@@ -26,13 +26,8 @@ pytest-cov>=4.0.0
 # mypy>=1.0.0
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FUTURE DEPENDENCIES (v0.1.0+)
+# HTTP API
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# HTTP API (uncomment when needed)
-# fastapi>=0.100.0
-# uvicorn>=0.23.0
-
-# Async support (uncomment when needed)
-# httpx>=0.24.0
-# aiofiles>=23.0.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
