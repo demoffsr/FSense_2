@@ -14,6 +14,7 @@ from typing import List
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, EmotionData
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,16 @@ Analyze the emotional state behind this message."""
             )
 
             logger.info(f"EIA detected emotion: {dominant} (tone: {tone}, intensity: {intensity:.2f})")
+
+            # Console output
+            console = get_console_logger()
+            console.agent_result("EIA", {
+                "Dominant Emotion": dominant,
+                "Emotion Tone": tone,
+                "Intensity": f"{intensity:.2f}",
+                "Secondary Emotions": secondary_emotions if secondary_emotions else "None",
+                "Subtext": response.get("emotional_subtext", "N/A"),
+            })
 
         except AIClientError as e:
             logger.error(f"EIA AI error: {e}")

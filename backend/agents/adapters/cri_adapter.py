@@ -18,6 +18,7 @@ from backend.pipeline.context import (
     CulturalInsight,
 )
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +135,19 @@ Analyze the cultural meanings and appropriateness of this flower in the regional
             )
 
             logger.info(f"CRI analyzed {flower_name} for {ctx.region.upper()}: {len(insights_list)} insights, {len(warnings)} warnings")
+
+            # Console output
+            console = get_console_logger()
+            cultures = [f"{i.emoji} {i.culture}" for i in insights_list[:3]]
+            cultural_raw = ctx.cultural_insights.raw_output
+
+            console.agent_result("CRI", {
+                "Primary Region": response.get("primary_region", ctx.region.upper()),
+                "Risk Level": risk_level,
+                "Traditional Symbolism": cultural_raw.get("traditional_symbolism", "")[:60] + "..." if cultural_raw.get("traditional_symbolism", "") else "N/A",
+                "Cultural Insights": cultures,
+                "Warnings": warnings if warnings else "None",
+            })
 
         except AIClientError as e:
             logger.error(f"CRI AI error: {e}")

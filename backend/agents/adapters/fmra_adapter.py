@@ -16,6 +16,7 @@ from backend.pipeline.context import (
     FlowerCandidate,
 )
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,15 @@ class FMRAAdapter(BaseAgent):
             )
 
             logger.info(f"FMRA selected: {candidate.name}")
+
+            # Console output
+            console = get_console_logger()
+            console.agent_result("FMRA", {
+                "Selected Flower": candidate.name,
+                "Flower ID": candidate.flower_id,
+                "Match Score": f"{candidate.match_score:.2f}",
+                "Meanings": candidate.meanings[:4],
+            })
 
         except AIClientError as e:
             logger.error(f"FMRA AI error: {e}")

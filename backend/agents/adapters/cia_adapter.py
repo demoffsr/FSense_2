@@ -14,6 +14,7 @@ from typing import List
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, IntensityData
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,14 @@ class CIAAdapter(BaseAgent):
             )
 
             logger.info(f"CIA calculated intensity: {intensity:.2f} ({label})")
+
+            # Console output
+            console = get_console_logger()
+            console.agent_result("CIA", {
+                "Mood Intensity": f"{intensity:.2f}",
+                "Intensity Label": label,
+                "Factors": factors[:3] if factors else ["emotion_level"],
+            })
 
         except AIClientError as e:
             logger.error(f"CIA AI error: {e}")

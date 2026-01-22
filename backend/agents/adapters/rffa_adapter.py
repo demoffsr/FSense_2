@@ -14,6 +14,7 @@ from typing import List
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, RisksData, RiskItem
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,20 @@ Analyze potential risks and assess overall fit."""
 
             risk_emoji = "⚠️" if overall_risk in ("medium", "high") else "✅"
             logger.info(f"RFFA {risk_emoji} overall risk: {overall_risk}, {len(risks_list)} risks identified")
+
+            # Console output
+            console = get_console_logger()
+            risk_details = []
+            for risk in risks_list[:3]:
+                risk_details.append(f"{risk.risk_type} ({risk.severity})")
+
+            console.agent_result("RFFA", {
+                "Overall Risk Level": overall_risk,
+                "Fit Assessment": fit_assessment,
+                "Risks Identified": len(risks_list),
+                "Risk Details": risk_details if risk_details else "None",
+                "Confidence": f"{confidence:.2f}",
+            })
 
         except AIClientError as e:
             logger.error(f"RFFA AI error: {e}")

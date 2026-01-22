@@ -14,6 +14,7 @@ from typing import List
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, AdaptiveData
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,16 @@ Harmonize these elements to create the optimal communication style."""
             )
 
             logger.info(f"AITB harmonized tone: {adjusted_tone} ({voice_style}, {formality})")
+
+            # Console output
+            console = get_console_logger()
+            console.agent_result("AITB", {
+                "Adjusted Tone": adjusted_tone,
+                "Voice Style": voice_style,
+                "Formality": formality,
+                "Personalization Hints": hints[:3] if hints else "None",
+                "Confidence": f"{confidence:.2f}",
+            })
 
         except AIClientError as e:
             logger.error(f"AITB AI error: {e}")

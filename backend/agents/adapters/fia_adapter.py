@@ -14,6 +14,7 @@ from typing import List
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, IntentData
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,18 @@ Analyze this message and extract intent dimensions."""
             )
 
             logger.info(f"FIA extracted intent: {primary}")
+
+            # Console output
+            console = get_console_logger()
+            console.agent_result("FIA", {
+                "Primary Intent": primary,
+                "Recipient": response.get("recipient", "unspecified"),
+                "Occasion": response.get("occasion", "general"),
+                "Tone": response.get("tone", "neutral"),
+                "Emotion": response.get("emotion", "calm"),
+                "Relationship Level": response.get("relationship_level", "unspecified"),
+                "Keywords": response.get("keywords", []),
+            })
 
         except AIClientError as e:
             logger.error(f"FIA AI error: {e}")

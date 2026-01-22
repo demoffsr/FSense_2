@@ -1,8 +1,8 @@
 """
-Pipeline Orchestrator - v0.0.1
+Pipeline Orchestrator - v0.3.0
 
 Manages the fixed execution order of all agents.
-In v0.0.1, this is a simple sequential executor with no dynamic routing.
+Enhanced with beautiful console logging for visibility.
 
 Agent Execution Order (FIXED):
 1. FIA  → Flower Intent Agent
@@ -19,9 +19,11 @@ Agent Execution Order (FIXED):
 
 from typing import Optional
 import logging
+import time
 
 from backend.pipeline.context import PipelineContext
 from backend.agents.base import BaseAgent
+from backend.core.console_logger import get_console_logger
 
 # Agent adapter imports (all are placeholders in v0.0.1)
 from backend.agents.adapters.fia_adapter import FIAAdapter
@@ -79,48 +81,65 @@ class PipelineOrchestrator:
     def run(self, ctx: PipelineContext) -> PipelineContext:
         """
         Execute all agents in fixed order.
-        
+
         Args:
             ctx: Pipeline context with user input and priors
-            
+
         Returns:
             Same context object, mutated with all agent outputs
         """
+        console = get_console_logger()
+        start_time = time.time()
+
+        # Beautiful console output
+        console.pipeline_start(ctx.request_id, ctx.user_input, ctx.region)
+
         logger.info(f"Pipeline started: request_id={ctx.request_id}")
-        
-        for agent in self._agents:
-            self._execute_agent(agent, ctx)
-        
-        logger.info(f"Pipeline completed: request_id={ctx.request_id}")
+
+        total_agents = len(self._agents)
+        for idx, agent in enumerate(self._agents, 1):
+            self._execute_agent(agent, ctx, step=idx, total=total_agents)
+
+        total_time = time.time() - start_time
+        success = len(ctx.errors) == 0
+
+        console.pipeline_end(ctx.request_id, success, total_time)
+        logger.info(f"Pipeline completed: request_id={ctx.request_id}, time={total_time:.2f}s")
+
         return ctx
     
-    def _execute_agent(self, agent: BaseAgent, ctx: PipelineContext) -> None:
+    def _execute_agent(self, agent: BaseAgent, ctx: PipelineContext, step: int, total: int) -> None:
         """
         Execute a single agent with timing and error handling.
-        
+
         Args:
             agent: The agent to execute
             ctx: Pipeline context
+            step: Current step number
+            total: Total number of steps
         """
         agent_name = agent.name
-        
+        console = get_console_logger()
+
         try:
+            console.agent_start(agent_name, step, total)
             logger.debug(f"Starting agent: {agent_name}")
             ctx.start_timing(agent_name)
-            
+
             agent.run(ctx)
-            
+
             ctx.end_timing(agent_name, status="completed")
+            console.agent_end(agent_name, status="completed")
             logger.debug(f"Completed agent: {agent_name}")
-            
+
         except Exception as e:
             ctx.end_timing(agent_name, status="failed")
-            error_msg = f"Agent {agent_name} failed: {str(e)}"
+            error_msg = f"{str(e)}"
             ctx.add_error(error_msg)
-            logger.error(error_msg, exc_info=True)
-            
-            # In v0.0.1, we continue despite errors
-            # TODO v0.1.0: Add configurable error handling strategy
+            console.agent_error(agent_name, error_msg)
+            logger.error(f"Agent {agent_name} failed: {error_msg}", exc_info=True)
+
+            # Continue despite errors (graceful degradation)
 
 
 class PipelineOrchestratorBuilder:

@@ -13,6 +13,7 @@ from typing import List
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, ReflectionData
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,17 @@ class SRFLAdapter(BaseAgent):
 
             status_emoji = "✅" if is_consistent else "⚠️"
             logger.info(f"SRFL {status_emoji} confidence: {confidence:.2f}, consistency: {consistency:.2f}, gaps: {len(gaps)}")
+
+            # Console output
+            console = get_console_logger()
+            console.agent_result("SRFL", {
+                "Confidence Score": f"{confidence:.2f}",
+                "Consistency Check": "✅ Passed" if is_consistent else "⚠️ Issues detected",
+                "Consistency Score": f"{consistency:.2f}",
+                "Cultural Safety": f"{cultural_safety:.2f}",
+                "Gaps Identified": gaps if gaps else "None",
+                "Suggestions": suggestions[:2] if suggestions else "None",
+            })
 
         except Exception as e:
             logger.error(f"SRFL unexpected error: {e}", exc_info=True)

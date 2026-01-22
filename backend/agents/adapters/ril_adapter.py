@@ -12,6 +12,7 @@ import logging
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, RelationshipData
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,18 @@ Analyze the relationship dynamics based on this information."""
             )
 
             logger.info(f"RIL detected relationship: {r_type} ({r_stage}, {r_tone}) - intimacy={intimacy:.2f}")
+
+            # Console output
+            console = get_console_logger()
+            console.agent_result("RIL", {
+                "Relationship Type": r_type,
+                "Stage": r_stage,
+                "Tone": r_tone,
+                "Intimacy Level": f"{intimacy:.2f}",
+                "Formality Level": f"{formality:.2f}",
+                "Power Dynamic": power_dynamic,
+                "Confidence": f"{confidence:.2f}",
+            })
 
         except AIClientError as e:
             logger.error(f"RIL AI error: {e}")

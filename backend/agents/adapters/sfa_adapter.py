@@ -15,6 +15,7 @@ from typing import Any
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext
 from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.console_logger import get_console_logger
 from backend.schemas.flower_card_payload import (
     FlowerCardPayload,
     FlowerHeader,
@@ -131,6 +132,17 @@ class SFAAdapter(BaseAgent):
 
         payload = self._assemble_payload(ctx, flower)
         ctx.ui_payload = payload.model_dump(mode="json")
+
+        # Console output
+        console = get_console_logger()
+        console.agent_result("SFA", {
+            "Final Flower": payload.header.name,
+            "Meanings": payload.meaning.meanings[:4],
+            "Mood Intensity": f"{payload.meaning.mood_intensity.value:.2f} ({payload.meaning.mood_intensity.label})",
+            "Suitability": payload.gifting.suitability.level,
+            "Risk Level": payload.gifting.emotional_risk.level,
+            "Pipeline Version": payload.pipeline_version,
+        })
 
     def _assemble_payload(self, ctx: PipelineContext, flower: Any) -> FlowerCardPayload:
         """Assemble complete payload using AI."""
