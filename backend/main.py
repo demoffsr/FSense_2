@@ -12,8 +12,12 @@ Or from project root:
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional
+import asyncio
+import json
+from pathlib import Path
 
 from backend.pipeline.runner import run_flower_chat
 
@@ -57,6 +61,37 @@ class ErrorResponse(BaseModel):
     """Error response model."""
     success: bool = False
     error: str
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOG STREAMING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from backend.core.log_queue import get_log_queue
+
+async def log_stream():
+    """Stream logs to connected clients via Server-Sent Events."""
+    log_queue = get_log_queue()
+    while True:
+        try:
+            log_data = await asyncio.wait_for(log_queue.get(), timeout=30.0)
+            yield f"data: {json.dumps(log_data)}\n\n"
+        except asyncio.TimeoutError:
+            # Send keepalive
+            yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+
+@app.get("/api/logs/stream")
+async def stream_logs():
+    """Server-Sent Events endpoint for real-time logs."""
+    return StreamingResponse(log_stream(), media_type="text/event-stream")
+
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_page():
+    """Serve the logs viewer page."""
+    html_path = Path(__file__).parent / "static" / "logs.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text())
+    return HTMLResponse("<h1>Logs page not found</h1>")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
