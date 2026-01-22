@@ -1,9 +1,12 @@
 """
-SFA Adapter - Symbolic Flower Agent (FINAL ASSEMBLER) - v0.0.3
+SFA Adapter - Symbolic Flower Agent (FINAL ASSEMBLER) - v3 (Enhanced)
 
 Purpose:
 THE ONLY COMPONENT that assembles the final UI payload.
-Uses comprehensive AI prompt to generate all UI sections.
+Uses comprehensive AI prompt with full pipeline context from all 10 agents:
+FIA, EIA, RIL, FMRA, CIA, AITB, RFFA, CRI, SRFL → SFA
+
+Based on: symbolic_flower_agent_v3.py
 """
 
 import logging
@@ -183,7 +186,7 @@ class SFAAdapter(BaseAgent):
             gifting=gifting_tab,
             context=context_tab,
             ask_ai=ask_ai,
-            pipeline_version="0.0.3",
+            pipeline_version="0.3.0",
             request_id=ctx.request_id,
         )
 
@@ -194,25 +197,86 @@ class SFAAdapter(BaseAgent):
         return (clamped - 15) / 25.0
 
     def _generate_ai_content(self, ctx: PipelineContext, flower: Any) -> dict:
-        """Generate all content sections using AI."""
+        """Generate all content sections using AI with full pipeline context."""
         try:
             client = get_ai_client()
 
-            # Build context for prompt
-            user_intent = ctx.intent.primary_intent if ctx.intent else "General gifting"
-            emotion_summary = ctx.emotions.primary_emotion if ctx.emotions else "Neutral"
-            relationship_type = ctx.relationship.relationship_type if ctx.relationship else "General"
-            region = ctx.region.upper()
+            # Build comprehensive context from all agents
+            context_parts = []
 
-            # Build user prompt with context
+            # === FIA + EIA ===
+            if ctx.intent:
+                intent_data = ctx.intent.raw_output
+                context_parts.append(f"Intent: {ctx.intent.primary_intent}")
+                context_parts.append(f"- Occasion: {intent_data.get('occasion', 'general')}")
+                context_parts.append(f"- Recipient: {intent_data.get('recipient', 'unspecified')}")
+                context_parts.append(f"- Tone: {intent_data.get('tone', 'neutral')}")
+
+            if ctx.emotions:
+                context_parts.append(f"\nEmotions: {ctx.emotions.primary_emotion} (intensity: {ctx.emotions.emotion_intensity:.2f})")
+                context_parts.append(f"- Emotional tone: {ctx.emotions.emotional_tone}")
+                if ctx.emotions.secondary_emotions:
+                    context_parts.append(f"- Secondary: {', '.join(ctx.emotions.secondary_emotions)}")
+
+            # === RIL ===
+            if ctx.relationship:
+                rel_data = ctx.relationship.raw_output
+                context_parts.append(f"\nRelationship: {ctx.relationship.relationship_type}")
+                context_parts.append(f"- Stage: {rel_data.get('relationship_stage', 'unknown')}")
+                context_parts.append(f"- Tone: {rel_data.get('relationship_tone', 'neutral')}")
+                context_parts.append(f"- Intimacy: {ctx.relationship.intimacy_level:.2f}")
+
+            # === CIA ===
+            if ctx.intensity:
+                context_parts.append(f"\nCalculated intensity: {ctx.intensity.mood_intensity:.2f} ({ctx.intensity.intensity_label})")
+                if ctx.intensity.intensity_factors:
+                    context_parts.append(f"- Factors: {', '.join(ctx.intensity.intensity_factors)}")
+
+            # === AITB ===
+            if ctx.adaptive:
+                context_parts.append(f"\nAdaptive tone: {ctx.adaptive.tone}")
+                context_parts.append(f"- Voice style: {ctx.adaptive.voice_style}")
+                context_parts.append(f"- Formality: {ctx.adaptive.formality}")
+                if ctx.adaptive.personalization_hints:
+                    context_parts.append(f"- Hints: {', '.join(ctx.adaptive.personalization_hints)}")
+
+            # === RFFA ===
+            if ctx.risks:
+                context_parts.append(f"\nRisk assessment: {ctx.risks.overall_risk_level}")
+                context_parts.append(f"- Fit: {ctx.risks.fit_assessment}")
+                if ctx.risks.risks:
+                    context_parts.append(f"- Identified risks: {len(ctx.risks.risks)}")
+                    for risk in ctx.risks.risks[:2]:
+                        context_parts.append(f"  * {risk.risk_type} ({risk.severity}): {risk.description}")
+
+            # === CRI ===
+            if ctx.cultural_insights:
+                if ctx.cultural_insights.warnings:
+                    context_parts.append(f"\nCultural warnings: {', '.join(ctx.cultural_insights.warnings)}")
+                cultural_raw = ctx.cultural_insights.raw_output
+                if cultural_raw.get("traditional_symbolism"):
+                    context_parts.append(f"- Traditional: {cultural_raw['traditional_symbolism']}")
+                if cultural_raw.get("modern_symbolism"):
+                    context_parts.append(f"- Modern: {cultural_raw['modern_symbolism']}")
+
+            # === SRFL ===
+            if ctx.reflection:
+                context_parts.append(f"\nReflection: confidence={ctx.reflection.confidence_score:.2f}, consistent={ctx.reflection.consistency_check}")
+                if ctx.reflection.suggestions:
+                    context_parts.append(f"- Suggestion: {ctx.reflection.suggestions[0]}")
+
+            context_summary = "\n".join(context_parts)
+
+            # Build user prompt with comprehensive context
             user_prompt = f"""Flower: {flower.name}
-User intent: {user_intent}
-Emotional context: {emotion_summary}
-Relationship context: {relationship_type}
-Region: {region}
+Region: {ctx.region.upper()}
+
+Pipeline Analysis:
+{context_summary}
 
 User's original message: "{ctx.user_input}"
-"""
+
+Generate UI content that reflects this rich analysis. Use the calculated intensity value ({ctx.intensity.mood_intensity if ctx.intensity else 0.5}) to determine the mood intensity (convert 0.0-1.0 to 15-40 scale). Incorporate the emotional tone ({ctx.adaptive.tone if ctx.adaptive else 'warm'}), relationship context, and cultural insights into your descriptions."""
 
             response = client.complete_json(
                 prompt=user_prompt,
@@ -221,11 +285,18 @@ User's original message: "{ctx.user_input}"
                 max_tokens=3000,
             )
 
+            # Apply calculated intensity from CIA if available
+            if ctx.intensity and "meaning" in response:
+                # Convert 0.0-1.0 to 15-40 scale
+                calculated_value = int(15 + (ctx.intensity.mood_intensity * 25))
+                response["meaning"]["mood_intensity"] = calculated_value
+                response["meaning"]["mood_label"] = self._get_intensity_label(calculated_value)
+                logger.info(f"SFA applied calculated intensity: {calculated_value} from CIA value {ctx.intensity.mood_intensity:.2f}")
+
             # Debug logging
             meaning_data = response.get("meaning", {})
-            print(f"[SFA DEBUG] AI returned meanings: {meaning_data.get('meanings')}")
-            print(f"[SFA DEBUG] AI returned mood: {meaning_data.get('mood_intensity')} ({meaning_data.get('mood_label')})")
-            print(f"[SFA DEBUG] Flower meanings from FMRA: {flower.meanings}")
+            logger.debug(f"SFA AI returned meanings: {meaning_data.get('meanings')}")
+            logger.debug(f"SFA AI returned mood: {meaning_data.get('mood_intensity')} ({meaning_data.get('mood_label')})")
 
             return response
 
@@ -236,6 +307,19 @@ User's original message: "{ctx.user_input}"
         except Exception as e:
             logger.error(f"SFA error: {e}", exc_info=True)
             return self._get_fallback_content(flower.name)
+
+    def _get_intensity_label(self, value: int) -> str:
+        """Get intensity label for 15-40 scale."""
+        if value <= 20:
+            return "Very Low"
+        elif value <= 26:
+            return "Low"
+        elif value <= 32:
+            return "Balanced"
+        elif value <= 37:
+            return "High"
+        else:
+            return "Very High"
 
     def _get_fallback_content(self, flower_name: str) -> dict:
         """Fallback content when AI fails."""
@@ -425,5 +509,5 @@ User's original message: "{ctx.user_input}"
         return {
             "error": True,
             "message": message,
-            "pipeline_version": "0.0.3",
+            "pipeline_version": "0.3.0",
         }
