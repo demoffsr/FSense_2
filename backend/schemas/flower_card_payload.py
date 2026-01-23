@@ -29,11 +29,11 @@ class FlowerHeader(BaseModel):
 
     Maps to: Flower (partial)
     """
-    flower_id: str = Field(..., description="Unique flower identifier")
+    flower_id: str = Field(..., description="Unique flower identifier", serialization_alias="flowerId")
     name: str = Field(..., description="Display name of the flower")
-    image_url: Optional[str] = Field(None, description="Remote image URL")
-    image_asset: Optional[str] = Field(None, description="Local asset name (iOS)")
-    image_cache_key: Optional[str] = Field(None, description="Cache key for polling image status")
+    image_url: Optional[str] = Field(None, description="Remote image URL", serialization_alias="imageUrl")
+    image_asset: Optional[str] = Field(None, description="Local asset name (iOS)", serialization_alias="imageAsset")
+    image_cache_key: Optional[str] = Field(None, description="Cache key for polling image status", serialization_alias="imageCacheKey")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

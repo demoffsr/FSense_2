@@ -339,6 +339,7 @@ struct ExpandedChatView: View {
         .navigationDestination(isPresented: $navigateToFlowerDetail) {
             if let flower = selectedFlower {
                 FlowerCardView(flower: flower)
+                    .id(flower.name) // Force view recreation on flower change
             }
         }
     }

@@ -136,7 +136,14 @@ class SFAAdapter(BaseAgent):
             return
 
         payload = self._assemble_payload(ctx, flower)
-        ctx.ui_payload = payload.model_dump(mode="json")
+        ctx.ui_payload = payload.model_dump(mode="json", by_alias=True)
+
+        # Debug: log actual JSON keys
+        header_keys = list(ctx.ui_payload.get("header", {}).keys())
+        header_data = ctx.ui_payload.get("header", {})
+        print(f"[IMAGE DEBUG] JSON header keys: {header_keys}")
+        print(f"[IMAGE DEBUG] JSON imageUrl: {header_data.get('imageUrl')}")
+        print(f"[IMAGE DEBUG] JSON imageCacheKey: {header_data.get('imageCacheKey')}")
 
         # Console output
         console = get_console_logger()
@@ -157,6 +164,7 @@ class SFAAdapter(BaseAgent):
         # Get or initiate image generation
         image_url, cache_key = self._get_or_generate_image(flower.name, ctx)
 
+        print(f"[IMAGE DEBUG] Returning to payload - imageUrl: {image_url}, imageCacheKey: {cache_key}")
         logger.info(f"[IMAGE] Returning to payload - imageUrl: {image_url}, imageCacheKey: {cache_key}")
 
         # Build header
@@ -264,8 +272,11 @@ class SFAAdapter(BaseAgent):
             - image_url: Optional[str] - URL if completed, None if generating
             - cache_key: str - for polling
         """
+        print(f"[IMAGE DEBUG] _get_or_generate_image called for: {flower_name}")
+
         # Extract emotion context from pipeline
         emotion_context = self._extract_emotion_context(ctx)
+        print(f"[IMAGE DEBUG] Extracted emotion_context: {emotion_context}")
 
         # Check cache or create entry
         cache_key, image_url, status = self.image_service.get_or_create_entry(
@@ -273,6 +284,7 @@ class SFAAdapter(BaseAgent):
             emotion_context=emotion_context,
         )
 
+        print(f"[IMAGE DEBUG] Generated cache_key for {flower_name} ({emotion_context}): {cache_key}")
         logger.info(f"[IMAGE] Generated cache_key for {flower_name} ({emotion_context}): {cache_key}")
 
         if status == "completed":
