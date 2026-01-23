@@ -80,10 +80,14 @@ struct FullScreenChatView: View {
                                 viewModel.send(.toggleThinkingCard(message.id))
                             },
                             onExploreFlower: { recommendation in
+                                print("[FullScreenChatView] onExploreFlower called for: \(recommendation.flowerName)")
                                 // Use real payload data from API
                                 if let payload = viewModel.lastPayload {
+                                    print("[FullScreenChatView] Using real payload for: \(payload.header.name)")
                                     selectedFlower = payload.toFlower()
+                                    print("[FullScreenChatView] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
                                 } else {
+                                    print("[FullScreenChatView] WARNING: No payload! Using fallback")
                                     // Fallback if payload not available
                                     selectedFlower = Flower(
                                         name: recommendation.flowerName,

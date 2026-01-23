@@ -45,8 +45,11 @@ struct ChatView: View {
                             onExploreFlower: { recommendation in
                                 // Use real payload data from API
                                 if let payload = viewModel.lastPayload {
+                                    print("[ChatView] Using real payload for: \(payload.header.name)")
                                     selectedFlower = payload.toFlower()
+                                    print("[ChatView] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
                                 } else {
+                                    print("[ChatView] WARNING: No payload! Using fallback for: \(recommendation.flowerName)")
                                     // Fallback if payload not available
                                     selectedFlower = Flower(
                                         name: recommendation.flowerName,

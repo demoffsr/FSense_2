@@ -306,14 +306,24 @@ struct ExpandedChatView: View {
                             messages: viewModel.orderedMessages,
                             messageIndex: index,
                             onExploreFlower: { recommendation in
-                                selectedFlower = Flower(
-                                    name: recommendation.flowerName,
-                                    imageAsset: recommendation.imageAsset,
-                                    meanings: ["Love", "Passion", "Romance"],
-                                    symbolismText: recommendation.explanation,
-                                    whyThisFlowerText: recommendation.meaning,
-                                    moodIntensityValue: 0.85
-                                )
+                                print("[BottomInputBar] onExploreFlower called for: \(recommendation.flowerName)")
+                                // Use real payload data from API
+                                if let payload = viewModel.lastPayload {
+                                    print("[BottomInputBar] Using real payload for: \(payload.header.name)")
+                                    selectedFlower = payload.toFlower()
+                                    print("[BottomInputBar] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
+                                } else {
+                                    print("[BottomInputBar] WARNING: No payload! Using fallback")
+                                    // Fallback if payload not available
+                                    selectedFlower = Flower(
+                                        name: recommendation.flowerName,
+                                        imageAsset: recommendation.imageAsset,
+                                        meanings: ["Love", "Appreciation"],
+                                        symbolismText: recommendation.explanation,
+                                        whyThisFlowerText: recommendation.meaning,
+                                        moodIntensityValue: 0.7
+                                    )
+                                }
                                 navigateToFlowerDetail = true
                             }
                         )

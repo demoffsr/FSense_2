@@ -168,7 +168,12 @@ extension FlowerCardPayload {
     }
 
     private func toGiftingInfo() -> GiftingInfo {
-        GiftingInfo(
+        print("[toGiftingInfo] Creating GiftingInfo...")
+        print("[toGiftingInfo] suitability.level: \(gifting.suitability.level)")
+        print("[toGiftingInfo] whenToGift count: \(gifting.whenToGift.count)")
+        print("[toGiftingInfo] recipientFits count: \(gifting.recipientFits.count)")
+
+        let result = GiftingInfo(
             overallSuitability: mapSuitability(gifting.suitability.level),
             suitabilityDescription: gifting.suitability.description,
             emotionalRisk: mapRiskLevel(gifting.emotionalRisk.level),
@@ -183,6 +188,8 @@ extension FlowerCardPayload {
                 )
             }
         )
+        print("[toGiftingInfo] Created successfully")
+        return result
     }
 
     private func toContextInfo() -> ContextInfo {
