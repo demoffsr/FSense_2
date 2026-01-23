@@ -36,9 +36,9 @@ struct RecommendationCardView: View {
 
     private var imageSection: some View {
         AsyncFlowerImageView(
-            imageUrl: nil,  // FlowerRecommendation doesn't have imageUrl
+            imageUrl: recommendation.imageUrl,
             imageAsset: recommendation.imageAsset,
-            cacheKey: nil
+            cacheKey: recommendation.imageCacheKey
         )
         .frame(height: 140)
         .clipped()

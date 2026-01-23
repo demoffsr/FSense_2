@@ -12,22 +12,29 @@ struct AsyncFlowerImageView: View {
 
     var body: some View {
         Group {
-            if let url = displayImageUrl, let imageURL = URL(string: url) {
+            if let url = displayImageUrl {
                 // Display remote image
-                AsyncImage(url: constructFullURL(from: imageURL)) { phase in
-                    switch phase {
-                    case .empty:
-                        placeholderView
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure:
-                        // Fallback to local asset
-                        localAssetView
-                    @unknown default:
-                        placeholderView
+                if let fullURL = constructFullURL(from: url) {
+                    AsyncImage(url: fullURL) { phase in
+                        switch phase {
+                        case .empty:
+                            placeholderView
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        case .failure(let error):
+                            // Fallback to local asset
+                            localAssetView
+                                .onAppear {
+                                    print("[AsyncImage] Failed to load: \(fullURL) - \(error)")
+                                }
+                        @unknown default:
+                            placeholderView
+                        }
                     }
+                } else {
+                    localAssetView
                 }
             } else {
                 // Use local asset
@@ -94,21 +101,19 @@ struct AsyncFlowerImageView: View {
 
     // MARK: - Helper Methods
 
-    private func constructFullURL(from url: URL) -> URL {
+    private func constructFullURL(from urlString: String) -> URL? {
         // If URL is relative (starts with /), construct full URL
-        if url.path.hasPrefix("/") {
+        if urlString.hasPrefix("/") {
             #if DEBUG
             let baseURL = "http://192.168.1.176:8000"
             #else
             let baseURL = "http://localhost:8000"
             #endif
 
-            if let fullURL = URL(string: baseURL + url.path) {
-                return fullURL
-            }
+            return URL(string: baseURL + urlString)
         }
 
-        // Otherwise return as-is
-        return url
+        // Otherwise parse as-is
+        return URL(string: urlString)
     }
 }

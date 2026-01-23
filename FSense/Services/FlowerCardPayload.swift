@@ -150,6 +150,8 @@ extension FlowerCardPayload {
         FlowerRecommendation(
             flowerName: header.name,
             imageAsset: header.imageAsset,
+            imageUrl: header.imageUrl,
+            imageCacheKey: header.imageCacheKey,
             meaning: meaning.meanings.joined(separator: ", "),
             explanation: meaning.whyThisFlower.text,
             confidence: gifting.suitability.level.capitalized
