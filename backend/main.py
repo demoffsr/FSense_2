@@ -68,17 +68,32 @@ class ErrorResponse(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 from backend.core.log_queue import get_log_queue
+import queue as queue_module
 
 async def log_stream():
     """Stream logs to connected clients via Server-Sent Events."""
     log_queue = get_log_queue()
+
+    def get_with_timeout():
+        try:
+            return log_queue.get(block=True, timeout=30.0)
+        except queue_module.Empty:
+            return None
+
     while True:
         try:
-            log_data = await asyncio.wait_for(log_queue.get(), timeout=30.0)
-            yield f"data: {json.dumps(log_data)}\n\n"
-        except asyncio.TimeoutError:
-            # Send keepalive
-            yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+            # Use run_in_executor to avoid blocking the async event loop
+            log_data = await asyncio.get_event_loop().run_in_executor(None, get_with_timeout)
+
+            if log_data is not None:
+                yield f"data: {json.dumps(log_data)}\n\n"
+            else:
+                # Timeout - send keepalive
+                yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+        except Exception as e:
+            # Send error and keepalive
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            await asyncio.sleep(1)
 
 @app.get("/api/logs/stream")
 async def stream_logs():

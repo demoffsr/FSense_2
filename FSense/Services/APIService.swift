@@ -11,7 +11,8 @@ actor APIService {
 
     /// Base URL for the API - change this for different environments
     #if DEBUG
-    private let baseURL = "http://localhost:8000"
+    private let baseURL = "http://192.168.1.176:8000"  // Use Mac's IP for real device testing
+    // Use "http://localhost:8000" if running on iOS Simulator
     #else
     private let baseURL = "http://localhost:8000" // TODO: Replace with production URL
     #endif
