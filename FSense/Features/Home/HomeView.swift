@@ -88,7 +88,7 @@ struct HomeView: View {
             .navigationBarHidden(true)
             .navigationDestination(for: Flower.self) { flower in
                 FlowerCardView(flower: flower)
-                    .id(flower.name) // Force view recreation on flower change
+                    .id(flower.id) // Force view recreation on flower change
             }
         }
         .onAppear {

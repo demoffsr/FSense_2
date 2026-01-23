@@ -132,7 +132,16 @@ extension FlowerCardPayload {
 
     /// Convert API payload to domain Flower model
     func toFlower() -> Flower {
-        Flower(
+        let giftingData = toGiftingInfo()
+        let contextData = toContextInfo()
+
+        print("[toFlower] Converting payload for: \(header.name)")
+        print("[toFlower] meanings: \(meaning.meanings)")
+        print("[toFlower] giftingInfo.suitability: \(giftingData.overallSuitability)")
+        print("[toFlower] giftingInfo.whenToGift: \(giftingData.whenToGiftItems)")
+        print("[toFlower] contextInfo.culturalCount: \(contextData.culturalInterpretations.count)")
+
+        return Flower(
             name: header.name,
             imageAsset: header.imageAsset,
             imageURL: header.imageUrl.flatMap { URL(string: $0) },
@@ -140,8 +149,8 @@ extension FlowerCardPayload {
             symbolismText: meaning.symbolism.text,
             whyThisFlowerText: meaning.whyThisFlower.text,
             moodIntensityValue: meaning.moodIntensity.value,
-            giftingInfo: toGiftingInfo(),
-            contextInfo: toContextInfo()
+            giftingInfo: giftingData,
+            contextInfo: contextData
         )
     }
 
