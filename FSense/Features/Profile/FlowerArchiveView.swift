@@ -43,7 +43,7 @@ struct FlowerArchiveView: View {
             ForEach(archiveService.archivedFlowers) { archivedItem in
                 FlowerArchiveRow(
                     flower: archivedItem.flower,
-                    archivedAt: archivedItem.archivedAt
+                    lastViewedAt: archivedItem.lastViewedAt
                 )
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -62,15 +62,15 @@ struct FlowerArchiveView: View {
 
     private var emptyState: some View {
         VStack(spacing: 20) {
-            Image(systemName: "tray")
+            Image(systemName: "leaf.fill")
                 .font(.system(size: 64))
                 .foregroundColor(.secondary.opacity(0.5))
 
-            Text("No Archived Flowers")
+            Text("No Flowers Yet")
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("Flowers you explore will appear here")
+            Text("Explore flowers to build your collection")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -84,7 +84,7 @@ struct FlowerArchiveView: View {
 struct FlowerArchiveRow: View {
 
     let flower: Flower
-    let archivedAt: Date
+    let lastViewedAt: Date
 
     var body: some View {
         HStack(spacing: 16) {
@@ -104,7 +104,7 @@ struct FlowerArchiveRow: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
 
-                Text(formattedDate)
+                Text("Last viewed \(formattedDate)")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary.opacity(0.7))
             }
@@ -165,7 +165,7 @@ struct FlowerArchiveRow: View {
     private var formattedDate: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: archivedAt, relativeTo: Date())
+        return formatter.localizedString(for: lastViewedAt, relativeTo: Date())
     }
 }
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var archiveService = FlowerArchiveService.shared
     @State private var navigateToArchive = false
 
     var body: some View {
@@ -17,7 +18,7 @@ struct ProfileView: View {
                 ProfileMenuButton(
                     icon: "archivebox.fill",
                     title: "Flower Archive",
-                    subtitle: "View saved flowers"
+                    subtitle: archiveSubtitle
                 ) {
                     navigateToArchive = true
                 }
@@ -48,6 +49,19 @@ struct ProfileView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Computed Properties
+
+    private var archiveSubtitle: String {
+        let count = archiveService.flowerCount
+        if count == 0 {
+            return "No flowers yet"
+        } else if count == 1 {
+            return "1 flower saved"
+        } else {
+            return "\(count) flowers saved"
         }
     }
 }

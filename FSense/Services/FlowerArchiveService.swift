@@ -14,20 +14,40 @@ final class FlowerArchiveService: ObservableObject {
         loadArchive()
     }
 
+    // MARK: - Archive Statistics
+
+    var flowerCount: Int {
+        archivedFlowers.count
+    }
+
     // MARK: - Archive Management
 
-    /// Save a flower to the archive
+    /// Save a flower to the archive (or update if already exists)
     func archiveFlower(_ flower: Flower) {
-        let archived = ArchivedFlower(
-            id: UUID(),
-            flower: flower,
-            archivedAt: Date()
-        )
+        // Check if flower already exists (by name)
+        if let existingIndex = archivedFlowers.firstIndex(where: { $0.flower.name == flower.name }) {
+            // Update existing entry: move to top and update timestamp
+            var updated = archivedFlowers[existingIndex]
+            updated.lastViewedAt = Date()
 
-        archivedFlowers.insert(archived, at: 0) // Add to beginning
-        saveArchive()
+            archivedFlowers.remove(at: existingIndex)
+            archivedFlowers.insert(updated, at: 0)
 
-        print("[Archive] Saved flower: \(flower.name)")
+            saveArchive()
+            print("[Archive] Updated flower: \(flower.name)")
+        } else {
+            // Create new entry
+            let archived = ArchivedFlower(
+                id: UUID(),
+                flower: flower,
+                archivedAt: Date(),
+                lastViewedAt: Date()
+            )
+
+            archivedFlowers.insert(archived, at: 0)
+            saveArchive()
+            print("[Archive] Saved new flower: \(flower.name)")
+        }
     }
 
     /// Remove a flower from archive
@@ -75,7 +95,8 @@ final class FlowerArchiveService: ObservableObject {
 struct ArchivedFlower: Identifiable, Codable {
     let id: UUID
     let flower: Flower
-    let archivedAt: Date
+    let archivedAt: Date // First time added to archive
+    var lastViewedAt: Date // Last time viewed (updated on each open)
 }
 
 // MARK: - Flower Codable Extension
