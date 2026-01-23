@@ -157,6 +157,8 @@ class SFAAdapter(BaseAgent):
         # Get or initiate image generation
         image_url, cache_key = self._get_or_generate_image(flower.name, ctx)
 
+        logger.info(f"[IMAGE] Returning to payload - imageUrl: {image_url}, imageCacheKey: {cache_key}")
+
         # Build header
         header = FlowerHeader(
             flower_id=flower.flower_id,
@@ -270,6 +272,8 @@ class SFAAdapter(BaseAgent):
             flower_name=flower_name,
             emotion_context=emotion_context,
         )
+
+        logger.info(f"[IMAGE] Generated cache_key for {flower_name} ({emotion_context}): {cache_key}")
 
         if status == "completed":
             # Cache hit - return immediately

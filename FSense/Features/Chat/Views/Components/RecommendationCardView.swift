@@ -50,6 +50,10 @@ struct RecommendationCardView: View {
                 topTrailingRadius: 24
             )
         )
+        .onAppear {
+            print("[RecommendationCard] imageUrl: \(recommendation.imageUrl ?? "nil")")
+            print("[RecommendationCard] imageCacheKey: \(recommendation.imageCacheKey ?? "nil")")
+        }
     }
     
     // MARK: - Content Section

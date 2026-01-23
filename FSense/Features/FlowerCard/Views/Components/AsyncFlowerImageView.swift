@@ -83,12 +83,14 @@ struct AsyncFlowerImageView: View {
         guard imageUrl == nil,
               let key = cacheKey,
               !isPolling else {
+            print("[AsyncImage] Skipping poll - imageUrl: \(imageUrl != nil ? "present" : "nil"), cacheKey: \(cacheKey != nil ? "present" : "nil"), isPolling: \(isPolling)")
             return
         }
 
         isPolling = true
 
         print("[AsyncImage] Starting poll for cache key: \(key)")
+        print("[AsyncImage] Cache key length: \(key.count) characters")
 
         if let url = await ImagePollingService.shared.pollForImage(cacheKey: key) {
             await MainActor.run {
