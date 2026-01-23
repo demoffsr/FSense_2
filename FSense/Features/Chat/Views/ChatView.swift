@@ -42,14 +42,20 @@ struct ChatView: View {
                             messages: viewModel.orderedMessages,
                             messageIndex: index,
                             onExploreFlower: { recommendation in
-                                selectedFlower = Flower(
-                                    name: recommendation.flowerName,
-                                    imageAsset: recommendation.imageAsset,
-                                    meanings: ["Love", "Passion", "Romance"],
-                                    symbolismText: recommendation.explanation,
-                                    whyThisFlowerText: recommendation.meaning,
-                                    moodIntensityValue: 0.85
-                                )
+                                // Use real payload data from API
+                                if let payload = viewModel.lastPayload {
+                                    selectedFlower = payload.toFlower()
+                                } else {
+                                    // Fallback if payload not available
+                                    selectedFlower = Flower(
+                                        name: recommendation.flowerName,
+                                        imageAsset: recommendation.imageAsset,
+                                        meanings: ["Love", "Appreciation"],
+                                        symbolismText: recommendation.explanation,
+                                        whyThisFlowerText: recommendation.meaning,
+                                        moodIntensityValue: 0.7
+                                    )
+                                }
                                 navigateToFlowerDetail = true
                             }
                         )

@@ -4,26 +4,29 @@ import SwiftUI
 /// Implements a state machine for the conversation flow
 @MainActor
 final class ChatViewModel: ObservableObject {
-    
+
     // MARK: - Published State
-    
+
     @Published private(set) var state = ChatState()
-    
+
+    /// The last received payload from the API (for FlowerCard navigation)
+    @Published private(set) var lastPayload: FlowerCardPayload?
+
     // MARK: - Session Management
-    
+
     /// Current session ID for persistence (nil until first message is sent)
     private var sessionId: UUID?
-    
+
     // MARK: - Private Properties
-    
+
     private var thinkingTask: Task<Void, Never>?
     private let historyManager = ChatHistoryManager.shared
-    
-    // MARK: - Timing Constants (for mock simulation)
-    
+
+    // MARK: - Timing Constants
+
     private let acknowledgementDelay: UInt64 = 300_000_000 // 0.3s
-    private let thinkingStepDelay: UInt64 = 500_000_000 // 0.5s
-    private let recommendationDelay: UInt64 = 400_000_000 // 0.4s
+    private let thinkingStepDelay: UInt64 = 400_000_000 // 0.4s per step during API call
+    private let minThinkingTime: UInt64 = 2_000_000_000 // 2s minimum thinking display
     
     // MARK: - Initialization
     
@@ -196,12 +199,12 @@ final class ChatViewModel: ObservableObject {
     
     private func startAIResponseFlow(for userQuery: String) {
         thinkingTask?.cancel()
-        
+
         thinkingTask = Task {
             // STATE 2: Immediate acknowledgement
             try? await Task.sleep(nanoseconds: acknowledgementDelay)
             guard !Task.isCancelled else { return }
-            
+
             let acknowledgement = generateAcknowledgement(for: userQuery)
             let ackMessage = ChatMessage(
                 content: .acknowledgement(acknowledgement),
@@ -209,62 +212,90 @@ final class ChatViewModel: ObservableObject {
             )
             state.messages.append(ackMessage)
             state.phase = .acknowledgement
-            
+
             // Short pause before thinking
             try? await Task.sleep(nanoseconds: 200_000_000)
             guard !Task.isCancelled else { return }
-            
-            // STATE 3: Start thinking mode
-            await startThinkingProcess()
+
+            // STATE 3: Start thinking mode with real API call
+            await startThinkingProcessWithAPI(for: userQuery)
         }
     }
-    
-    private func startThinkingProcess() async {
+
+    private func startThinkingProcessWithAPI(for userQuery: String) async {
         // Create thinking content with all steps pending
         var thinkingContent = ThinkingContent(
             steps: ThinkingStep.mockSteps,
             isExpanded: true,
             isComplete: false
         )
-        
+
         let thinkingMessage = ChatMessage(
             content: .thinking(thinkingContent),
             sender: .ai
         )
-        
+
         state.messages.append(thinkingMessage)
         state.expandedThinkingCards.insert(thinkingMessage.id)
         state.phase = .thinking
-        
-        // Process each step with delays
+
+        // Start API call concurrently with thinking animation
+        let apiTask = Task<FlowerCardPayload?, Never> {
+            do {
+                return try await APIService.shared.getRecommendation(prompt: userQuery)
+            } catch {
+                print("API Error: \(error.localizedDescription)")
+                return nil
+            }
+        }
+
+        // Animate through thinking steps while API call is in progress
+        let startTime = DispatchTime.now()
+
         for index in 0..<thinkingContent.steps.count {
             guard !Task.isCancelled else { return }
-            
+
             // Set current step to active
             thinkingContent.steps[index].status = .active
             updateThinkingMessage(thinkingMessage.id, with: thinkingContent)
-            
+
             // Wait for step duration
             try? await Task.sleep(nanoseconds: thinkingStepDelay)
             guard !Task.isCancelled else { return }
-            
+
             // Mark step as completed
             thinkingContent.steps[index].status = .completed
             updateThinkingMessage(thinkingMessage.id, with: thinkingContent)
         }
-        
+
+        // Wait for API result
+        let payload = await apiTask.value
+
+        // Ensure minimum thinking time has elapsed
+        let elapsed = DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds
+        if elapsed < minThinkingTime {
+            try? await Task.sleep(nanoseconds: minThinkingTime - elapsed)
+        }
+
+        guard !Task.isCancelled else { return }
+
         // Mark thinking as complete
         thinkingContent.isComplete = true
-        thinkingContent.isExpanded = false // Collapse after completion
+        thinkingContent.isExpanded = false
         updateThinkingMessage(thinkingMessage.id, with: thinkingContent)
         state.expandedThinkingCards.remove(thinkingMessage.id)
-        
+
         // Short pause before recommendation
-        try? await Task.sleep(nanoseconds: recommendationDelay)
+        try? await Task.sleep(nanoseconds: 300_000_000)
         guard !Task.isCancelled else { return }
-        
+
         // STATE 4: Show recommendation
-        await showRecommendation()
+        if let payload = payload {
+            lastPayload = payload
+            await showRecommendation(from: payload)
+        } else {
+            await showError()
+        }
     }
     
     private func updateThinkingMessage(_ messageId: UUID, with content: ThinkingContent) {
@@ -278,19 +309,34 @@ final class ChatViewModel: ObservableObject {
         }
     }
     
-    private func showRecommendation() async {
-        let recommendation = FlowerRecommendation.mock
+    private func showRecommendation(from payload: FlowerCardPayload) async {
+        let recommendation = payload.toFlowerRecommendation()
         let recMessage = ChatMessage(
             content: .recommendation(recommendation),
             sender: .ai
         )
         state.messages.append(recMessage)
         state.phase = .recommendation
-        
+
         // Save to history (with recommendation)
         saveToHistory()
-        
+
         // Re-enable input - wait for user, no follow-up suggestions
+        state.isInputEnabled = true
+    }
+
+    private func showError() async {
+        let errorMessage = ChatMessage(
+            content: .text("I'm sorry, I couldn't process your request right now. Please try again."),
+            sender: .ai
+        )
+        state.messages.append(errorMessage)
+        state.phase = .idle
+
+        // Save to history
+        saveToHistory()
+
+        // Re-enable input
         state.isInputEnabled = true
     }
     
@@ -335,10 +381,13 @@ final class ChatViewModel: ObservableObject {
     
     private func handleReset() {
         thinkingTask?.cancel()
-        
+
         // Clear session ID - new session will be created lazily when user sends a message
         sessionId = nil
-        
+
+        // Clear last payload
+        lastPayload = nil
+
         state = ChatState()
         state.messages = [.welcomeMessage]
     }
