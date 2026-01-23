@@ -114,6 +114,11 @@ final class FlowerCardViewModel: ObservableObject {
     // MARK: - Private Handlers
     
     private func handleOnAppear() {
+        // Save flower to archive when card is opened
+        if let flower = state.flower {
+            FlowerArchiveService.shared.archiveFlower(flower)
+        }
+
         // Future: Analytics tracking, data refresh, etc.
     }
     

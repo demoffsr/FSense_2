@@ -111,6 +111,15 @@ struct BottomInputBarView: View {
             // Load the session when it changes
             if let session = newSession {
                 chatViewModel.loadSession(session)
+            } else {
+                // New chat - reset the view model
+                chatViewModel.send(.reset)
+            }
+        }
+        .onChange(of: controller.isExpanded) { _, isExpanded in
+            // When opening the sheet without a specific session, ensure clean state
+            if isExpanded && controller.sessionToLoad == nil {
+                chatViewModel.send(.reset)
             }
         }
     }
