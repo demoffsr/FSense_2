@@ -10,12 +10,13 @@ Based on: symbolic_flower_agent_v3.py
 """
 
 import logging
-from typing import Any
+from typing import Any, Tuple, Optional
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext
 from backend.core.ai_client import get_ai_client, AIClientError
 from backend.core.console_logger import get_console_logger
+from backend.services.image_service import ImageService
 from backend.schemas.flower_card_payload import (
     FlowerCardPayload,
     FlowerHeader,
@@ -122,6 +123,10 @@ class SFAAdapter(BaseAgent):
 
     name = "SFA"
 
+    def __init__(self):
+        super().__init__()
+        self.image_service = ImageService()
+
     def run(self, ctx: PipelineContext) -> None:
         """Assemble the final UI payload."""
         flower = ctx.get_selected_flower()
@@ -149,12 +154,16 @@ class SFAAdapter(BaseAgent):
         # Generate AI content
         ai_content = self._generate_ai_content(ctx, flower)
 
+        # Get or initiate image generation
+        image_url, cache_key = self._get_or_generate_image(flower.name, ctx)
+
         # Build header
         header = FlowerHeader(
             flower_id=flower.flower_id,
             name=flower.name,
-            image_url=None,
+            image_url=image_url,  # May be None if generating
             image_asset=flower.name.replace(" ", ""),
+            image_cache_key=cache_key,
         )
 
         # Build meaning tab from AI
@@ -207,6 +216,85 @@ class SFAAdapter(BaseAgent):
         # 15-40 range → 0.0-1.0
         clamped = max(15, min(40, value))
         return (clamped - 15) / 25.0
+
+    def _extract_emotion_context(self, ctx: PipelineContext) -> str:
+        """
+        Extract emotion context from pipeline for cache key.
+
+        Strategy: Use primary emotion + intent
+        Examples: "love", "apology", "celebration", "sympathy"
+
+        Args:
+            ctx: Pipeline context with all agent data
+
+        Returns:
+            Normalized emotion context string
+        """
+        parts = []
+
+        if ctx.emotions and ctx.emotions.primary_emotion:
+            parts.append(ctx.emotions.primary_emotion.lower())
+
+        if ctx.intent and ctx.intent.primary_intent:
+            parts.append(ctx.intent.primary_intent.lower())
+
+        # Fallback
+        if not parts:
+            return "general"
+
+        # Join with underscore (max 2 components)
+        return "_".join(parts[:2])
+
+    def _get_or_generate_image(
+        self,
+        flower_name: str,
+        ctx: PipelineContext,
+    ) -> Tuple[Optional[str], str]:
+        """
+        Get cached image or initiate background generation.
+
+        Args:
+            flower_name: Name of the flower
+            ctx: Pipeline context
+
+        Returns:
+            (image_url, cache_key) tuple
+            - image_url: Optional[str] - URL if completed, None if generating
+            - cache_key: str - for polling
+        """
+        # Extract emotion context from pipeline
+        emotion_context = self._extract_emotion_context(ctx)
+
+        # Check cache or create entry
+        cache_key, image_url, status = self.image_service.get_or_create_entry(
+            flower_name=flower_name,
+            emotion_context=emotion_context,
+        )
+
+        if status == "completed":
+            # Cache hit - return immediately
+            logger.info(f"Image cache hit: {flower_name} ({emotion_context})")
+            return (image_url, cache_key)
+
+        elif status == "pending":
+            # Cache miss - initiate background generation
+            logger.info(f"Image cache miss: {flower_name} ({emotion_context}) - initiating generation")
+
+            # Add to background tasks queue
+            # Import here to avoid circular dependency
+            try:
+                from backend.main import add_background_task
+                add_background_task(
+                    self.image_service.generate_image_sync,
+                    flower_name,
+                    emotion_context,
+                    cache_key,
+                )
+            except Exception as e:
+                logger.error(f"Failed to initiate background image generation: {e}")
+
+        # Return None - iOS will use local asset and poll for updates
+        return (None, cache_key)
 
     def _generate_ai_content(self, ctx: PipelineContext, flower: Any) -> dict:
         """Generate all content sections using AI with full pipeline context."""

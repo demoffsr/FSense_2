@@ -10,16 +10,21 @@ Or from project root:
     python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Optional
 import asyncio
 import json
 from pathlib import Path
+import logging
 
 from backend.pipeline.runner import run_flower_chat
+from backend.database.connection import init_database, get_db
+from backend.database.repository import ImageCacheRepository
+
+logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # APP CONFIGURATION
@@ -39,6 +44,35 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STARTUP & BACKGROUND TASKS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    init_database()
+    logger.info("Database initialized")
+
+
+# Global background tasks list for image generation
+_background_tasks_list = []
+
+
+def add_background_task(func, *args):
+    """
+    Add background task for execution.
+
+    Note: This is a simple helper for SFA adapter to schedule image generation.
+    Tasks are executed immediately in a separate thread.
+    """
+    import threading
+    thread = threading.Thread(target=func, args=args, daemon=True)
+    thread.start()
+    _background_tasks_list.append(thread)
+    logger.info(f"Started background task: {func.__name__}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -174,6 +208,87 @@ async def recommend_get(prompt: str, region: str = "US"):
         )
 
     return {"success": True, "data": result["data"]}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# IMAGE GENERATION ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/images/status/{cache_key}")
+async def get_image_status(cache_key: str):
+    """
+    Poll image generation status.
+
+    Args:
+        cache_key: Cache key from FlowerCardPayload
+
+    Returns:
+        {
+            "cache_key": str,
+            "status": "pending" | "generating" | "completed" | "failed",
+            "image_url": str | null,
+            "error": str | null,
+            "updated_at": str
+        }
+
+    Raises:
+        404: Cache entry not found
+    """
+    with get_db() as db:
+        repo = ImageCacheRepository(db)
+        entry = repo.get_by_cache_key(cache_key)
+
+        if not entry:
+            raise HTTPException(status_code=404, detail="Cache entry not found")
+
+        return {
+            "cache_key": cache_key,
+            "status": entry.status,
+            "image_url": entry.image_url,
+            "error": entry.error_message,
+            "updated_at": entry.updated_at.isoformat(),
+        }
+
+
+@app.get("/static/images/{filename}")
+async def serve_image(filename: str):
+    """
+    Serve generated flower image.
+
+    Args:
+        filename: Image filename (e.g., "abc123.png")
+
+    Returns:
+        Image file
+
+    Raises:
+        404: Image not found
+    """
+    image_path = Path(__file__).parent / "static" / "images" / filename
+
+    if not image_path.exists() or not image_path.is_file():
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    return FileResponse(image_path, media_type="image/png")
+
+
+@app.get("/api/images/cache-key")
+async def get_cache_key_for_debugging(flower_name: str, emotion_context: str):
+    """
+    Get cache key for debugging.
+
+    Query params:
+        - flower_name: string
+        - emotion_context: string
+
+    Returns:
+        {"cache_key": str}
+    """
+    from backend.services.image_service import ImageService
+    service = ImageService()
+    cache_key = service.get_cache_key(flower_name, emotion_context)
+
+    return {"cache_key": cache_key}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

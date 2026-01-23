@@ -78,3 +78,14 @@ DerivedData/
 # ═══════════════════════════════════════════════════════════════════════════════
 *.log
 logs/
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Database & Generated Content
+# ═══════════════════════════════════════════════════════════════════════════════
+backend/data/*.db
+backend/data/*.db-*
+backend/static/images/*.png
+backend/static/images/*.jpg
+backend/static/images/*.jpeg
+!backend/static/images/.gitkeep
+!backend/data/.gitkeep

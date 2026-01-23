@@ -33,27 +33,15 @@ struct RecommendationCardView: View {
     }
     
     // MARK: - Image Section
-    
+
     private var imageSection: some View {
-        Group {
-            if let imageAsset = recommendation.imageAsset {
-                Image(imageAsset)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: 140)
-                    .clipped()
-            } else {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.pink.opacity(0.2), Color.purple.opacity(0.15)],
-                            startPoint: .topTrailing,
-                            endPoint: .bottomLeading
-                        )
-                    )
-                    .frame(height: 140)
-            }
-        }
+        AsyncFlowerImageView(
+            imageUrl: nil,  // FlowerRecommendation doesn't have imageUrl
+            imageAsset: recommendation.imageAsset,
+            cacheKey: nil
+        )
+        .frame(height: 140)
+        .clipped()
         .clipShape(
             UnevenRoundedRectangle(
                 topLeadingRadius: 24,

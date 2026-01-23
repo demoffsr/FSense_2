@@ -21,6 +21,7 @@ struct FlowerHeader: Decodable, Equatable {
     let name: String
     let imageUrl: String?
     let imageAsset: String?
+    let imageCacheKey: String?
 }
 
 // MARK: - Meaning Tab

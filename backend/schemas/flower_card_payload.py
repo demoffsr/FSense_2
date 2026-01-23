@@ -26,13 +26,14 @@ from pydantic import BaseModel, Field, ConfigDict
 class FlowerHeader(BaseModel):
     """
     Flower identification and image.
-    
+
     Maps to: Flower (partial)
     """
     flower_id: str = Field(..., description="Unique flower identifier")
     name: str = Field(..., description="Display name of the flower")
     image_url: Optional[str] = Field(None, description="Remote image URL")
     image_asset: Optional[str] = Field(None, description="Local asset name (iOS)")
+    image_cache_key: Optional[str] = Field(None, description="Cache key for polling image status")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
