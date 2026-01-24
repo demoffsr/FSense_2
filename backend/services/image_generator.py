@@ -1,7 +1,8 @@
 """
 Image generation service using OpenAI DALL-E 3.
 
-Adapted from FSense/utils/image_generator.py
+Generates flower images and uploads to Supabase Storage.
+Falls back to local storage if Supabase is not configured.
 """
 
 import logging
@@ -11,6 +12,8 @@ from typing import Tuple
 import requests
 from openai import OpenAI
 import os
+
+from backend.services.storage_service import get_storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +25,13 @@ class ImageGenerationError(Exception):
 
 class ImageGenerator:
     """
-    Service for generating flower images using AI (DALL-E 3)
+    Service for generating flower images using AI (DALL-E 3).
+
+    Uploads generated images to Supabase Storage.
     """
 
     def __init__(self):
-        self.output_dir = Path(__file__).parent.parent / "static" / "images"
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.storage = get_storage_service()
 
         # Initialize OpenAI client (lazy initialization)
         self.api_key = os.getenv("OPENAI_API_KEY")
@@ -51,7 +55,7 @@ class ImageGenerator:
         cache_key: str,
     ) -> Tuple[str, str]:
         """
-        Generate flower image
+        Generate flower image and upload to Supabase Storage.
 
         Args:
             flower_name: Name of the flower (e.g., "Red Rose")
@@ -59,7 +63,7 @@ class ImageGenerator:
             cache_key: Cache key for filename
 
         Returns:
-            (image_path, image_url) tuple
+            (storage_path, public_url) tuple
 
         Raises:
             ImageGenerationError: If generation fails
@@ -71,25 +75,30 @@ class ImageGenerator:
             prompt = self._build_prompt(flower_name, emotion_context)
             logger.info(f"Generating image for {flower_name} ({emotion_context})")
 
-            # Generate image
+            # Generate image with DALL-E
             image_data = self._call_ai_image_generator(prompt)
 
-            # Save to disk
+            # Upload to Supabase Storage (or local fallback)
             filename = f"{cache_key[:16]}.png"
-            image_path = self.output_dir / filename
+            public_url, is_supabase = self.storage.upload_image(
+                image_data=image_data,
+                filename=filename,
+                content_type="image/png",
+            )
 
-            with open(image_path, "wb") as f:
-                f.write(image_data)
+            if not public_url:
+                raise ImageGenerationError("Failed to upload image to storage")
 
-            # Build URL
-            relative_path = f"static/images/{filename}"
-            image_url = f"/static/images/{filename}"  # Relative URL for FastAPI
-
+            storage_type = "Supabase" if is_supabase else "local"
             generation_time = int((time.time() - start_time) * 1000)
-            logger.info(f"Image generated in {generation_time}ms: {filename}")
+            logger.info(f"Image generated in {generation_time}ms ({storage_type}): {filename}")
 
-            return (relative_path, image_url)
+            # Return path and URL
+            storage_path = f"flower-images/{filename}" if is_supabase else f"static/images/{filename}"
+            return (storage_path, public_url)
 
+        except ImageGenerationError:
+            raise
         except Exception as e:
             logger.error(f"Image generation failed: {e}", exc_info=True)
             raise ImageGenerationError(f"Failed to generate image: {str(e)}")

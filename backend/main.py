@@ -10,7 +10,7 @@ Or from project root:
     python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
@@ -22,7 +22,8 @@ import logging
 
 from backend.pipeline.runner import run_flower_chat
 from backend.database.connection import init_database, get_db
-from backend.database.repository import ImageCacheRepository
+from backend.database.repository import ImageCacheRepository, SessionRepository, ConversationHistoryRepository
+from backend.core.rate_limiter import RateLimitMiddleware, configure_rate_limiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Rate limiting middleware (30 requests/min per IP + 10 burst)
+app.add_middleware(RateLimitMiddleware)
+configure_rate_limiter(requests_per_minute=30, burst_size=10, enabled=True)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STARTUP & BACKGROUND TASKS
@@ -55,6 +60,16 @@ async def startup_event():
     """Initialize database on startup"""
     init_database()
     logger.info("Database initialized")
+
+    # Cleanup stale image generation entries from previous runs
+    try:
+        from backend.services.image_service import ImageService
+        service = ImageService()
+        cleaned = service.cleanup_stale_entries()
+        if cleaned:
+            logger.info(f"Cleaned up {cleaned} stale image entries on startup")
+    except Exception as e:
+        logger.warning(f"Failed to cleanup stale entries: {e}")
 
 
 # Global background tasks list for image generation
@@ -83,12 +98,15 @@ class RecommendRequest(BaseModel):
     """Request body for flower recommendation."""
     prompt: str = Field(..., min_length=1, description="User's message/query")
     region: str = Field(default="US", description="Geographic region for cultural context")
+    session_id: Optional[str] = Field(default=None, description="Session ID for conversation continuity")
+    device_id: Optional[str] = Field(default=None, description="iOS device identifier")
 
 
 class RecommendResponse(BaseModel):
     """Wrapper for successful recommendation response."""
     success: bool = True
     data: Dict[str, Any]
+    session_id: Optional[str] = None  # Return session ID for continuity
 
 
 class ErrorResponse(BaseModel):
@@ -161,7 +179,13 @@ async def logs_page():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "version": "0.0.1"}
+    from backend.database.connection import get_db_info
+    db_info = get_db_info()
+    return {
+        "status": "ok" if db_info["connected"] else "degraded",
+        "version": "0.0.1",
+        "database": db_info,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -169,21 +193,56 @@ async def health_check():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/recommend", response_model=RecommendResponse)
-async def recommend(request: RecommendRequest):
+async def recommend(request: RecommendRequest, http_request: Request):
     """
     Generate a flower recommendation based on user prompt.
 
     This is the main endpoint for iOS integration.
 
     Args:
-        request: Contains prompt (user message) and optional region
+        request: Contains prompt (user message), optional region, and optional session_id
 
     Returns:
         FlowerCardPayload with header, meaning, gifting, and context tabs
+        Includes session_id for conversation continuity
 
     Raises:
         HTTPException 400: If prompt is invalid or pipeline fails
     """
+    # Get or create session
+    session_id = request.session_id
+    client_ip = get_client_ip(http_request)
+    user_agent = http_request.headers.get("User-Agent")
+
+    with get_db() as db:
+        session_repo = SessionRepository(db)
+
+        if session_id:
+            # Try to find existing session
+            session = session_repo.get_by_session_id(session_id)
+            if not session:
+                # Session not found, create new one
+                logger.warning(f"Session not found: {session_id}, creating new")
+                session = session_repo.create(
+                    device_id=request.device_id,
+                    client_ip=client_ip,
+                    region=request.region,
+                    user_agent=user_agent,
+                )
+            else:
+                # Update last active
+                session_repo.update_last_active(session_id)
+        else:
+            # No session ID provided, create new session
+            session = session_repo.create(
+                device_id=request.device_id,
+                client_ip=client_ip,
+                region=request.region,
+                user_agent=user_agent,
+            )
+
+        session_id = session.session_id
+
     # Run pipeline in thread pool to NOT block the event loop
     # This allows SSE streaming to work in parallel
     loop = asyncio.get_event_loop()
@@ -195,13 +254,46 @@ async def recommend(request: RecommendRequest):
         )
     )
 
+    # Store conversation history
+    with get_db() as db:
+        session_repo = SessionRepository(db)
+        history_repo = ConversationHistoryRepository(db)
+
+        # Increment message count
+        session_repo.increment_message_count(session_id)
+
+        # Extract flower info from response
+        flower_name = None
+        flower_id = None
+        if result["success"] and result.get("data"):
+            header = result["data"].get("header", {})
+            flower_name = header.get("name")
+            flower_id = header.get("flowerId")
+
+        # Add to history
+        history_repo.add_message(
+            session_id=session_id,
+            request_id=result.get("data", {}).get("requestId", "unknown"),
+            user_message=request.prompt,
+            region=request.region,
+            flower_name=flower_name,
+            flower_id=flower_id,
+            response_payload=result.get("data") if result["success"] else None,
+            success=result["success"],
+            error_message=result.get("error") if not result["success"] else None,
+        )
+
     if not result["success"]:
         raise HTTPException(
             status_code=400,
             detail=result.get("error", "Failed to generate recommendation")
         )
 
-    return RecommendResponse(success=True, data=result["data"])
+    return RecommendResponse(
+        success=True,
+        data=result["data"],
+        session_id=session_id,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -230,6 +322,159 @@ async def recommend_get(prompt: str, region: str = "US"):
         )
 
     return {"success": True, "data": result["data"]}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# IMAGE GENERATION ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SESSION ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/sessions")
+async def create_session(http_request: Request, device_id: Optional[str] = None, region: str = "US"):
+    """
+    Create a new session explicitly.
+
+    Returns:
+        {
+            "session_id": str,
+            "region": str,
+            "created_at": str
+        }
+    """
+    client_ip = get_client_ip(http_request)
+    user_agent = http_request.headers.get("User-Agent")
+
+    with get_db() as db:
+        repo = SessionRepository(db)
+        session = repo.create(
+            device_id=device_id,
+            client_ip=client_ip,
+            region=region,
+            user_agent=user_agent,
+        )
+        return {
+            "session_id": session.session_id,
+            "region": session.region,
+            "created_at": session.created_at.isoformat(),
+        }
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: str):
+    """
+    Get session information.
+
+    Returns:
+        {
+            "session_id": str,
+            "region": str,
+            "message_count": int,
+            "created_at": str,
+            "last_active_at": str
+        }
+
+    Raises:
+        404: Session not found
+    """
+    with get_db() as db:
+        repo = SessionRepository(db)
+        session = repo.get_by_session_id(session_id)
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        return {
+            "session_id": session.session_id,
+            "region": session.region,
+            "message_count": session.message_count,
+            "created_at": session.created_at.isoformat(),
+            "last_active_at": session.last_active_at.isoformat(),
+        }
+
+
+@app.get("/api/sessions/{session_id}/history")
+async def get_session_history(session_id: str, limit: int = 20, offset: int = 0):
+    """
+    Get conversation history for a session.
+
+    Args:
+        session_id: Session identifier
+        limit: Maximum number of entries (default 20, max 100)
+        offset: Pagination offset
+
+    Returns:
+        {
+            "session_id": str,
+            "total": int,
+            "messages": [
+                {
+                    "request_id": str,
+                    "user_message": str,
+                    "flower_name": str | null,
+                    "success": bool,
+                    "created_at": str
+                }
+            ]
+        }
+
+    Raises:
+        404: Session not found
+    """
+    # Limit max to 100
+    limit = min(limit, 100)
+
+    with get_db() as db:
+        session_repo = SessionRepository(db)
+        session = session_repo.get_by_session_id(session_id)
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        history_repo = ConversationHistoryRepository(db)
+        entries = history_repo.get_session_history(session_id, limit=limit, offset=offset)
+        total = history_repo.count_session_messages(session_id)
+
+        messages = [
+            {
+                "request_id": entry.request_id,
+                "user_message": entry.user_message,
+                "flower_name": entry.flower_name,
+                "flower_id": entry.flower_id,
+                "success": entry.success == 1,
+                "created_at": entry.created_at.isoformat(),
+            }
+            for entry in entries
+        ]
+
+        return {
+            "session_id": session_id,
+            "total": total,
+            "messages": messages,
+        }
+
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """
+    Delete a session and its history.
+
+    Returns:
+        {"deleted": bool}
+
+    Raises:
+        404: Session not found
+    """
+    with get_db() as db:
+        repo = SessionRepository(db)
+        deleted = repo.delete_session(session_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        return {"deleted": True}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -311,6 +556,36 @@ async def get_cache_key_for_debugging(flower_name: str, emotion_context: str):
     cache_key = service.get_cache_key(flower_name, emotion_context)
 
     return {"cache_key": cache_key}
+
+
+@app.get("/api/images/stats")
+async def get_image_generation_stats():
+    """
+    Get image generation statistics.
+
+    Returns:
+        {
+            "active_generations": int,
+            "max_concurrent": int,
+            "available_slots": int
+        }
+    """
+    from backend.services.image_service import ImageService
+    return ImageService.get_generation_stats()
+
+
+@app.post("/api/images/cleanup")
+async def cleanup_stale_images():
+    """
+    Manually trigger cleanup of stale image generation entries.
+
+    Returns:
+        {"cleaned": int}
+    """
+    from backend.services.image_service import ImageService
+    service = ImageService()
+    cleaned = service.cleanup_stale_entries()
+    return {"cleaned": cleaned}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

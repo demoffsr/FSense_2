@@ -1,14 +1,24 @@
 """
 SQLAlchemy models for FSense database.
 
-Contains image caching model for storing generated flower images.
+Contains:
+- ImageCache: Generated flower images
+- Session: User sessions for conversation continuity
+- ConversationHistory: Chat history within sessions
 """
 
-from sqlalchemy import Column, String, DateTime, Integer, Text, Index
+from sqlalchemy import Column, String, DateTime, Integer, Text, Index, ForeignKey, JSON
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
+import uuid
 
 Base = declarative_base()
+
+
+def generate_uuid() -> str:
+    """Generate a new UUID string."""
+    return str(uuid.uuid4())
 
 
 class ImageCache(Base):
@@ -59,3 +69,90 @@ class ImageCache(Base):
 
     def __repr__(self):
         return f"<ImageCache(cache_key='{self.cache_key}', status='{self.status}')>"
+
+
+class Session(Base):
+    """
+    User session for maintaining conversation continuity.
+
+    Sessions allow:
+    - Tracking conversation history
+    - Persisting user preferences
+    - Rate limiting per session
+    """
+    __tablename__ = "sessions"
+
+    # Primary Key
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Session identifier (sent to iOS)
+    session_id = Column(String(36), unique=True, nullable=False, default=generate_uuid, index=True)
+
+    # Client identification
+    device_id = Column(String(255), nullable=True)  # iOS device identifier
+    client_ip = Column(String(45), nullable=True)   # IPv4 or IPv6
+
+    # Session metadata
+    region = Column(String(10), default="US")
+    user_agent = Column(String(500), nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_active_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)  # Optional session expiration
+
+    # Relationships
+    messages = relationship("ConversationHistory", back_populates="session", cascade="all, delete-orphan")
+
+    # Statistics
+    message_count = Column(Integer, default=0)
+
+    __table_args__ = (
+        Index('idx_session_last_active', 'last_active_at'),
+        Index('idx_session_device', 'device_id'),
+    )
+
+    def __repr__(self):
+        return f"<Session(session_id='{self.session_id}', messages={self.message_count})>"
+
+
+class ConversationHistory(Base):
+    """
+    Stores conversation history within a session.
+
+    Each entry represents a user message and the system's response.
+    """
+    __tablename__ = "conversation_history"
+
+    # Primary Key
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Foreign Key to Session
+    session_id = Column(String(36), ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Request data
+    request_id = Column(String(36), nullable=False, index=True)  # Pipeline request ID
+    user_message = Column(Text, nullable=False)
+    region = Column(String(10), default="US")
+
+    # Response data
+    flower_name = Column(String(255), nullable=True)  # Selected flower
+    flower_id = Column(String(255), nullable=True)
+    response_payload = Column(JSON, nullable=True)    # Full FlowerCardPayload (for history display)
+
+    # Status
+    success = Column(Integer, default=1)  # 1 = success, 0 = failed
+    error_message = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Relationship
+    session = relationship("Session", back_populates="messages")
+
+    __table_args__ = (
+        Index('idx_history_created', 'created_at'),
+    )
+
+    def __repr__(self):
+        return f"<ConversationHistory(request_id='{self.request_id}', flower='{self.flower_name}')>"

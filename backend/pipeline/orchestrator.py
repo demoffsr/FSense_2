@@ -18,6 +18,7 @@ Expected speedup: ~2x compared to sequential execution.
 from typing import Optional, List
 import logging
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from backend.pipeline.context import PipelineContext
@@ -64,6 +65,7 @@ class PipelineOrchestrator:
         self._sfa = SFAAdapter()
 
         self._step_counter = 0
+        self._step_lock = threading.Lock()
         self._total_steps = 10
 
     @property
@@ -135,8 +137,9 @@ class PipelineOrchestrator:
         agent_name = agent.name
         console = get_console_logger()
 
-        self._step_counter += 1
-        step = self._step_counter
+        with self._step_lock:
+            self._step_counter += 1
+            step = self._step_counter
 
         try:
             console.agent_start(agent_name, step, self._total_steps)

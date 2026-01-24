@@ -58,29 +58,33 @@ class SettingsError(Exception):
 class Settings:
     """
     Application settings loaded from environment.
-    
+
     Required:
     - openai_api_key: Must be set, cannot be empty
-    
+    - database_url: PostgreSQL connection string (Supabase)
+
     Optional:
     - All other settings have sensible defaults
     """
-    
+
     # OpenAI (REQUIRED)
     openai_api_key: str
     openai_model: str = "gpt-4o"  # Complex tasks (FMRA, CRI, SFA)
     openai_model_fast: str = "gpt-4o-mini"  # Simple tasks (~3x faster)
     openai_timeout: int = 60  # seconds
     openai_max_retries: int = 3
-    
+
+    # Database (REQUIRED for production)
+    database_url: str = ""  # PostgreSQL connection string
+
     # Application
     fsense_env: str = "local"
     fsense_version: str = "v0.0.1"
-    
+
     # Pipeline
     default_region: str = "us"
     max_candidates: int = 5
-    
+
     # Debug
     debug_mode: bool = False
     log_level: str = "INFO"
@@ -115,21 +119,24 @@ class Settings:
         return cls(
             # Required
             openai_api_key=api_key,
-            
+
             # OpenAI settings
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o"),
             openai_model_fast=os.getenv("OPENAI_MODEL_FAST", "gpt-4o-mini"),
             openai_timeout=int(os.getenv("OPENAI_TIMEOUT", "60")),
             openai_max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "3")),
-            
+
+            # Database
+            database_url=os.getenv("DATABASE_URL", ""),
+
             # Application
             fsense_env=os.getenv("FSENSE_ENV", "local"),
             fsense_version=os.getenv("FSENSE_VERSION", "v0.0.1"),
-            
+
             # Pipeline
             default_region=os.getenv("DEFAULT_REGION", "us"),
             max_candidates=int(os.getenv("MAX_CANDIDATES", "5")),
-            
+
             # Debug
             debug_mode=os.getenv("DEBUG_MODE", "false").lower() == "true",
             log_level=os.getenv("LOG_LEVEL", "INFO"),

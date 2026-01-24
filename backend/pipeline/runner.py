@@ -21,6 +21,7 @@ import traceback
 from backend.pipeline.context import PipelineContext, UserPriors
 from backend.pipeline.orchestrator import PipelineOrchestrator
 from backend.core.settings import get_settings, SettingsError
+from backend.core.input_validator import validate_input, validate_region
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +70,23 @@ def run_flower_chat(
         ... else:
         ...     print(f"Error: {result['error']}")
     """
-    # Validate input
-    if not prompt or not prompt.strip():
+    # Validate and sanitize input
+    validation = validate_input(prompt)
+    if not validation.is_valid:
         return {
             "success": False,
-            "error": "Message cannot be empty",
+            "error": validation.error_message,
         }
-    
-    # Normalize region
-    region = region.strip().upper() if region else "US"
+
+    # Use sanitized input
+    prompt = validation.sanitized_input
+
+    # Log warnings if any suspicious patterns detected
+    if validation.warnings:
+        logger.warning(f"Input validation warnings for prompt: {validation.warnings}")
+
+    # Validate and normalize region
+    region = validate_region(region)
     
     try:
         # Validate settings (will raise if API key missing)
@@ -87,8 +96,8 @@ def run_flower_chat(
         
         # Build context
         ctx = PipelineContext(
-            user_input=prompt.strip(),
-            region=region.lower(),
+            user_input=prompt,  # Already sanitized
+            region=region.lower(),  # Context expects lowercase
             priors=UserPriors(),
         )
         
