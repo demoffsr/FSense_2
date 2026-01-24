@@ -101,15 +101,16 @@ class CIAAdapter(BaseAgent):
     name = "CIA"
 
     def run(self, ctx: PipelineContext) -> None:
-        """Calculate appropriate mood intensity based on context."""
+        """Calculate appropriate mood intensity based on context with AI refinement."""
         try:
             # Calculate base intensity from emotions
             base_intensity = ctx.emotions.emotion_intensity if ctx.emotions else 0.5
 
-            # Apply heuristic adjustments (no AI for speed)
-            intensity = self._calculate_intensity_heuristic(ctx, base_intensity)
-            factors = ["emotion_level", "tone", "relationship"]
-            reasoning = "Calculated from emotional and relationship context"
+            # Apply heuristic adjustments
+            heuristic_intensity = self._calculate_intensity_heuristic(ctx, base_intensity)
+
+            # Refine with AI for better accuracy
+            intensity, factors, reasoning = self._refine_with_ai(ctx, heuristic_intensity)
 
             # Determine label
             label = self._get_intensity_label(intensity)
@@ -120,12 +121,13 @@ class CIAAdapter(BaseAgent):
                 intensity_factors=factors,
                 raw_output={
                     "base_intensity": base_intensity,
+                    "heuristic_intensity": heuristic_intensity,
                     "final_intensity": intensity,
                     "reasoning": reasoning,
                 },
             )
 
-            logger.info(f"CIA calculated intensity: {intensity:.2f} ({label})")
+            logger.info(f"CIA calculated intensity: {intensity:.2f} ({label}) - AI refined")
 
             # Console output
             console = get_console_logger()

@@ -185,17 +185,47 @@ struct RecentChatRowView: View {
     
     private var thumbnail: some View {
         Group {
-            if let imageName = session.flowerImageAsset {
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(Color.gray.opacity(0.1))
-                    .frame(width: 46, height: 46)
-                    .overlay(
-                        Image(imageName)
+            // Priority: imageUrl > imageAsset > placeholder
+            if let imageUrlString = session.flowerImageUrl,
+               let imageUrl = URL(string: imageUrlString) {
+                // Remote AI-generated image
+                AsyncImage(url: imageUrl) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                    )
+                            .frame(width: 46, height: 46)
+                            .clipShape(RoundedRectangle(cornerRadius: 9))
+                    case .failure, .empty:
+                        // Fallback to local asset or placeholder
+                        localImageOrPlaceholder
+                    @unknown default:
+                        localImageOrPlaceholder
+                    }
+                }
+            } else {
+                localImageOrPlaceholder
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 9)
+                .inset(by: 0.5)
+                .stroke(Color(red: 0.95, green: 0.95, blue: 0.95), lineWidth: 1)
+        )
+    }
+
+    private var localImageOrPlaceholder: some View {
+        Group {
+            if let imageName = session.flowerImageAsset {
+                // Local asset image
+                Image(imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 46, height: 46)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
             } else {
+                // Placeholder gradient
                 RoundedRectangle(cornerRadius: 9)
                     .fill(
                         LinearGradient(
@@ -215,11 +245,6 @@ struct RecentChatRowView: View {
                     )
             }
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: 9)
-                .inset(by: 0.5)
-                .stroke(Color(red: 0.95, green: 0.95, blue: 0.95), lineWidth: 1)
-        )
     }
 }
 

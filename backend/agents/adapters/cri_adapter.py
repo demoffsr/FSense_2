@@ -1,9 +1,10 @@
 """
-CRI Adapter - Cultural & Regional Intelligence - v2 (Adapted)
+CRI Adapter - Cultural & Regional Intelligence - v2.1 (DB-Enhanced)
 
 Purpose:
 Provides cultural context and regional interpretations for the recommended flower.
 Analyzes traditional and modern symbolism specific to the user's region.
+Uses flower database for cultural context and taboos.
 
 Based on: cultural_reasoning_intelligence_v2.py
 """
@@ -19,6 +20,19 @@ from backend.pipeline.context import (
 )
 from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
+
+# Import flower database functions
+try:
+    from backend.database.flower_database import (
+        get_cultural_warnings,
+        get_number_rules,
+        get_flower_by_id,
+        CULTURAL_CONTEXTS_DATA,
+    )
+    DATABASE_AVAILABLE = True
+except ImportError:
+    DATABASE_AVAILABLE = False
+    logger.warning("Flower database not available for CRI, using heuristics only")
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +94,25 @@ class CRIAdapter(BaseAgent):
 
             region = ctx.region.upper()
 
-            # Heuristic-based cultural insights (no AI call for speed)
-            insights_list = self._generate_cultural_insights(flower_name, region)
+            # Check database for warnings first
             warnings = self._check_cultural_warnings(flower_name, region)
-            traditional, modern = self._get_symbolism(flower_name, region)
+
+            # Use AI for cultural analysis with database context
+            result = self._analyze_with_ai(ctx, flower_name, region, warnings)
+
+            insights_list = result.get("insights", self._generate_cultural_insights(flower_name, region))
+            traditional = result.get("traditional_symbolism", "")
+            modern = result.get("modern_symbolism", "")
+
+            # Get number rules from database if available
+            number_advice = None
+            if DATABASE_AVAILABLE:
+                number_rules = get_number_rules(region.lower())
+                if number_rules:
+                    even_rule = number_rules.get("even_number_rule", "")
+                    odd_rule = number_rules.get("odd_number_rule", "")
+                    if even_rule or odd_rule:
+                        number_advice = f"Number rules: {even_rule or odd_rule}"
 
             risk_level = "medium" if warnings else "low"
 
@@ -96,7 +125,7 @@ class CRIAdapter(BaseAgent):
                     "modern_symbolism": modern,
                     "risk_level": risk_level,
                     "confidence": 0.75,
-                    "advice": None,
+                    "advice": number_advice,
                 },
             )
 
@@ -164,8 +193,33 @@ class CRIAdapter(BaseAgent):
         return insights[:3]
 
     def _check_cultural_warnings(self, flower_name: str, region: str) -> List[str]:
-        """Check for cultural warnings."""
+        """Check for cultural warnings - uses database if available."""
         warnings = []
+
+        # Try database first
+        if DATABASE_AVAILABLE:
+            # Get flower ID from candidates context
+            flower_id = None
+            # Try to infer flower_id from name (e.g., "Red Rose" -> "red_rose")
+            flower_id = flower_name.lower().replace(" ", "_")
+
+            # Check database for cultural warnings
+            db_warning = get_cultural_warnings(flower_id, region.lower())
+            if db_warning and db_warning.get("is_taboo"):
+                if db_warning.get("taboo_reason"):
+                    warnings.append(db_warning["taboo_reason"])
+
+                # Add occasion-specific warnings
+                if db_warning.get("taboo_occasions"):
+                    occasions = ", ".join(db_warning["taboo_occasions"])
+                    warnings.append(f"Avoid for: {occasions}")
+
+            # If database had results, return them
+            if warnings:
+                logger.info(f"CRI: Found cultural warnings in database for {flower_id} in {region}")
+                return warnings
+
+        # Fallback to heuristics if no database or no matches
         flower_lower = flower_name.lower()
 
         # Yellow flowers in some cultures
@@ -181,6 +235,53 @@ class CRIAdapter(BaseAgent):
             warnings.append("Chrysanthemums are associated with funerals in many European countries")
 
         return warnings
+
+    def _analyze_with_ai(self, ctx: PipelineContext, flower_name: str, region: str, db_warnings: List[str]) -> dict:
+        """Use AI for cultural analysis with database warnings as context."""
+        try:
+            client = get_ai_client_fast()
+
+            warnings_context = ""
+            if db_warnings:
+                warnings_context = f"\nDatabase warnings: {', '.join(db_warnings)}"
+
+            prompt = f"""Analyze the cultural symbolism of {flower_name} for {region} region.
+
+User context: "{ctx.user_input}"{warnings_context}
+
+Provide traditional and modern symbolism, and cultural insights for major cultures."""
+
+            response = client.complete_json(
+                prompt=prompt,
+                system_prompt=CULTURAL_ANALYSIS_PROMPT,
+                temperature=0.4,
+            )
+
+            # Parse insights from AI response
+            insights = []
+            for insight_data in response.get("cross_cultural_insights", []):
+                insights.append(CulturalInsight(
+                    culture=insight_data.get("culture", "Unknown"),
+                    emoji=insight_data.get("emoji", "🌍"),
+                    interpretation=insight_data.get("interpretation", ""),
+                    sentiment=insight_data.get("sentiment", "neutral"),
+                ))
+
+            return {
+                "traditional_symbolism": response.get("traditional_symbolism", ""),
+                "modern_symbolism": response.get("modern_symbolism", ""),
+                "insights": insights[:3],
+            }
+
+        except Exception as e:
+            logger.warning(f"CRI AI analysis failed, using heuristics: {e}")
+            # Fallback to heuristics
+            traditional, modern = self._get_symbolism(flower_name, region)
+            return {
+                "traditional_symbolism": traditional,
+                "modern_symbolism": modern,
+                "insights": [],
+            }
 
     def _get_symbolism(self, flower_name: str, region: str) -> tuple[str, str]:
         """Get traditional and modern symbolism."""

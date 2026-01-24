@@ -55,26 +55,18 @@ class AITBAdapter(BaseAgent):
     name = "AITB"
 
     def run(self, ctx: PipelineContext) -> None:
-        """Build adaptive tone configuration based on all context (heuristic-only for speed)."""
+        """Build adaptive tone configuration with AI analysis."""
         try:
-            # Extract data from previous agents
-            emotion_tone = ctx.emotions.emotional_tone if ctx.emotions else "neutral"
-            emotion_intensity = ctx.emotions.emotion_intensity if ctx.emotions else 0.5
+            # Use AI to harmonize tone and style
+            result = self._harmonize_with_ai(ctx)
 
-            intensity_label = ctx.intensity.intensity_label if ctx.intensity else "balanced"
-
-            relationship_stage = "unspecified"
-            if ctx.relationship:
-                rel_data = ctx.relationship.raw_output
-                relationship_stage = rel_data.get("relationship_stage", "unspecified")
-
-            # Heuristic-based tone adjustment (no AI call for speed)
-            adjusted_tone = self._adjust_tone_heuristic(emotion_tone, intensity_label, relationship_stage)
-            voice_style = self._determine_voice_style(emotion_tone, relationship_stage)
-            formality = self._determine_formality(ctx)
-            hints = self._generate_hints(emotion_tone, intensity_label, relationship_stage)
-            advice = "Tone balanced based on emotional and relationship context"
-            confidence = 0.75
+            adjusted_tone = result.get("adjusted_emotion_tone", "warm")
+            adjusted_intensity = result.get("adjusted_intensity", "balanced")
+            voice_style = result.get("voice_style", "conversational")
+            formality = result.get("formality", "casual")
+            hints = result.get("personalization_hints", [])
+            advice = result.get("adaptive_advice", "AI-harmonized tone and style")
+            confidence = result.get("confidence_score", 0.85)
 
             ctx.adaptive = AdaptiveData(
                 tone=adjusted_tone,
@@ -82,16 +74,16 @@ class AITBAdapter(BaseAgent):
                 formality=formality,
                 personalization_hints=hints,
                 raw_output={
-                    "original_emotion_tone": emotion_tone,
+                    "original_emotion_tone": ctx.emotions.emotional_tone if ctx.emotions else "neutral",
                     "adjusted_emotion_tone": adjusted_tone,
-                    "original_intensity": intensity_label,
-                    "adjusted_intensity": intensity_label,
+                    "original_intensity": ctx.intensity.intensity_label if ctx.intensity else "balanced",
+                    "adjusted_intensity": adjusted_intensity,
                     "adaptive_advice": advice,
                     "confidence_score": confidence,
                 },
             )
 
-            logger.info(f"AITB harmonized tone: {adjusted_tone} ({voice_style}, {formality})")
+            logger.info(f"AITB harmonized tone: {adjusted_tone} ({voice_style}, {formality}) - AI")
 
             # Console output
             console = get_console_logger()
@@ -113,8 +105,57 @@ class AITBAdapter(BaseAgent):
             ctx.add_error(f"AITB: Unexpected error")
             self._fallback_adaptive(ctx)
 
+    def _harmonize_with_ai(self, ctx: PipelineContext) -> dict:
+        """Use AI to harmonize tone and style."""
+        try:
+            client = get_ai_client_fast()
+
+            # Build context summary
+            emotion_summary = ""
+            if ctx.emotions:
+                emotion_summary = f"Emotion: {ctx.emotions.primary_emotion}, tone: {ctx.emotions.emotional_tone}, intensity: {ctx.emotions.emotion_intensity:.2f}"
+
+            intensity_summary = ""
+            if ctx.intensity:
+                intensity_summary = f"Intensity: {ctx.intensity.intensity_label} ({ctx.intensity.mood_intensity:.2f})"
+
+            relationship_summary = ""
+            if ctx.relationship:
+                rel_data = ctx.relationship.raw_output
+                relationship_summary = f"Relationship: {ctx.relationship.relationship_type}, stage: {rel_data.get('relationship_stage', 'unknown')}"
+
+            prompt = f"""Context:
+- User message: "{ctx.user_input}"
+- Region: {ctx.region.upper()}
+- {emotion_summary}
+- {intensity_summary}
+- {relationship_summary}
+
+Harmonize the tone and communication style for this context."""
+
+            response = client.complete_json(
+                prompt=prompt,
+                system_prompt=ADAPTIVE_BALANCING_PROMPT,
+                temperature=0.4,
+            )
+
+            return response
+
+        except Exception as e:
+            logger.warning(f"AITB AI harmonization failed, using fallback: {e}")
+            # Fallback to heuristic
+            return {
+                "adjusted_emotion_tone": "warm",
+                "adjusted_intensity": "balanced",
+                "voice_style": "conversational",
+                "formality": "casual",
+                "personalization_hints": ["keep_balanced"],
+                "adaptive_advice": "Fallback harmonization",
+                "confidence_score": 0.6,
+            }
+
     def _adjust_tone_heuristic(self, emotion_tone: str, intensity: str, stage: str) -> str:
-        """Adjust tone based on heuristics."""
+        """Adjust tone based on heuristics (deprecated - now using AI)."""
         tone_map = {
             "passionate": "warm" if stage in ("new", "early") else "passionate",
             "romantic": "tender" if stage in ("new", "early") else "romantic",

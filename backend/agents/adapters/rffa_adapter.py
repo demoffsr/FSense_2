@@ -62,69 +62,43 @@ class RFFAAdapter(BaseAgent):
     name = "RFFA"
 
     def run(self, ctx: PipelineContext) -> None:
-        """Assess risks and fit for recommendations (heuristic-only for speed)."""
+        """Assess risks and fit for recommendations with AI analysis."""
         try:
             # Get flower name
             flower_name = "unknown"
             if ctx.candidates and ctx.candidates.candidates:
                 flower_name = ctx.candidates.candidates[0].name
 
-            # Heuristic-based risk assessment (no AI call for speed)
+            # Use AI for comprehensive risk assessment
+            result = self._assess_with_ai(ctx, flower_name)
+
+            # Parse AI response
+            overall_risk = result.get("overall_risk_level", "low")
+            fit_assessment = result.get("fit_assessment", "Good fit for the context")
+            confidence = result.get("confidence", 0.85)
+
+            # Convert risks to RiskItem objects
             risks_list = []
-            fit_assessment = "Good fit for the context"
-
-            # Check for intensity mismatch with relationship stage
-            if ctx.relationship and ctx.intensity:
-                rel_data = ctx.relationship.raw_output
-                stage = rel_data.get("relationship_stage", "established")
-                intensity = ctx.intensity.mood_intensity
-
-                if stage in ("new", "early") and intensity > 0.7:
-                    risks_list.append(RiskItem(
-                        risk_type="intensity_mismatch",
-                        severity="medium",
-                        description="High intensity may be too bold for early relationship stage",
-                        mitigation="Consider softer colors or more subtle varieties",
-                    ))
-
-                if stage in ("new", "early") and flower_name.lower() in ("red rose", "rose"):
-                    risks_list.append(RiskItem(
-                        risk_type="relationship_appropriateness",
-                        severity="low",
-                        description="Red roses may be too romantic for early relationships",
-                        mitigation="Consider pink or white roses instead",
-                    ))
-
-            # Check emotional alignment
-            if ctx.emotions:
-                if ctx.emotions.primary_emotion.lower() in ("sadness", "grief", "mourning"):
-                    if flower_name.lower() in ("red rose", "rose"):
-                        risks_list.append(RiskItem(
-                            risk_type="emotional_alignment",
-                            severity="medium",
-                            description="Red roses may not align with somber emotions",
-                            mitigation="Consider white lilies or white roses",
-                        ))
-
-            overall_risk = "medium" if len(risks_list) > 0 else "low"
-            if len(risks_list) > 2:
-                overall_risk = "high"
-                fit_assessment = "Some concerns with the recommendation"
-            elif len(risks_list) > 0:
-                fit_assessment = "Generally good fit with minor considerations"
+            for risk_data in result.get("risks", []):
+                risks_list.append(RiskItem(
+                    risk_type=risk_data.get("risk_type", "general"),
+                    severity=risk_data.get("severity", "low"),
+                    description=risk_data.get("description", ""),
+                    mitigation=risk_data.get("mitigation", ""),
+                ))
 
             ctx.risks = RisksData(
                 overall_risk_level=overall_risk,
                 risks=risks_list,
                 fit_assessment=fit_assessment,
                 raw_output={
-                    "confidence": 0.75,
+                    "confidence": confidence,
                     "risk_count": len(risks_list),
                 },
             )
 
             risk_emoji = "⚠️" if overall_risk in ("medium", "high") else "✅"
-            logger.info(f"RFFA {risk_emoji} overall risk: {overall_risk}, {len(risks_list)} risks identified")
+            logger.info(f"RFFA {risk_emoji} overall risk: {overall_risk}, {len(risks_list)} risks identified (AI)")
 
             # Console output
             console = get_console_logger()
@@ -149,6 +123,59 @@ class RFFAAdapter(BaseAgent):
             logger.error(f"RFFA unexpected error: {e}", exc_info=True)
             ctx.add_error(f"RFFA: Unexpected error")
             self._fallback_risks(ctx)
+
+    def _assess_with_ai(self, ctx: PipelineContext, flower_name: str) -> dict:
+        """Use AI to assess risks and fit."""
+        try:
+            client = get_ai_client_fast()
+
+            # Build context summary
+            emotion_summary = ""
+            if ctx.emotions:
+                emotion_summary = f"Emotion: {ctx.emotions.primary_emotion}, tone: {ctx.emotions.emotional_tone}"
+
+            intensity_summary = ""
+            if ctx.intensity:
+                intensity_summary = f"Intensity: {ctx.intensity.intensity_label} ({ctx.intensity.mood_intensity:.2f})"
+
+            relationship_summary = ""
+            if ctx.relationship:
+                rel_data = ctx.relationship.raw_output
+                relationship_summary = f"Relationship: {ctx.relationship.relationship_type}, stage: {rel_data.get('relationship_stage', 'unknown')}, intimacy: {ctx.relationship.intimacy_level:.2f}"
+
+            intent_summary = ""
+            if ctx.intent:
+                intent_data = ctx.intent.raw_output
+                intent_summary = f"Intent: {ctx.intent.primary_intent}, occasion: {intent_data.get('occasion', 'unknown')}"
+
+            prompt = f"""Context:
+- User message: "{ctx.user_input}"
+- Recommended flower: {flower_name}
+- Region: {ctx.region.upper()}
+- {emotion_summary}
+- {intensity_summary}
+- {relationship_summary}
+- {intent_summary}
+
+Assess potential risks and fit for this flower recommendation."""
+
+            response = client.complete_json(
+                prompt=prompt,
+                system_prompt=RISK_ASSESSMENT_PROMPT,
+                temperature=0.3,
+            )
+
+            return response
+
+        except Exception as e:
+            logger.warning(f"RFFA AI assessment failed, using fallback: {e}")
+            # Fallback response
+            return {
+                "overall_risk_level": "low",
+                "fit_assessment": "Basic assessment (fallback)",
+                "confidence": 0.6,
+                "risks": [],
+            }
 
     def _fallback_risks(self, ctx: PipelineContext) -> None:
         """Provide fallback risk assessment when AI fails."""
