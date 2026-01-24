@@ -13,7 +13,7 @@ from typing import List
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, RisksData, RiskItem
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
@@ -62,72 +62,63 @@ class RFFAAdapter(BaseAgent):
     name = "RFFA"
 
     def run(self, ctx: PipelineContext) -> None:
-        """Assess risks and fit for recommendations."""
+        """Assess risks and fit for recommendations (heuristic-only for speed)."""
         try:
-            client = get_ai_client()
-
-            # Build context summary
+            # Get flower name
             flower_name = "unknown"
             if ctx.candidates and ctx.candidates.candidates:
                 flower_name = ctx.candidates.candidates[0].name
 
-            emotion_summary = ""
-            if ctx.emotions:
-                emotion_summary = f"Emotion: {ctx.emotions.primary_emotion}, intensity: {ctx.emotions.emotion_intensity:.2f}"
-
-            relationship_summary = ""
-            if ctx.relationship:
-                rel_data = ctx.relationship.raw_output
-                relationship_summary = f"Relationship: {ctx.relationship.relationship_type}, stage: {rel_data.get('relationship_stage', 'unknown')}"
-
-            intensity_summary = ""
-            if ctx.intensity:
-                intensity_summary = f"Intensity: {ctx.intensity.intensity_label} ({ctx.intensity.mood_intensity:.2f})"
-
-            intent_summary = ""
-            if ctx.intent:
-                intent_data = ctx.intent.raw_output
-                intent_summary = f"Intent: {ctx.intent.primary_intent}, occasion: {intent_data.get('occasion', 'unknown')}, recipient: {intent_data.get('recipient', 'unknown')}"
-
-            prompt = f"""Context:
-- User message: "{ctx.user_input}"
-- Region: {ctx.region.upper()}
-- Recommended flower: {flower_name}
-- {emotion_summary}
-- {relationship_summary}
-- {intensity_summary}
-- {intent_summary}
-
-Analyze potential risks and assess overall fit."""
-
-            response = client.complete_json(
-                prompt=prompt,
-                system_prompt=RISK_ASSESSMENT_PROMPT,
-                temperature=0.3,
-            )
-
-            # Parse response
-            overall_risk = response.get("overall_risk_level", "low")
-            fit_assessment = response.get("fit_assessment", "Good fit for the context")
-            confidence = float(response.get("confidence", 0.75))
-
-            # Parse risks
+            # Heuristic-based risk assessment (no AI call for speed)
             risks_list = []
-            for risk_data in response.get("risks", []):
-                risk_item = RiskItem(
-                    risk_type=risk_data.get("risk_type", "unknown"),
-                    severity=risk_data.get("severity", "low"),
-                    description=risk_data.get("description", ""),
-                    mitigation=risk_data.get("mitigation", ""),
-                )
-                risks_list.append(risk_item)
+            fit_assessment = "Good fit for the context"
+
+            # Check for intensity mismatch with relationship stage
+            if ctx.relationship and ctx.intensity:
+                rel_data = ctx.relationship.raw_output
+                stage = rel_data.get("relationship_stage", "established")
+                intensity = ctx.intensity.mood_intensity
+
+                if stage in ("new", "early") and intensity > 0.7:
+                    risks_list.append(RiskItem(
+                        risk_type="intensity_mismatch",
+                        severity="medium",
+                        description="High intensity may be too bold for early relationship stage",
+                        mitigation="Consider softer colors or more subtle varieties",
+                    ))
+
+                if stage in ("new", "early") and flower_name.lower() in ("red rose", "rose"):
+                    risks_list.append(RiskItem(
+                        risk_type="relationship_appropriateness",
+                        severity="low",
+                        description="Red roses may be too romantic for early relationships",
+                        mitigation="Consider pink or white roses instead",
+                    ))
+
+            # Check emotional alignment
+            if ctx.emotions:
+                if ctx.emotions.primary_emotion.lower() in ("sadness", "grief", "mourning"):
+                    if flower_name.lower() in ("red rose", "rose"):
+                        risks_list.append(RiskItem(
+                            risk_type="emotional_alignment",
+                            severity="medium",
+                            description="Red roses may not align with somber emotions",
+                            mitigation="Consider white lilies or white roses",
+                        ))
+
+            overall_risk = "medium" if len(risks_list) > 0 else "low"
+            if len(risks_list) > 2:
+                overall_risk = "high"
+                fit_assessment = "Some concerns with the recommendation"
+            elif len(risks_list) > 0:
+                fit_assessment = "Generally good fit with minor considerations"
 
             ctx.risks = RisksData(
                 overall_risk_level=overall_risk,
                 risks=risks_list,
                 fit_assessment=fit_assessment,
                 raw_output={
-                    "confidence": confidence,
+                    "confidence": 0.75,
                     "risk_count": len(risks_list),
                 },
             )
@@ -146,7 +137,7 @@ Analyze potential risks and assess overall fit."""
                 "Fit Assessment": fit_assessment,
                 "Risks Identified": len(risks_list),
                 "Risk Details": risk_details if risk_details else "None",
-                "Confidence": f"{confidence:.2f}",
+                "Confidence": "0.75",
             })
 
         except AIClientError as e:

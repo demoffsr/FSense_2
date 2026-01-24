@@ -17,7 +17,7 @@ from backend.pipeline.context import (
     CulturalData,
     CulturalInsight,
 )
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
@@ -71,70 +71,36 @@ class CRIAdapter(BaseAgent):
     name = "CRI"
 
     def run(self, ctx: PipelineContext) -> None:
-        """Generate cultural insights for recommendations."""
+        """Generate cultural insights for recommendations (heuristic-only for speed)."""
         try:
-            client = get_ai_client()
-
             # Get flower name
             flower_name = "unknown"
             if ctx.candidates and ctx.candidates.candidates:
                 flower_name = ctx.candidates.candidates[0].name
 
-            # Build context
-            intent_summary = ""
-            if ctx.intent:
-                intent_data = ctx.intent.raw_output
-                occasion = intent_data.get("occasion", "general")
-                recipient = intent_data.get("recipient", "unspecified")
-                intent_summary = f"Occasion: {occasion}, Recipient: {recipient}"
+            region = ctx.region.upper()
 
-            prompt = f"""Flower: {flower_name}
-Region: {ctx.region.upper()}
-{intent_summary}
+            # Heuristic-based cultural insights (no AI call for speed)
+            insights_list = self._generate_cultural_insights(flower_name, region)
+            warnings = self._check_cultural_warnings(flower_name, region)
+            traditional, modern = self._get_symbolism(flower_name, region)
 
-User message: "{ctx.user_input}"
-
-Analyze the cultural meanings and appropriateness of this flower in the regional context."""
-
-            response = client.complete_json(
-                prompt=prompt,
-                system_prompt=CULTURAL_ANALYSIS_PROMPT,
-                temperature=0.3,
-            )
-
-            # Parse insights
-            insights_list: List[CulturalInsight] = []
-            for insight_data in response.get("cross_cultural_insights", []):
-                insight = CulturalInsight(
-                    culture=insight_data.get("culture", "Unknown"),
-                    emoji=insight_data.get("emoji", "🌍"),
-                    interpretation=insight_data.get("interpretation", ""),
-                    sentiment=insight_data.get("sentiment", "neutral"),
-                )
-                insights_list.append(insight)
-
-            # Parse warnings
-            warnings = response.get("warnings", [])
-            risk_level = response.get("risk_level", "low")
-            if risk_level in ("medium", "high"):
-                risk_reasoning = response.get("risk_reasoning", "")
-                if risk_reasoning and risk_reasoning not in warnings:
-                    warnings.append(risk_reasoning)
+            risk_level = "medium" if warnings else "low"
 
             ctx.cultural_insights = CulturalData(
-                detected_region=response.get("primary_region", ctx.region.upper()),
+                detected_region=region,
                 cultural_insights=insights_list,
                 warnings=warnings,
                 raw_output={
-                    "traditional_symbolism": response.get("traditional_symbolism", ""),
-                    "modern_symbolism": response.get("modern_symbolism", ""),
+                    "traditional_symbolism": traditional,
+                    "modern_symbolism": modern,
                     "risk_level": risk_level,
-                    "confidence": response.get("confidence", 0.75),
-                    "advice": response.get("advice"),
+                    "confidence": 0.75,
+                    "advice": None,
                 },
             )
 
-            logger.info(f"CRI analyzed {flower_name} for {ctx.region.upper()}: {len(insights_list)} insights, {len(warnings)} warnings")
+            logger.info(f"CRI analyzed {flower_name} for {region}: {len(insights_list)} insights, {len(warnings)} warnings")
 
             # Console output
             console = get_console_logger()
@@ -142,9 +108,9 @@ Analyze the cultural meanings and appropriateness of this flower in the regional
             cultural_raw = ctx.cultural_insights.raw_output
 
             console.agent_result("CRI", {
-                "Primary Region": response.get("primary_region", ctx.region.upper()),
+                "Primary Region": region,
                 "Risk Level": risk_level,
-                "Traditional Symbolism": cultural_raw.get("traditional_symbolism", "")[:60] + "..." if cultural_raw.get("traditional_symbolism", "") else "N/A",
+                "Traditional Symbolism": traditional[:60] + "..." if traditional else "N/A",
                 "Cultural Insights": cultures,
                 "Warnings": warnings if warnings else "None",
             })
@@ -158,6 +124,90 @@ Analyze the cultural meanings and appropriateness of this flower in the regional
             logger.error(f"CRI unexpected error: {e}", exc_info=True)
             ctx.add_error(f"CRI: Unexpected error")
             self._fallback_cultural(ctx)
+
+    def _generate_cultural_insights(self, flower_name: str, region: str) -> List[CulturalInsight]:
+        """Generate cultural insights based on heuristics."""
+        flower_lower = flower_name.lower()
+        insights = []
+
+        # Universal insight
+        insights.append(CulturalInsight(
+            culture="Universal",
+            emoji="🌍",
+            interpretation=f"{flower_name} is widely recognized as a symbol of beauty and emotion",
+            sentiment="positive",
+        ))
+
+        # Region-specific insights
+        if region == "US":
+            insights.append(CulturalInsight(
+                culture="Western",
+                emoji="🇺🇸",
+                interpretation=f"{flower_name} is popular for expressing romantic feelings and appreciation",
+                sentiment="positive",
+            ))
+        elif region == "RU":
+            insights.append(CulturalInsight(
+                culture="Russia",
+                emoji="🇷🇺",
+                interpretation=f"{flower_name} carries deep symbolic meaning in Russian culture",
+                sentiment="positive" if "rose" not in flower_lower else "neutral",
+            ))
+        elif region == "JP":
+            insights.append(CulturalInsight(
+                culture="Japan",
+                emoji="🇯🇵",
+                interpretation=f"{flower_name} is appreciated for its delicate beauty",
+                sentiment="positive",
+            ))
+
+        return insights[:3]
+
+    def _check_cultural_warnings(self, flower_name: str, region: str) -> List[str]:
+        """Check for cultural warnings."""
+        warnings = []
+        flower_lower = flower_name.lower()
+
+        # Yellow flowers in some cultures
+        if "yellow" in flower_lower and region in ("RU",):
+            warnings.append("Yellow flowers may be associated with separation in Russian culture")
+
+        # White flowers and funerals
+        if "white" in flower_lower and region in ("JP", "CN"):
+            warnings.append("White flowers are often associated with funerals in East Asian cultures")
+
+        # Chrysanthemums
+        if "chrysanthemum" in flower_lower and region in ("EU", "IT", "FR"):
+            warnings.append("Chrysanthemums are associated with funerals in many European countries")
+
+        return warnings
+
+    def _get_symbolism(self, flower_name: str, region: str) -> tuple[str, str]:
+        """Get traditional and modern symbolism."""
+        flower_lower = flower_name.lower()
+
+        # Default symbolism
+        traditional = f"{flower_name} has been a symbol of emotion and beauty for centuries"
+        modern = f"Today, {flower_name} remains a popular choice for expressing feelings"
+
+        if "rose" in flower_lower:
+            if "red" in flower_lower:
+                traditional = "Red roses have symbolized romantic love since ancient times"
+                modern = "Today, red roses remain the ultimate symbol of passionate love"
+            elif "white" in flower_lower:
+                traditional = "White roses traditionally symbolize purity and innocence"
+                modern = "Modern interpretations include new beginnings and remembrance"
+            elif "pink" in flower_lower:
+                traditional = "Pink roses have long represented grace and gratitude"
+                modern = "Pink roses are now associated with admiration and appreciation"
+        elif "lily" in flower_lower:
+            traditional = "Lilies have symbolized purity and rebirth across many cultures"
+            modern = "Modern use includes sympathy, devotion, and celebration"
+        elif "tulip" in flower_lower:
+            traditional = "Tulips originated as symbols of paradise in Persian culture"
+            modern = "Today, tulips represent perfect love and spring renewal"
+
+        return (traditional, modern)
 
     def _fallback_cultural(self, ctx: PipelineContext) -> None:
         """Provide fallback cultural data when AI fails."""

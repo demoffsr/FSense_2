@@ -13,7 +13,7 @@ from typing import List
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, AdaptiveData
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
@@ -55,55 +55,26 @@ class AITBAdapter(BaseAgent):
     name = "AITB"
 
     def run(self, ctx: PipelineContext) -> None:
-        """Build adaptive tone configuration based on all context."""
+        """Build adaptive tone configuration based on all context (heuristic-only for speed)."""
         try:
-            client = get_ai_client()
-
             # Extract data from previous agents
             emotion_tone = ctx.emotions.emotional_tone if ctx.emotions else "neutral"
             emotion_intensity = ctx.emotions.emotion_intensity if ctx.emotions else 0.5
 
             intensity_label = ctx.intensity.intensity_label if ctx.intensity else "balanced"
-            intensity_value = ctx.intensity.mood_intensity if ctx.intensity else 0.5
 
-            relationship_type = "neutral"
             relationship_stage = "unspecified"
-            relationship_tone = "neutral"
             if ctx.relationship:
-                relationship_type = ctx.relationship.relationship_type
                 rel_data = ctx.relationship.raw_output
                 relationship_stage = rel_data.get("relationship_stage", "unspecified")
-                relationship_tone = rel_data.get("relationship_tone", "neutral")
 
-            # Build prompt
-            prompt = f"""Emotion tone: "{emotion_tone}"
-Emotion intensity: {emotion_intensity:.2f}
-
-Intensity level: "{intensity_label}" ({intensity_value:.2f})
-
-Relationship type: "{relationship_type}"
-Relationship stage: "{relationship_stage}"
-Relationship tone: "{relationship_tone}"
-
-Region: "{ctx.region.upper()}"
-
-User message: "{ctx.user_input}"
-
-Harmonize these elements to create the optimal communication style."""
-
-            response = client.complete_json(
-                prompt=prompt,
-                system_prompt=ADAPTIVE_BALANCING_PROMPT,
-                temperature=0.35,
-            )
-
-            # Parse response
-            adjusted_tone = response.get("adjusted_emotion_tone", emotion_tone)
-            voice_style = response.get("voice_style", "conversational")
-            formality = response.get("formality", "casual")
-            hints = response.get("personalization_hints", [])
-            advice = response.get("adaptive_advice", "No major correction needed")
-            confidence = float(response.get("confidence_score", 0.7))
+            # Heuristic-based tone adjustment (no AI call for speed)
+            adjusted_tone = self._adjust_tone_heuristic(emotion_tone, intensity_label, relationship_stage)
+            voice_style = self._determine_voice_style(emotion_tone, relationship_stage)
+            formality = self._determine_formality(ctx)
+            hints = self._generate_hints(emotion_tone, intensity_label, relationship_stage)
+            advice = "Tone balanced based on emotional and relationship context"
+            confidence = 0.75
 
             ctx.adaptive = AdaptiveData(
                 tone=adjusted_tone,
@@ -114,7 +85,7 @@ Harmonize these elements to create the optimal communication style."""
                     "original_emotion_tone": emotion_tone,
                     "adjusted_emotion_tone": adjusted_tone,
                     "original_intensity": intensity_label,
-                    "adjusted_intensity": response.get("adjusted_intensity", intensity_label),
+                    "adjusted_intensity": intensity_label,
                     "adaptive_advice": advice,
                     "confidence_score": confidence,
                 },
@@ -141,6 +112,46 @@ Harmonize these elements to create the optimal communication style."""
             logger.error(f"AITB unexpected error: {e}", exc_info=True)
             ctx.add_error(f"AITB: Unexpected error")
             self._fallback_adaptive(ctx)
+
+    def _adjust_tone_heuristic(self, emotion_tone: str, intensity: str, stage: str) -> str:
+        """Adjust tone based on heuristics."""
+        tone_map = {
+            "passionate": "warm" if stage in ("new", "early") else "passionate",
+            "romantic": "tender" if stage in ("new", "early") else "romantic",
+            "warm": "warm",
+            "neutral": "warm",
+            "formal": "professional",
+        }
+        return tone_map.get(emotion_tone.lower(), emotion_tone)
+
+    def _determine_voice_style(self, emotion_tone: str, stage: str) -> str:
+        """Determine voice style."""
+        if emotion_tone.lower() in ("passionate", "romantic"):
+            return "romantic" if stage not in ("new", "early") else "conversational"
+        elif emotion_tone.lower() in ("formal", "professional"):
+            return "professional"
+        return "conversational"
+
+    def _determine_formality(self, ctx: PipelineContext) -> str:
+        """Determine formality level."""
+        if ctx.relationship:
+            if ctx.relationship.formality_level > 0.7:
+                return "formal"
+            elif ctx.relationship.formality_level < 0.3:
+                return "very_casual"
+        return "casual"
+
+    def _generate_hints(self, emotion_tone: str, intensity: str, stage: str) -> List[str]:
+        """Generate personalization hints."""
+        hints = []
+        if stage in ("new", "early"):
+            hints.append("keep_tone_gentle")
+            hints.append("avoid_overly_romantic")
+        if intensity in ("high", "very_high"):
+            hints.append("emphasize_emotion")
+        if emotion_tone.lower() in ("warm", "tender"):
+            hints.append("emphasize_warmth")
+        return hints[:3]
 
     def _fallback_adaptive(self, ctx: PipelineContext) -> None:
         """Provide fallback adaptive data when AI fails."""

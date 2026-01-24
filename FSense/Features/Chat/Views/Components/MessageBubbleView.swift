@@ -2,15 +2,12 @@ import SwiftUI
 
 /// Message bubble - optimized for performance
 struct MessageBubbleView: View {
-    
+
     let message: ChatMessage
     let isThinkingExpanded: Bool
     let onThinkingToggle: () -> Void
     var onExploreFlower: ((FlowerRecommendation) -> Void)? = nil
-    
-    /// Associated thinking content (for embedding in recommendation card)
-    var associatedThinkingContent: ThinkingContent? = nil
-    
+
     /// Whether the thinking is complete (used to hide standalone thinking card)
     var hideCompletedThinking: Bool = false
     
@@ -33,7 +30,6 @@ struct MessageBubbleView: View {
                 EmptyView()
             } else {
                 ThinkingCardView(
-                    content: content,
                     isExpanded: isThinkingExpanded,
                     onToggle: onThinkingToggle
                 )
@@ -42,7 +38,6 @@ struct MessageBubbleView: View {
         case .recommendation(let recommendation):
             RecommendationCardView(
                 recommendation: recommendation,
-                thinkingContent: associatedThinkingContent,
                 isThinkingExpanded: isThinkingExpanded,
                 onThinkingToggle: onThinkingToggle,
                 onExplore: { onExploreFlower?(recommendation) }

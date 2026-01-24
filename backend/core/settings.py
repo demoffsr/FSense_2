@@ -68,7 +68,8 @@ class Settings:
     
     # OpenAI (REQUIRED)
     openai_api_key: str
-    openai_model: str = "gpt-4o"
+    openai_model: str = "gpt-4o"  # Complex tasks (FMRA, CRI, SFA)
+    openai_model_fast: str = "gpt-4o-mini"  # Simple tasks (~3x faster)
     openai_timeout: int = 60  # seconds
     openai_max_retries: int = 3
     
@@ -117,6 +118,7 @@ class Settings:
             
             # OpenAI settings
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+            openai_model_fast=os.getenv("OPENAI_MODEL_FAST", "gpt-4o-mini"),
             openai_timeout=int(os.getenv("OPENAI_TIMEOUT", "60")),
             openai_max_retries=int(os.getenv("OPENAI_MAX_RETRIES", "3")),
             

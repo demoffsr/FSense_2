@@ -110,9 +110,13 @@ async def log_stream():
 
     def get_with_timeout():
         try:
-            return log_queue.get(block=True, timeout=30.0)
+            # Short timeout for responsive streaming
+            return log_queue.get(block=True, timeout=0.5)
         except queue_module.Empty:
             return None
+
+    # Send immediate connection confirmation
+    yield f"data: {json.dumps({'type': 'connected'})}\n\n"
 
     while True:
         try:
@@ -121,18 +125,25 @@ async def log_stream():
 
             if log_data is not None:
                 yield f"data: {json.dumps(log_data)}\n\n"
-            else:
-                # Timeout - send keepalive
-                yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+            # No keepalive needed with short timeout - just continue polling
         except Exception as e:
-            # Send error and keepalive
+            # Send error
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
 
 @app.get("/api/logs/stream")
 async def stream_logs():
     """Server-Sent Events endpoint for real-time logs."""
-    return StreamingResponse(log_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        log_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "Access-Control-Allow-Origin": "*",
+        }
+    )
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page():
@@ -173,9 +184,15 @@ async def recommend(request: RecommendRequest):
     Raises:
         HTTPException 400: If prompt is invalid or pipeline fails
     """
-    result = run_flower_chat(
-        prompt=request.prompt,
-        region=request.region,
+    # Run pipeline in thread pool to NOT block the event loop
+    # This allows SSE streaming to work in parallel
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,  # Use default thread pool
+        lambda: run_flower_chat(
+            prompt=request.prompt,
+            region=request.region,
+        )
     )
 
     if not result["success"]:
@@ -199,7 +216,12 @@ async def recommend_get(prompt: str, region: str = "US"):
     Example:
         GET /api/recommend?prompt=I%20want%20to%20apologize&region=US
     """
-    result = run_flower_chat(prompt=prompt, region=region)
+    # Run pipeline in thread pool to NOT block the event loop
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: run_flower_chat(prompt=prompt, region=region)
+    )
 
     if not result["success"]:
         raise HTTPException(

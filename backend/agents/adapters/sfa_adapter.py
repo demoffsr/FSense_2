@@ -14,7 +14,7 @@ from typing import Any, Tuple, Optional
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 from backend.services.image_service import ImageService
 from backend.schemas.flower_card_payload import (
@@ -315,7 +315,7 @@ class SFAAdapter(BaseAgent):
     def _generate_ai_content(self, ctx: PipelineContext, flower: Any) -> dict:
         """Generate all content sections using AI with full pipeline context."""
         try:
-            client = get_ai_client()
+            client = get_ai_client_fast()
 
             # Build comprehensive context from all agents
             context_parts = []
@@ -398,7 +398,7 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
                 prompt=user_prompt,
                 system_prompt=CONTENT_GENERATION_PROMPT,
                 temperature=0.6,
-                max_tokens=3000,
+                max_tokens=1500,  # Reduced for faster response
             )
 
             # Apply calculated intensity from CIA if available

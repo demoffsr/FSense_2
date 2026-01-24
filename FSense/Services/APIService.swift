@@ -34,6 +34,11 @@ actor APIService {
 
     // MARK: - Public API
 
+    /// Get the base URL for API requests
+    var apiBaseURL: String {
+        baseURL
+    }
+
     /// Request a flower recommendation from the backend
     /// - Parameters:
     ///   - prompt: User's message/query

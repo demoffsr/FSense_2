@@ -224,21 +224,18 @@ class AIClient:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SINGLETON PATTERN (Optional)
+# SINGLETON PATTERN
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _default_client: Optional[AIClient] = None
+_fast_client: Optional[AIClient] = None
 
 
 def get_ai_client() -> AIClient:
     """
-    Get or create default AI client singleton.
-    
-    For most use cases, use this function to get a shared client instance.
-    Create your own AIClient instance only if you need custom settings.
-    
-    Returns:
-        Shared AIClient instance
+    Get default AI client (gpt-4o) for complex tasks.
+
+    Use for: FMRA, CRI, SFA - tasks requiring deep reasoning.
     """
     global _default_client
     if _default_client is None:
@@ -246,11 +243,22 @@ def get_ai_client() -> AIClient:
     return _default_client
 
 
+def get_ai_client_fast() -> AIClient:
+    """
+    Get fast AI client (gpt-4o-mini) for simple tasks.
+
+    Use for: FIA, EIA, RIL, CIA, AITB, RFFA, SRFL - simpler analysis tasks.
+    ~3x faster than gpt-4o with good quality for these tasks.
+    """
+    global _fast_client
+    if _fast_client is None:
+        settings = get_settings()
+        _fast_client = AIClient(model=settings.openai_model_fast)
+    return _fast_client
+
+
 def reset_ai_client() -> None:
-    """
-    Reset AI client singleton (for testing).
-    
-    Next call to get_ai_client() will create a new instance.
-    """
-    global _default_client
+    """Reset AI client singletons (for testing)."""
+    global _default_client, _fast_client
     _default_client = None
+    _fast_client = None

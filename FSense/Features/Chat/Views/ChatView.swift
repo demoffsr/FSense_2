@@ -90,18 +90,7 @@ struct ChatView: View {
         let messages: [ChatMessage]
         let messageIndex: Int
         var onExploreFlower: ((FlowerRecommendation) -> Void)?
-        
-        private var associatedThinkingContent: ThinkingContent? {
-            guard case .recommendation = message.content else { return nil }
-            for i in stride(from: messageIndex - 1, through: 0, by: -1) {
-                if case .thinking(let content) = messages[i].content {
-                    return content
-                }
-                if messages[i].sender == .user { break }
-            }
-            return nil
-        }
-        
+
         private var associatedThinkingMessageId: UUID? {
             guard case .recommendation = message.content else { return nil }
             for i in stride(from: messageIndex - 1, through: 0, by: -1) {
@@ -129,7 +118,6 @@ struct ChatView: View {
                 isThinkingExpanded: viewModel.isThinkingCardExpanded(thinkingId),
                 onThinkingToggle: { viewModel.send(.toggleThinkingCard(thinkingId)) },
                 onExploreFlower: onExploreFlower,
-                associatedThinkingContent: associatedThinkingContent,
                 hideCompletedThinking: isThinkingFollowedByRecommendation
             )
         }

@@ -21,12 +21,11 @@ final class ChatViewModel: ObservableObject {
 
     private var thinkingTask: Task<Void, Never>?
     private let historyManager = ChatHistoryManager.shared
+    private let eventService = PipelineEventService.shared
 
     // MARK: - Timing Constants
 
     private let acknowledgementDelay: UInt64 = 300_000_000 // 0.3s
-    private let thinkingStepDelay: UInt64 = 400_000_000 // 0.4s per step during API call
-    private let minThinkingTime: UInt64 = 2_000_000_000 // 2s minimum thinking display
     
     // MARK: - Initialization
     
@@ -223,15 +222,9 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func startThinkingProcessWithAPI(for userQuery: String) async {
-        // Create thinking content with all steps pending
-        var thinkingContent = ThinkingContent(
-            steps: ThinkingStep.mockSteps,
-            isExpanded: true,
-            isComplete: false
-        )
-
+        // Add thinking card placeholder to messages
         let thinkingMessage = ChatMessage(
-            content: .thinking(thinkingContent),
+            content: .thinking(ThinkingContent(steps: [], isExpanded: true, isComplete: false)),
             sender: .ai
         )
 
@@ -239,55 +232,31 @@ final class ChatViewModel: ObservableObject {
         state.expandedThinkingCards.insert(thinkingMessage.id)
         state.phase = .thinking
 
-        // Start API call concurrently with thinking animation
-        let apiTask = Task<FlowerCardPayload?, Never> {
-            do {
-                return try await APIService.shared.getRecommendation(prompt: userQuery)
-            } catch {
-                print("API Error: \(error.localizedDescription)")
-                return nil
-            }
+        // Start SSE connection BEFORE API call
+        eventService.start()
+
+        // Small delay to ensure SSE is connected
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+
+        // Make API call
+        var payload: FlowerCardPayload?
+        do {
+            payload = try await APIService.shared.getRecommendation(prompt: userQuery)
+        } catch {
+            print("[ChatViewModel] API Error: \(error.localizedDescription)")
         }
 
-        // Animate through thinking steps while API call is in progress
-        let startTime = DispatchTime.now()
-
-        for index in 0..<thinkingContent.steps.count {
-            guard !Task.isCancelled else { return }
-
-            // Set current step to active
-            thinkingContent.steps[index].status = .active
-            updateThinkingMessage(thinkingMessage.id, with: thinkingContent)
-
-            // Wait for step duration
-            try? await Task.sleep(nanoseconds: thinkingStepDelay)
-            guard !Task.isCancelled else { return }
-
-            // Mark step as completed
-            thinkingContent.steps[index].status = .completed
-            updateThinkingMessage(thinkingMessage.id, with: thinkingContent)
-        }
-
-        // Wait for API result
-        let payload = await apiTask.value
-
-        // Ensure minimum thinking time has elapsed
-        let elapsed = DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds
-        if elapsed < minThinkingTime {
-            try? await Task.sleep(nanoseconds: minThinkingTime - elapsed)
-        }
+        // Wait for final events
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
 
         guard !Task.isCancelled else { return }
 
-        // Mark thinking as complete
-        thinkingContent.isComplete = true
-        thinkingContent.isExpanded = false
-        updateThinkingMessage(thinkingMessage.id, with: thinkingContent)
+        // Stop SSE listening
+        eventService.stop()
+
+        // Remove standalone thinking card (recommendation has its own)
+        state.messages.removeAll { $0.id == thinkingMessage.id }
         state.expandedThinkingCards.remove(thinkingMessage.id)
-
-        // Short pause before recommendation
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        guard !Task.isCancelled else { return }
 
         // STATE 4: Show recommendation
         if let payload = payload {
@@ -295,17 +264,6 @@ final class ChatViewModel: ObservableObject {
             await showRecommendation(from: payload)
         } else {
             await showError()
-        }
-    }
-    
-    private func updateThinkingMessage(_ messageId: UUID, with content: ThinkingContent) {
-        if let index = state.messages.firstIndex(where: { $0.id == messageId }) {
-            state.messages[index] = ChatMessage(
-                id: messageId,
-                content: .thinking(content),
-                sender: .ai,
-                timestamp: state.messages[index].timestamp
-            )
         }
     }
     
@@ -381,6 +339,7 @@ final class ChatViewModel: ObservableObject {
     
     private func handleReset() {
         thinkingTask?.cancel()
+        eventService.stop()
 
         // Clear session ID - new session will be created lazily when user sends a message
         sessionId = nil

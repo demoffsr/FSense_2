@@ -15,7 +15,7 @@ from backend.pipeline.context import (
     CandidatesData,
     FlowerCandidate,
 )
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class FMRAAdapter(BaseAgent):
     def run(self, ctx: PipelineContext) -> None:
         """Select flower based on user context."""
         try:
-            client = get_ai_client()
+            client = get_ai_client_fast()
             user_prompt = self._build_prompt(ctx)
 
             response = client.complete_json(

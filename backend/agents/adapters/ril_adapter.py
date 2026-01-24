@@ -11,7 +11,7 @@ Based on: relationship_intent_agent_v2.py
 import logging
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, RelationshipData
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class RILAdapter(BaseAgent):
     def run(self, ctx: PipelineContext) -> None:
         """Analyze relationship context and store in context."""
         try:
-            client = get_ai_client()
+            client = get_ai_client_fast()
 
             # Extract data from previous agents
             recipient = ctx.intent.raw_output.get("recipient", "unspecified") if ctx.intent else "unspecified"

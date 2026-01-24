@@ -13,7 +13,7 @@ from typing import List
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, IntensityData
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
@@ -106,15 +106,10 @@ class CIAAdapter(BaseAgent):
             # Calculate base intensity from emotions
             base_intensity = ctx.emotions.emotion_intensity if ctx.emotions else 0.5
 
-            # Apply heuristic adjustments
+            # Apply heuristic adjustments (no AI for speed)
             intensity = self._calculate_intensity_heuristic(ctx, base_intensity)
-
-            # Optionally refine with AI
-            if intensity > 0.0:  # Use AI to refine
-                intensity, factors, reasoning = self._refine_with_ai(ctx, intensity)
-            else:
-                factors = ["emotion_level"]
-                reasoning = "Calculated from emotional context"
+            factors = ["emotion_level", "tone", "relationship"]
+            reasoning = "Calculated from emotional and relationship context"
 
             # Determine label
             label = self._get_intensity_label(intensity)
@@ -192,7 +187,7 @@ class CIAAdapter(BaseAgent):
     def _refine_with_ai(self, ctx: PipelineContext, heuristic_score: float) -> tuple[float, List[str], str]:
         """Refine intensity calculation with AI reasoning."""
         try:
-            client = get_ai_client()
+            client = get_ai_client_fast()
 
             # Build context summary
             emotion_summary = ""

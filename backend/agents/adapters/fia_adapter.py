@@ -13,7 +13,7 @@ from typing import List
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, IntentData
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class FIAAdapter(BaseAgent):
     def run(self, ctx: PipelineContext) -> None:
         """Analyze user intent and store in context."""
         try:
-            client = get_ai_client()
+            client = get_ai_client_fast()
 
             prompt = f"""User message: "{ctx.user_input}"
 Region: {ctx.region.upper()}

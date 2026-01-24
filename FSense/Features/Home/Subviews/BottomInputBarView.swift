@@ -372,24 +372,7 @@ struct MessageRow: View {
     var messages: [ChatMessage] = []
     var messageIndex: Int = 0
     var onExploreFlower: ((FlowerRecommendation) -> Void)?
-    
-    /// Find associated thinking content for recommendation messages
-    private var associatedThinkingContent: ThinkingContent? {
-        guard case .recommendation = message.content else { return nil }
-        
-        // Look backwards to find the thinking message
-        for i in stride(from: messageIndex - 1, through: 0, by: -1) {
-            if case .thinking(let content) = messages[i].content {
-                return content
-            }
-            // Stop if we hit a user message (new conversation turn)
-            if messages[i].sender == .user {
-                break
-            }
-        }
-        return nil
-    }
-    
+
     /// Associated thinking message ID (for expand/collapse state)
     private var associatedThinkingMessageId: UUID? {
         guard case .recommendation = message.content else { return nil }
@@ -432,7 +415,6 @@ struct MessageRow: View {
                 viewModel.send(.toggleThinkingCard(thinkingId))
             },
             onExploreFlower: onExploreFlower,
-            associatedThinkingContent: associatedThinkingContent,
             hideCompletedThinking: isThinkingFollowedByRecommendation
         )
     }

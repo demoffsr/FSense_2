@@ -26,9 +26,10 @@ def broadcast_log(log_data: dict) -> None:
         # Try to put without blocking
         try:
             q.put_nowait(log_data)
+            print(f"[LOG_QUEUE] Broadcast: {log_data.get('type', 'unknown')}")
         except queue.Full:
             # Queue full, skip this log
-            pass
-    except Exception:
-        # Silently ignore broadcast errors
-        pass
+            print(f"[LOG_QUEUE] Queue full, skipping: {log_data.get('type', 'unknown')}")
+    except Exception as e:
+        # Log broadcast errors
+        print(f"[LOG_QUEUE] Error: {e}")

@@ -13,7 +13,7 @@ from typing import List
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, EmotionData
-from backend.core.ai_client import get_ai_client, AIClientError
+from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class EIAAdapter(BaseAgent):
     def run(self, ctx: PipelineContext) -> None:
         """Analyze emotional context and store in context."""
         try:
-            client = get_ai_client()
+            client = get_ai_client_fast()
 
             # Build prompt with context
             intent_hint = f"\nIntent context: {ctx.intent.primary_intent}" if ctx.intent else ""
