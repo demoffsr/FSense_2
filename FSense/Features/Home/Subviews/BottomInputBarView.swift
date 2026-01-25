@@ -169,6 +169,14 @@ struct ExpandedChatSheet: View {
     @Namespace private var bottomID
     @Namespace private var toolbarNamespace
 
+    // MARK: - Static Constants (performance optimization)
+    private static let inputBgColor = Color(red: 0.98, green: 0.98, blue: 0.98)
+    private static let toolbarSymbols = ["magnifyingglass", "ellipsis"]
+    private static let gradientColors = [
+        Color(red: 0.55, green: 0, blue: 0.92),
+        Color(red: 0.91, green: 0.04, blue: 0.79)
+    ]
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -197,10 +205,7 @@ struct ExpandedChatSheet: View {
             }
         }
         .onAppear {
-            // Animate plus button appearance
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7).delay(0.15)) {
-                showPlusButton = true
-            }
+            showPlusButton = true
             // Auto-focus input when sheet opens
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 isInputFocused = true
@@ -209,6 +214,7 @@ struct ExpandedChatSheet: View {
         .onDisappear {
             showPlusButton = false
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showPlusButton)
     }
 
     // MARK: - Messages Scroll View
@@ -218,12 +224,15 @@ struct ExpandedChatSheet: View {
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 16) {
-                        ForEach(Array(viewModel.orderedMessages.enumerated()), id: \.element.id) { index, message in
+                        let messages = viewModel.orderedMessages
+                        ForEach(messages.indices, id: \.self) { index in
+                            let message = messages[index]
                             MessageRow(
                                 message: message,
-                                viewModel: viewModel,
-                                messages: viewModel.orderedMessages,
+                                messages: messages,
                                 messageIndex: index,
+                                isThinkingExpanded: viewModel.isThinkingCardExpanded(message.id),
+                                onThinkingToggle: { viewModel.send(.toggleThinkingCard(message.id)) },
                                 onExploreFlower: { recommendation in
                                     if let payload = viewModel.lastPayload {
                                         selectedFlower = payload.toFlower()
@@ -254,29 +263,21 @@ struct ExpandedChatSheet: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .onScrollGeometryChange(for: Bool.self) { geometry in
-                    // Show button only when: has content AND scrolled away from bottom
                     let contentHeight = geometry.contentSize.height
                     let visibleHeight = geometry.visibleRect.height
-                    let offsetY = geometry.contentOffset.y
-                    let bottomOffset = contentHeight - visibleHeight - offsetY
-
-                    // Need at least some content to scroll, and be scrolled up from bottom
-                    return contentHeight > visibleHeight + 50 && bottomOffset > 80
-                } action: { _, shouldShow in
-                    if shouldShow != showScrollToBottom {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showScrollToBottom = shouldShow
-                        }
-                    }
+                    guard contentHeight > visibleHeight + 50 else { return false }
+                    let bottomOffset = contentHeight - visibleHeight - geometry.contentOffset.y
+                    return bottomOffset > 80
+                } action: { oldValue, newValue in
+                    guard oldValue != newValue else { return }
+                    showScrollToBottom = newValue
                 }
                 .defaultScrollAnchor(.bottom)
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: viewModel.messages.count) { _, _ in
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        withAnimation(.easeOut(duration: 0.25)) {
-                            proxy.scrollTo(bottomID, anchor: .bottom)
-                            showScrollToBottom = false
-                        }
+                        proxy.scrollTo(bottomID, anchor: .bottom)
+                        showScrollToBottom = false
                     }
                 }
                 .onTapGesture {
@@ -287,19 +288,17 @@ struct ExpandedChatSheet: View {
             // Floating scroll-to-bottom button (only when scrolled up)
             if showScrollToBottom {
                 scrollToBottomButton
-                    .transition(.scale.combined(with: .opacity))
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: showScrollToBottom)
     }
 
     // MARK: - Scroll to Bottom Button
 
     private var scrollToBottomButton: some View {
         Button {
-            withAnimation(.easeOut(duration: 0.25)) {
-                scrollProxy?.scrollTo(bottomID, anchor: .bottom)
-                showScrollToBottom = false
-            }
+            scrollProxy?.scrollTo(bottomID, anchor: .bottom)
+            showScrollToBottom = false
         } label: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 14, weight: .semibold))
@@ -308,52 +307,48 @@ struct ExpandedChatSheet: View {
                 .glassEffect(.clear.tint(.black.opacity(0.12)).interactive(), in: .circle)
         }
         .padding(.bottom, 12)
+        .transition(.scale.combined(with: .opacity))
     }
 
     // MARK: - Toolbar Buttons
 
+    @ViewBuilder
     private var toolbarButtons: some View {
-        let symbols = ["magnifyingglass", "ellipsis"]
-
-        return GlassEffectContainer(spacing: 0) {
+        GlassEffectContainer(spacing: 0) {
             HStack(spacing: 0) {
-                ForEach(symbols.indices, id: \.self) { index in
-                    if index == 0 {
-                        // Search button
-                        Image(systemName: symbols[index])
-                            .font(.system(size: 17, weight: .medium))
-                            .frame(width: 42, height: 36)
-                            .contentShape(Rectangle())
-                            .glassEffect()
-                            .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
-                            .onTapGesture {
-                                print("Search tapped")
-                            }
-                    } else {
-                        // Menu button
-                        Menu {
-                            Button {
-                                viewModel.send(.reset)
-                                controller.sessionToLoad = nil
-                            } label: {
-                                Label("Новый чат", systemImage: "plus.message")
-                            }
-
-                            Button(role: .destructive) {
-                                viewModel.send(.reset)
-                                controller.sessionToLoad = nil
-                            } label: {
-                                Label("Очистить чат", systemImage: "trash")
-                            }
-                        } label: {
-                            Image(systemName: symbols[index])
-                                .font(.system(size: 17, weight: .medium))
-                                .frame(width: 42, height: 36)
-                                .contentShape(Rectangle())
-                                .glassEffect()
-                                .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
-                        }
+                // Search button
+                Image(systemName: Self.toolbarSymbols[0])
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(width: 42, height: 36)
+                    .contentShape(Rectangle())
+                    .glassEffect()
+                    .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
+                    .onTapGesture {
+                        print("Search tapped")
                     }
+
+                // Menu button
+                Menu {
+                    Button {
+                        viewModel.send(.reset)
+                        controller.sessionToLoad = nil
+                    } label: {
+                        Label("Новый чат", systemImage: "plus.message")
+                    }
+
+                    Button(role: .destructive) {
+                        viewModel.send(.reset)
+                        controller.sessionToLoad = nil
+                    } label: {
+                        Label("Очистить чат", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: Self.toolbarSymbols[1])
+                        .font(.system(size: 17, weight: .medium))
+                        .frame(width: 42, height: 36)
+                        .contentShape(Rectangle())
+                        .glassEffect()
+                        .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
                 }
             }
         }
@@ -361,93 +356,102 @@ struct ExpandedChatSheet: View {
 
     // MARK: - Input Area
 
-    private let inputBackgroundColor = Color(red: 0.98, green: 0.98, blue: 0.98)
-
+    @ViewBuilder
     private var inputArea: some View {
         HStack(spacing: 12) {
             // Plus button - animated appearance
             if showPlusButton {
-                Button {
-                    viewModel.send(.reset)
-                    controller.sessionToLoad = nil
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.primary)
-                        .frame(width: 50, height: 50)
-                        .background(inputBackgroundColor)
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 0)
-                        .overlay(
-                            Circle()
-                                .inset(by: 0.5)
-                                .stroke(.white, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .transition(.scale.combined(with: .opacity))
+                plusButton
+                    .transition(.scale.combined(with: .opacity))
             }
 
-            // Text field
-            HStack(spacing: 8) {
-                TextField("Ask me about flowers...", text: Binding(
-                    get: { viewModel.inputText },
-                    set: { viewModel.send(.inputTextChanged($0)) }
-                ))
-                .font(.system(size: 16))
-                .focused($isInputFocused)
-                .disabled(!viewModel.isInputEnabled)
-                .submitLabel(.send)
-                .onSubmit {
-                    if viewModel.canSendMessage {
-                        viewModel.send(.sendMessage)
-                    }
-                }
-
-                // Send button
-                Button {
-                    if viewModel.canSendMessage {
-                        viewModel.send(.sendMessage)
-                        isInputFocused = false
-                    }
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 30, height: 30)
-                        .background(
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 0.55, green: 0, blue: 0.92),
-                                            Color(red: 0.91, green: 0.04, blue: 0.79)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .opacity(viewModel.canSendMessage ? 1 : 0.4)
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(!viewModel.canSendMessage)
-            }
-            .padding(.leading, 18)
-            .padding(.trailing, 10)
-            .frame(height: 50)
-            .background(inputBackgroundColor)
-            .cornerRadius(100)
-            .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 0)
-            .overlay(
-                RoundedRectangle(cornerRadius: 100)
-                    .inset(by: 0.5)
-                    .stroke(.white, lineWidth: 1)
-            )
+            // Text field container
+            textFieldContainer
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(Color.white)
+    }
+
+    private var plusButton: some View {
+        Button {
+            viewModel.send(.reset)
+            controller.sessionToLoad = nil
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(.primary)
+                .frame(width: 50, height: 50)
+                .background(Self.inputBgColor)
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 0)
+                .overlay(
+                    Circle()
+                        .inset(by: 0.5)
+                        .stroke(.white, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var textFieldContainer: some View {
+        HStack(spacing: 8) {
+            TextField("Ask me about flowers...", text: inputTextBinding)
+                .font(.system(size: 16))
+                .focused($isInputFocused)
+                .disabled(!viewModel.isInputEnabled)
+                .submitLabel(.send)
+                .onSubmit(sendMessageIfCan)
+
+            // Send button
+            sendButton
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 10)
+        .frame(height: 50)
+        .background(Self.inputBgColor)
+        .cornerRadius(100)
+        .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 0)
+        .overlay(
+            RoundedRectangle(cornerRadius: 100)
+                .inset(by: 0.5)
+                .stroke(.white, lineWidth: 1)
+        )
+    }
+
+    private var inputTextBinding: Binding<String> {
+        Binding(
+            get: { viewModel.inputText },
+            set: { viewModel.send(.inputTextChanged($0)) }
+        )
+    }
+
+    private var sendButton: some View {
+        Button(action: sendMessageIfCan) {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: Self.gradientColors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .opacity(viewModel.canSendMessage ? 1 : 0.4)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!viewModel.canSendMessage)
+    }
+
+    private func sendMessageIfCan() {
+        guard viewModel.canSendMessage else { return }
+        viewModel.send(.sendMessage)
+        isInputFocused = false
     }
 }
 
@@ -478,9 +482,10 @@ struct ChatPlusButton: View {
 
 struct MessageRow: View {
     let message: ChatMessage
-    @ObservedObject var viewModel: ChatViewModel
-    var messages: [ChatMessage] = []
-    var messageIndex: Int = 0
+    let messages: [ChatMessage]
+    let messageIndex: Int
+    let isThinkingExpanded: Bool
+    let onThinkingToggle: () -> Void
     var onExploreFlower: ((FlowerRecommendation) -> Void)?
 
     private var associatedThinkingMessageId: UUID? {
@@ -506,10 +511,8 @@ struct MessageRow: View {
     var body: some View {
         MessageBubbleView(
             message: message,
-            isThinkingExpanded: viewModel.isThinkingCardExpanded(associatedThinkingMessageId ?? message.id),
-            onThinkingToggle: {
-                viewModel.send(.toggleThinkingCard(associatedThinkingMessageId ?? message.id))
-            },
+            isThinkingExpanded: isThinkingExpanded,
+            onThinkingToggle: onThinkingToggle,
             onExploreFlower: onExploreFlower,
             hideCompletedThinking: isThinkingFollowedByRecommendation
         )
