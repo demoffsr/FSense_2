@@ -17,6 +17,15 @@ final class FlowerCardViewModel: ObservableObject {
     
     init(flower: Flower? = nil) {
         state.flower = flower
+
+        if let f = flower {
+            print("[FlowerCardViewModel] Init with flower: \(f.name)")
+            print("[FlowerCardViewModel] meanings: \(f.meanings)")
+            print("[FlowerCardViewModel] giftingInfo: \(f.giftingInfo != nil)")
+            print("[FlowerCardViewModel] contextInfo: \(f.contextInfo != nil)")
+        } else {
+            print("[FlowerCardViewModel] Init with nil flower")
+        }
     }
     
     // MARK: - Action Handler
@@ -105,6 +114,11 @@ final class FlowerCardViewModel: ObservableObject {
     // MARK: - Private Handlers
     
     private func handleOnAppear() {
+        // Save flower to archive when card is opened
+        if let flower = state.flower {
+            FlowerArchiveService.shared.archiveFlower(flower)
+        }
+
         // Future: Analytics tracking, data refresh, etc.
     }
     
