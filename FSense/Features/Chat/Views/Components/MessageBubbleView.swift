@@ -59,16 +59,14 @@ struct MessageBubbleView: View {
     private func userMessage(text: String) -> some View {
         HStack {
             Spacer(minLength: 60)
-            
+
             Text(text)
                 .font(.subheadline)
                 .foregroundColor(.black)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(14)
                 .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .compositingGroup()
-                .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                .cornerRadius(16)
+                .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
         }
     }
 
@@ -80,14 +78,12 @@ struct MessageBubbleView: View {
                 .font(.subheadline)
                 .foregroundColor(.black)
                 .lineSpacing(3)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .compositingGroup()
-                .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
-            
+                .cornerRadius(16)
+                .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
+
             Spacer(minLength: 40)
         }
     }
@@ -97,13 +93,11 @@ struct MessageBubbleView: View {
     private var typingIndicator: some View {
         HStack {
             TypingIndicatorView()
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(14)
                 .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .compositingGroup()
-                .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
-            
+                .cornerRadius(16)
+                .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
+
             Spacer()
         }
     }

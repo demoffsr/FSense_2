@@ -32,27 +32,26 @@ struct HomeView: View {
                         HomeGradientBackground()
 
                         // Header content
-                        VStack(spacing: 16) {
+                        VStack(spacing: 12) {
                             HomeHeaderView()
                             MeaningBannerView()
                             ScanCTAView()
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, topInset + 8)
+                        .padding(.top, topInset + 2)
                     }
                     .frame(height: headerHeight + topInset)
-
-                    // ══════════════════════════════════════════════════════════
-                    // 2. WHITE FADE — переход (накладывается на градиент сверху)
-                    // ══════════════════════════════════════════════════════════
-                    LinearGradient(
-                        colors: [.white.opacity(0), .white],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 80)
-                    .offset(y: -30) // Накладываем поверх нижней части градиента
-                    .padding(.bottom, -30) // Компенсируем offset чтобы не сдвигать контент ниже
+                    .overlay(alignment: .bottom) {
+                        // ══════════════════════════════════════════════════════════
+                        // 2. WHITE FADE — переход (накладывается на низ хедера)
+                        // ══════════════════════════════════════════════════════════
+                        LinearGradient(
+                            colors: [.white.opacity(0), .white],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 20)
+                    }
 
                     // ══════════════════════════════════════════════════════════
                     // 3. WHITE CONTENT — заголовок + скролл карточек
@@ -69,6 +68,7 @@ struct HomeView: View {
                             }
                         )
                         .padding(.horizontal, 16)
+                        .padding(.top, 16)
                         
                         // Scrollable cards (только карточки скроллятся)
                         ScrollView(showsIndicators: false) {

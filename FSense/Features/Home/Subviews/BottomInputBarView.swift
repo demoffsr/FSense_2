@@ -178,7 +178,7 @@ struct ExpandedChatSheet: View {
                 // Input area - automatically moves with keyboard in native sheet
                 inputArea
             }
-            .background(Color.white)
+            .background(Color(white: 0.97))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {

@@ -17,11 +17,11 @@ struct ThinkingCardView: View {
                 expandedContent
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 14)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(white: 0.96))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) {
