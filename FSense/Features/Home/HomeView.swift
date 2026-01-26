@@ -43,17 +43,16 @@ struct HomeView: View {
                     .frame(height: headerHeight + topInset)
 
                     // ══════════════════════════════════════════════════════════
-                    // 2. WHITE FADE — переход
+                    // 2. WHITE FADE — переход (накладывается на градиент сверху)
                     // ══════════════════════════════════════════════════════════
                     LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(0), location: 0.12),
-                            .init(color: .white, location: 0.36)
-                        ],
+                        colors: [.white.opacity(0), .white],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 32)
+                    .frame(height: 80)
+                    .offset(y: -30) // Накладываем поверх нижней части градиента
+                    .padding(.bottom, -30) // Компенсируем offset чтобы не сдвигать контент ниже
 
                     // ══════════════════════════════════════════════════════════
                     // 3. WHITE CONTENT — заголовок + скролл карточек
