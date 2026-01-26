@@ -26,6 +26,7 @@ try:
     from backend.database.flower_database import (
         get_flowers_by_emotion,
         get_flower_by_id,
+        get_flowers_by_ids,
         FLOWERS_DATA,
     )
     DATABASE_AVAILABLE = True
@@ -107,13 +108,13 @@ class FMRAAdapter(BaseAgent):
             return []
 
         emotion = ctx.emotions.primary_emotion.lower()
-        matches = get_flowers_by_emotion(emotion, top_n=5)
+        matches = list(get_flowers_by_emotion(emotion, top_n=5))
 
         if not matches:
             # Try secondary emotions
             if ctx.emotions.secondary_emotions:
                 for sec_emotion in ctx.emotions.secondary_emotions[:2]:
-                    matches = get_flowers_by_emotion(sec_emotion.lower(), top_n=3)
+                    matches = list(get_flowers_by_emotion(sec_emotion.lower(), top_n=3))
                     if matches:
                         break
 
@@ -121,10 +122,14 @@ class FMRAAdapter(BaseAgent):
 
     def _rank_with_ai(self, ctx: PipelineContext, db_matches: list[dict]) -> FlowerCandidate:
         """Use AI to rank database matches and select the best one."""
+        # Batch lookup all flowers at once (fixes N+1 query pattern)
+        flower_ids = tuple(m["flower_id"] for m in db_matches)
+        flowers_data = get_flowers_by_ids(flower_ids)
+
         # Build list of flowers from database
         flower_options = []
         for match in db_matches:
-            flower_data = get_flower_by_id(match["flower_id"])
+            flower_data = flowers_data.get(match["flower_id"])
             if flower_data:
                 flower_options.append({
                     "id": match["flower_id"],

@@ -4,6 +4,7 @@ struct HomeView: View {
 
     @StateObject private var viewModel = HomeViewModel()
     @StateObject private var chatSheetController = ChatSheetController()
+    @StateObject private var chatViewModel = ChatViewModel()
 
     // HEADER HEIGHT — меняй это значение, высота изменится
     private let headerHeight: CGFloat = 240
@@ -97,7 +98,7 @@ struct HomeView: View {
                 }
                 .ignoresSafeArea(edges: .top)
                 .overlay(alignment: .bottom) {
-                    BottomInputBarView(controller: chatSheetController)
+                    BottomInputBarView(controller: chatSheetController, viewModel: chatViewModel)
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
             }

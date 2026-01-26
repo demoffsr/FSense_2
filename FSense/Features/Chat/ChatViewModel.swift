@@ -16,6 +16,9 @@ final class ChatViewModel: ObservableObject {
     /// Pipeline progress steps (forwarded from eventService to avoid multiple observers)
     @Published private(set) var pipelineSteps: [ProgressStep] = []
 
+    /// Expanded thinking cards - separate @Published for efficient UI updates
+    @Published private(set) var expandedThinkingCards: Set<UUID> = []
+
     // MARK: - Session Management
 
     /// Current session ID for persistence (nil until first message is sent)
@@ -55,7 +58,7 @@ final class ChatViewModel: ObservableObject {
         // Restore expanded state for any thinking cards
         for message in state.messages {
             if case .thinking(let content) = message.content, !content.isComplete {
-                state.expandedThinkingCards.insert(message.id)
+                expandedThinkingCards.insert(message.id)
             }
         }
 
@@ -103,7 +106,7 @@ final class ChatViewModel: ObservableObject {
         // Restore expanded state for any thinking cards
         for message in state.messages {
             if case .thinking(let content) = message.content, !content.isComplete {
-                state.expandedThinkingCards.insert(message.id)
+                expandedThinkingCards.insert(message.id)
             }
         }
     }
@@ -185,7 +188,7 @@ final class ChatViewModel: ObservableObject {
     }
     
     func isThinkingCardExpanded(_ messageId: UUID) -> Bool {
-        state.expandedThinkingCards.contains(messageId)
+        expandedThinkingCards.contains(messageId)
     }
     
     // MARK: - Private Handlers
@@ -255,7 +258,7 @@ final class ChatViewModel: ObservableObject {
         )
 
         state.messages.append(thinkingMessage)
-        state.expandedThinkingCards.insert(thinkingMessage.id)
+        expandedThinkingCards.insert(thinkingMessage.id)
         state.phase = .thinking
 
         // Start SSE connection BEFORE API call
@@ -276,7 +279,7 @@ final class ChatViewModel: ObservableObject {
 
         // Remove standalone thinking card (recommendation has its own)
         state.messages.removeAll { $0.id == thinkingMessage.id }
-        state.expandedThinkingCards.remove(thinkingMessage.id)
+        expandedThinkingCards.remove(thinkingMessage.id)
 
         // STATE 4: Show recommendation
         if let payload = payload {
@@ -319,15 +322,12 @@ final class ChatViewModel: ObservableObject {
     }
     
     private func handleToggleThinkingCard(_ messageId: UUID) {
-        // Toggle the expanded state
-        if state.expandedThinkingCards.contains(messageId) {
-            state.expandedThinkingCards.remove(messageId)
+        // Toggle the expanded state - @Published handles UI updates automatically
+        if expandedThinkingCards.contains(messageId) {
+            expandedThinkingCards.remove(messageId)
         } else {
-            state.expandedThinkingCards.insert(messageId)
+            expandedThinkingCards.insert(messageId)
         }
-        
-        // Force UI update by triggering objectWillChange
-        objectWillChange.send()
     }
     
     private func handleThinkingStepCompleted(_ index: Int) {
@@ -366,6 +366,9 @@ final class ChatViewModel: ObservableObject {
 
         // Clear last payload
         lastPayload = nil
+
+        // Clear expanded thinking cards
+        expandedThinkingCards.removeAll()
 
         state = ChatState()
         state.messages = [.welcomeMessage]

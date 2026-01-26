@@ -20,9 +20,12 @@ final class ChatHistoryManager: ObservableObject {
     private let sessionsKey = "chat_sessions"
     
     // MARK: - Initialization
-    
+
     private init() {
-        loadSessions()
+        // Load sessions asynchronously to avoid blocking main thread at startup
+        Task { @MainActor in
+            await loadSessionsAsync()
+        }
     }
     
     // MARK: - Public API
@@ -111,14 +114,19 @@ final class ChatHistoryManager: ObservableObject {
     }
     
     // MARK: - Private Methods
-    
-    private func loadSessions() {
-        guard let data = userDefaults.data(forKey: sessionsKey),
-              let decoded = try? JSONDecoder().decode([ChatSession].self, from: data) else {
+
+    private func loadSessionsAsync() async {
+        guard let data = userDefaults.data(forKey: sessionsKey) else {
             sessions = []
             return
         }
-        sessions = decoded.sorted { $0.updatedAt > $1.updatedAt }
+
+        // Decode on background thread to avoid blocking UI
+        let decoded = await Task.detached(priority: .userInitiated) {
+            try? JSONDecoder().decode([ChatSession].self, from: data)
+        }.value
+
+        sessions = (decoded ?? []).sorted { $0.updatedAt > $1.updatedAt }
     }
     
     private func saveSessions() {

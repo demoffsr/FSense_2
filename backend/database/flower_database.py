@@ -27,6 +27,7 @@ Stats:
 """
 
 from typing import Optional, List, Dict
+from functools import lru_cache
 from sqlalchemy import Column, String, DateTime, Integer, Text, Index, Float, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
@@ -2352,19 +2353,27 @@ def seed_database(session):
 # QUICK LOOKUP FUNCTIONS (for agent use without DB)
 # =============================================================================
 
-def get_flowers_by_emotion(emotion: str, top_n: int = 5) -> List[dict]:
-    """Quick lookup: get best flowers for an emotion."""
+@lru_cache(maxsize=128)
+def get_flowers_by_emotion(emotion: str, top_n: int = 5) -> tuple:
+    """Quick lookup: get best flowers for an emotion. Cached for performance."""
     matches = [m for m in FLOWER_MEANINGS_DATA if m["emotion"] == emotion]
     matches.sort(key=lambda x: x["match_score"], reverse=True)
-    return matches[:top_n]
+    # Return tuple for hashability (lru_cache requirement)
+    return tuple(matches[:top_n])
 
 
+@lru_cache(maxsize=256)
 def get_flower_by_id(flower_id: str) -> Optional[dict]:
-    """Quick lookup: get flower data by ID."""
+    """Quick lookup: get flower data by ID. Cached for performance."""
     for f in FLOWERS_DATA:
         if f["id"] == flower_id:
             return f
     return None
+
+
+def get_flowers_by_ids(flower_ids: tuple) -> dict:
+    """Batch lookup: get multiple flowers by IDs. Returns dict of id -> flower data."""
+    return {fid: get_flower_by_id(fid) for fid in flower_ids}
 
 
 def get_cultural_warnings(flower_id: str, region: str) -> Optional[dict]:

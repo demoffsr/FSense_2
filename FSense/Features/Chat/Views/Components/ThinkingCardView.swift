@@ -66,6 +66,7 @@ struct ThinkingCardView: View {
                 ProgressStepRow(step: step)
             }
         }
+        .animation(.easeInOut(duration: 0.15), value: steps.map(\.status))
     }
 }
 
@@ -89,7 +90,6 @@ struct ProgressStepRow: View {
             Spacer()
         }
         .padding(.vertical, 3)
-        .animation(.easeInOut(duration: 0.15), value: step.status)
     }
 
     @ViewBuilder

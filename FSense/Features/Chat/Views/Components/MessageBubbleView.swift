@@ -67,12 +67,13 @@ struct MessageBubbleView: View {
                 .padding(.vertical, 12)
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .compositingGroup()
                 .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
         }
     }
-    
+
     // MARK: - AI Message
-    
+
     private func aiMessage(text: String) -> some View {
         HStack {
             Text(text)
@@ -84,6 +85,7 @@ struct MessageBubbleView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .compositingGroup()
                 .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
             
             Spacer(minLength: 40)
@@ -99,6 +101,7 @@ struct MessageBubbleView: View {
                 .padding(.vertical, 12)
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .compositingGroup()
                 .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
             
             Spacer()

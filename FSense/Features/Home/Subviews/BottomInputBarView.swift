@@ -26,7 +26,7 @@ final class ChatSheetController: ObservableObject {
 
 struct BottomInputBarView: View {
     @ObservedObject var controller: ChatSheetController
-    @StateObject private var chatViewModel = ChatViewModel()
+    @ObservedObject var viewModel: ChatViewModel
     @FocusState private var isInputFocused: Bool
 
     // Static constants for performance
@@ -50,7 +50,7 @@ struct BottomInputBarView: View {
             .compositingGroup()
             .shadow(color: Self.shadowColor, radius: 16, x: 0, y: -12)
             .sheet(isPresented: $controller.isExpanded) {
-                ExpandedChatSheet(controller: controller, viewModel: chatViewModel)
+                ExpandedChatSheet(controller: controller, viewModel: viewModel)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled)
@@ -58,14 +58,14 @@ struct BottomInputBarView: View {
             }
             .onChange(of: controller.sessionToLoad) { _, newSession in
                 if let session = newSession {
-                    chatViewModel.loadSession(session)
+                    viewModel.loadSession(session)
                 } else {
-                    chatViewModel.send(.reset)
+                    viewModel.send(.reset)
                 }
             }
             .onChange(of: controller.isExpanded) { _, isExpanded in
                 if isExpanded && controller.sessionToLoad == nil {
-                    chatViewModel.send(.reset)
+                    viewModel.send(.reset)
                 }
             }
     }
@@ -206,7 +206,7 @@ struct ExpandedChatSheet: View {
         .onDisappear {
             showPlusButton = false
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showPlusButton)
+        .animation(.easeOut(duration: 0.15), value: showPlusButton)
     }
 
     // MARK: - Messages Scroll View

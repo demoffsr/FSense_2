@@ -6,6 +6,10 @@ struct FlowerArchiveView: View {
     @State private var selectedFlower: Flower?
     @State private var navigateToDetail = false
 
+    // Pagination
+    @State private var displayedCount: Int = 20
+    private let batchSize: Int = 20
+
     var body: some View {
         ZStack {
             if archiveService.archivedFlowers.isEmpty {
@@ -27,6 +31,7 @@ struct FlowerArchiveView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(role: .destructive) {
                         archiveService.clearArchive()
+                        displayedCount = batchSize
                     } label: {
                         Text("Clear All")
                             .foregroundColor(.red)
@@ -34,13 +39,27 @@ struct FlowerArchiveView: View {
                 }
             }
         }
+        .onChange(of: archiveService.archivedFlowers.count) { oldCount, newCount in
+            // Reset pagination if archive was cleared or significantly changed
+            if newCount < oldCount {
+                displayedCount = min(displayedCount, max(newCount, batchSize))
+            }
+        }
     }
 
     // MARK: - Flower List
 
+    private var displayedFlowers: [ArchivedFlower] {
+        Array(archiveService.archivedFlowers.prefix(displayedCount))
+    }
+
+    private var hasMoreToLoad: Bool {
+        displayedCount < archiveService.archivedFlowers.count
+    }
+
     private var flowerList: some View {
         List {
-            ForEach(archiveService.archivedFlowers) { archivedItem in
+            ForEach(displayedFlowers) { archivedItem in
                 FlowerArchiveRow(
                     flower: archivedItem.flower,
                     lastViewedAt: archivedItem.lastViewedAt
@@ -53,6 +72,15 @@ struct FlowerArchiveView: View {
             }
             .onDelete { indexSet in
                 archiveService.removeFlower(at: indexSet)
+            }
+
+            // Load more trigger
+            if hasMoreToLoad {
+                Color.clear
+                    .frame(height: 1)
+                    .onAppear {
+                        displayedCount += batchSize
+                    }
             }
         }
         .listStyle(.plain)
@@ -123,17 +151,12 @@ struct FlowerArchiveRow: View {
     @ViewBuilder
     private var flowerImage: some View {
         if let imageURL = flower.imageURL {
-            AsyncImage(url: imageURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                case .failure, .empty:
-                    fallbackImage
-                @unknown default:
-                    fallbackImage
-                }
+            CachedAsyncImage(url: imageURL) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } placeholder: {
+                fallbackImage
             }
         } else if let asset = flower.imageAsset {
             Image(asset)

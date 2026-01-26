@@ -4,15 +4,11 @@ struct FlowerCardView: View {
     
     @StateObject private var viewModel: FlowerCardViewModel
     @Environment(\.dismiss) private var dismiss
-    
-    @State private var scrollOffset: CGFloat = 0
-    
+
+    @State private var showOverlayToolbar = false
+
     private let heroHeight: CGFloat = 360
     private let toolbarThreshold: CGFloat = 250
-    
-    private var showOverlayToolbar: Bool {
-        scrollOffset > toolbarThreshold
-    }
     
     init(flower: Flower) {
         _viewModel = StateObject(wrappedValue: FlowerCardViewModel(flower: flower))
@@ -27,10 +23,10 @@ struct FlowerCardView: View {
                     contentSection
                 }
             }
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentOffset.y
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y > toolbarThreshold
             } action: { _, newValue in
-                scrollOffset = newValue
+                showOverlayToolbar = newValue
             }
             
             // MARK: - Back Button on Hero
