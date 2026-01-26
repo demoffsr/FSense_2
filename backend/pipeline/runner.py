@@ -43,21 +43,24 @@ PipelineResponse = Dict[str, Any]
 def run_flower_chat(
     prompt: str,
     region: str = "US",
+    image_base64: Optional[str] = None,
 ) -> PipelineResponse:
     """
     Run the flower recommendation pipeline for a chat message.
-    
+
     THIS IS THE MAIN ENTRYPOINT FOR iOS.
-    
+
     Semantics:
     - Every message is treated as: "Find the best flower for this message"
+    - If image_base64 provided, analyzes the bouquet image to identify flowers
     - No conversation history (v0.0.1)
     - Each call is independent and deterministic
-    
+
     Args:
         prompt: User's chat message (e.g., "I want to apologize to my wife")
         region: Geographic region for cultural context (default: "US")
-        
+        image_base64: Optional base64-encoded bouquet image for flower identification
+
     Returns:
         On success: {"success": True, "data": FlowerCardPayload}
         On failure: {"success": False, "error": "Human-readable error"}
@@ -92,13 +95,15 @@ def run_flower_chat(
         # Validate settings (will raise if API key missing)
         settings = get_settings()
         
-        logger.info(f"Starting flower chat: region={region}, prompt_len={len(prompt)}")
-        
+        has_image = image_base64 is not None
+        logger.info(f"Starting flower chat: region={region}, prompt_len={len(prompt)}, has_image={has_image}")
+
         # Build context
         ctx = PipelineContext(
             user_input=prompt,  # Already sanitized
             region=region.lower(),  # Context expects lowercase
             priors=UserPriors(),
+            image_base64=image_base64,  # Pass image for vision analysis
         )
         
         # Run pipeline

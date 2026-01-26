@@ -275,6 +275,13 @@ class SFAAdapter(BaseAgent):
 
         # Extract emotion context from pipeline
         emotion_context = self._extract_emotion_context(ctx)
+
+        # If request came with a user image, force new generation
+        # (don't use user's photo in card - generate clean studio image)
+        if ctx.image_base64:
+            emotion_context = f"vision_{emotion_context}"
+            logger.info(f"Image request detected - forcing generation with context: {emotion_context}")
+
         logger.debug(f"Extracted emotion_context: {emotion_context}")
 
         # Check cache or create entry

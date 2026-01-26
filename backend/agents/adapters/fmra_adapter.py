@@ -58,8 +58,12 @@ class FMRAAdapter(BaseAgent):
     def run(self, ctx: PipelineContext) -> None:
         """Select flower based on user context - hybrid DB + AI approach."""
         try:
+            # Check if flower was already identified via vision analysis
+            if ctx.vision and ctx.vision.main_flower and ctx.vision.main_flower.name:
+                logger.info(f"FMRA: Using flower from vision analysis: {ctx.vision.main_flower.name}")
+                candidate = self._flower_from_vision(ctx)
             # Try database-assisted selection first
-            if DATABASE_AVAILABLE and ctx.emotions and ctx.emotions.primary_emotion:
+            elif DATABASE_AVAILABLE and ctx.emotions and ctx.emotions.primary_emotion:
                 db_matches = self._get_database_matches(ctx)
                 if db_matches:
                     logger.info(f"FMRA: Found {len(db_matches)} matches in database")
@@ -101,6 +105,37 @@ class FMRAAdapter(BaseAgent):
             logger.error(f"FMRA error: {e}", exc_info=True)
             ctx.add_error(f"FMRA: Unexpected error")
             self._fallback_recommendation(ctx)
+
+    def _flower_from_vision(self, ctx: PipelineContext) -> FlowerCandidate:
+        """Create FlowerCandidate from vision analysis result."""
+        vision_flower = ctx.vision.main_flower
+        flower_name = vision_flower.name
+
+        # Generate flower_id from name
+        flower_id = flower_name.lower().replace(" ", "_").replace("-", "_")
+
+        # Generate meanings using AI for the identified flower
+        client = get_ai_client_fast()
+        meanings_prompt = f"""For the flower "{flower_name}", provide 4-6 symbolic meanings.
+Return JSON: {{"meanings": ["meaning1", "meaning2", "meaning3", "meaning4"]}}"""
+
+        try:
+            response = client.complete_json(
+                prompt=meanings_prompt,
+                system_prompt="You are a flower symbolism expert. Return only the JSON.",
+                temperature=0.5,
+            )
+            meanings = response.get("meanings", ["Beauty", "Nature", "Elegance"])[:6]
+        except Exception:
+            meanings = ["Beauty", "Nature", "Elegance", "Grace"]
+
+        return FlowerCandidate(
+            flower_id=flower_id,
+            name=flower_name,
+            match_score=vision_flower.confidence,
+            match_reasons=["Identified from user image", "Vision analysis"],
+            meanings=meanings,
+        )
 
     def _get_database_matches(self, ctx: PipelineContext) -> list[dict]:
         """Get flower matches from database based on emotion."""

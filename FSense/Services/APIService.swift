@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// API Service for communicating with FSense backend
 actor APIService {
@@ -43,8 +44,9 @@ actor APIService {
     /// - Parameters:
     ///   - prompt: User's message/query
     ///   - region: Geographic region for cultural context (default: "US")
+    ///   - image: Optional bouquet image for flower identification
     /// - Returns: FlowerCardPayload containing the recommendation
-    func getRecommendation(prompt: String, region: String = "US") async throws -> FlowerCardPayload {
+    func getRecommendation(prompt: String, region: String = "US", image: UIImage? = nil) async throws -> FlowerCardPayload {
         let endpoint = "\(baseURL)/api/recommend"
 
         guard let url = URL(string: endpoint) else {
@@ -55,7 +57,13 @@ actor APIService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let body = RecommendRequest(prompt: prompt, region: region)
+        // Convert image to base64 if provided
+        var imageBase64: String? = nil
+        if let image = image {
+            imageBase64 = imageToBase64(image)
+        }
+
+        let body = RecommendRequest(prompt: prompt, region: region, imageBase64: imageBase64)
         request.httpBody = try JSONEncoder().encode(body)
 
         let (data, response) = try await session.data(for: request)
@@ -106,6 +114,13 @@ actor APIService {
 private struct RecommendRequest: Encodable {
     let prompt: String
     let region: String
+    let imageBase64: String?
+
+    enum CodingKeys: String, CodingKey {
+        case prompt
+        case region
+        case imageBase64 = "image_base64"
+    }
 }
 
 private struct RecommendResponse: Decodable {

@@ -100,6 +100,7 @@ class RecommendRequest(BaseModel):
     region: str = Field(default="US", description="Geographic region for cultural context")
     session_id: Optional[str] = Field(default=None, description="Session ID for conversation continuity")
     device_id: Optional[str] = Field(default=None, description="iOS device identifier")
+    image_base64: Optional[str] = Field(default=None, description="Base64-encoded bouquet image for flower identification")
 
 
 class RecommendResponse(BaseModel):
@@ -251,6 +252,7 @@ async def recommend(request: RecommendRequest, http_request: Request):
         lambda: run_flower_chat(
             prompt=request.prompt,
             region=request.region,
+            image_base64=request.image_base64,
         )
     )
 

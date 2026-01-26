@@ -1,7 +1,25 @@
 import Foundation
 import UIKit
 
-// MARK: - Image Compression Utility
+// MARK: - Image Utilities
+
+/// Convert UIImage to base64 string for API transmission
+/// - Parameters:
+///   - image: The UIImage to convert
+///   - maxSize: Maximum dimensions (default 1024x1024)
+///   - compressionQuality: JPEG quality 0.0-1.0 (default 0.6 for balance)
+/// - Returns: Base64 encoded string or nil if conversion fails
+func imageToBase64(_ image: UIImage, maxSize: CGSize = CGSize(width: 1024, height: 1024), compressionQuality: CGFloat = 0.6) -> String? {
+    // First compress/resize the image
+    let compressed = compressImageForAttachment(image, maxSize: maxSize, compressionQuality: compressionQuality)
+
+    // Convert to JPEG data and then base64
+    guard let data = compressed.jpegData(compressionQuality: compressionQuality) else {
+        return nil
+    }
+
+    return data.base64EncodedString()
+}
 
 /// Compress image for chat attachment to reduce memory usage
 func compressImageForAttachment(_ image: UIImage, maxSize: CGSize = CGSize(width: 1024, height: 1024), compressionQuality: CGFloat = 0.7) -> UIImage {

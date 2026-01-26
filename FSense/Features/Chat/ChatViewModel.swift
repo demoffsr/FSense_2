@@ -180,7 +180,10 @@ final class ChatViewModel: ObservableObject {
     }
     
     var canSendMessage: Bool {
-        !state.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && state.isInputEnabled
+        // Allow sending if there's text OR an attached image (or both)
+        let hasText = !state.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasImage = state.attachedImage != nil
+        return (hasText || hasImage) && state.isInputEnabled
     }
 
     var attachedImage: UIImage? {
@@ -201,6 +204,8 @@ final class ChatViewModel: ObservableObject {
         guard canSendMessage else { return }
 
         let userText = state.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let attachedImage = state.attachedImage  // Capture before clearing
+
         state.inputText = ""
         state.attachedImage = nil // Clear attachment after sending
         state.isInputEnabled = false
@@ -216,8 +221,8 @@ final class ChatViewModel: ObservableObject {
         // Save to history
         saveToHistory()
 
-        // Start the AI response flow
-        startAIResponseFlow(for: userText)
+        // Start the AI response flow (with optional image)
+        startAIResponseFlow(for: userText, image: attachedImage)
     }
     
     // MARK: - Persistence
@@ -229,7 +234,7 @@ final class ChatViewModel: ObservableObject {
         historyManager.saveMessages(state.messages, to: sessionId)
     }
     
-    private func startAIResponseFlow(for userQuery: String) {
+    private func startAIResponseFlow(for userQuery: String, image: UIImage? = nil) {
         thinkingTask?.cancel()
 
         thinkingTask = Task {
@@ -237,7 +242,7 @@ final class ChatViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: acknowledgementDelay)
             guard !Task.isCancelled else { return }
 
-            let acknowledgement = generateAcknowledgement(for: userQuery)
+            let acknowledgement = generateAcknowledgement(for: userQuery, hasImage: image != nil)
             let ackMessage = ChatMessage(
                 content: .acknowledgement(acknowledgement),
                 sender: .ai
@@ -245,12 +250,12 @@ final class ChatViewModel: ObservableObject {
             state.messages.append(ackMessage)
             state.phase = .acknowledgement
 
-            // STATE 3: Start thinking mode with real API call
-            await startThinkingProcessWithAPI(for: userQuery)
+            // STATE 3: Start thinking mode with real API call (include image if provided)
+            await startThinkingProcessWithAPI(for: userQuery, image: image)
         }
     }
 
-    private func startThinkingProcessWithAPI(for userQuery: String) async {
+    private func startThinkingProcessWithAPI(for userQuery: String, image: UIImage? = nil) async {
         // Add thinking card placeholder to messages
         let thinkingMessage = ChatMessage(
             content: .thinking(ThinkingContent(steps: [], isExpanded: true, isComplete: false)),
@@ -265,9 +270,10 @@ final class ChatViewModel: ObservableObject {
         eventService.start()
 
         // Make API call (SSE connects in parallel)
+        // Pass image if provided for vision analysis
         var payload: FlowerCardPayload?
         do {
-            payload = try await APIService.shared.getRecommendation(prompt: userQuery)
+            payload = try await APIService.shared.getRecommendation(prompt: userQuery, image: image)
         } catch {
             print("[ChatViewModel] API Error: \(error.localizedDescription)")
         }
@@ -375,8 +381,17 @@ final class ChatViewModel: ObservableObject {
     }
     
     // MARK: - Acknowledgement Generator (Mock)
-    
-    private func generateAcknowledgement(for query: String) -> String {
+
+    private func generateAcknowledgement(for query: String, hasImage: Bool = false) -> String {
+        // Handle image uploads
+        if hasImage {
+            if query.isEmpty {
+                return "I see you've shared a beautiful bouquet! Let me identify the flowers for you."
+            } else {
+                return "Thanks for sharing that image! Let me analyze the flowers and find more information."
+            }
+        }
+
         let acknowledgements = [
             "That's a beautiful thought. Let me find something special.",
             "I understand. Let me think about the perfect choice for you.",
@@ -384,7 +399,7 @@ final class ChatViewModel: ObservableObject {
             "That's lovely. Let me explore some options that would fit perfectly.",
             "I can feel the care in your words. Let me find something meaningful."
         ]
-        
+
         // Simple mock logic - in production, this would be context-aware
         if query.lowercased().contains("birthday") {
             return "A birthday gift! Let me think about something that captures the joy of this celebration."
@@ -395,7 +410,7 @@ final class ChatViewModel: ObservableObject {
         } else if query.lowercased().contains("love") || query.lowercased().contains("romantic") {
             return "Romance deserves something truly special. Let me consider the perfect expression."
         }
-        
+
         return acknowledgements.randomElement() ?? acknowledgements[0]
     }
 }

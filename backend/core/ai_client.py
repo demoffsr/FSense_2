@@ -141,6 +141,96 @@ class AIClient:
             logger.error(f"Unexpected error: {e}", exc_info=True)
             raise AIClientError(f"Unexpected error: {str(e)}") from e
     
+    def analyze_image(
+        self,
+        image_base64: str,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 500,
+    ) -> dict[str, Any]:
+        """
+        Analyze an image using GPT-4 Vision API.
+
+        Args:
+            image_base64: Base64 encoded image data
+            prompt: Text prompt describing what to analyze
+            system_prompt: Optional system message
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens in response
+
+        Returns:
+            Parsed JSON response from the model
+
+        Raises:
+            AIClientError: If the API call fails or JSON is invalid
+        """
+        messages = []
+
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        # Build vision message with image and text
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_base64}",
+                        "detail": "low"  # Use low detail for faster processing
+                    }
+                }
+            ]
+        })
+
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,  # gpt-4o supports vision
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content
+
+            if content is None:
+                raise AIClientError("Empty response from Vision API")
+
+            # Parse JSON
+            try:
+                data = json.loads(content)
+                logger.debug(f"Vision analysis successful: {len(content)} chars")
+                return data
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON from Vision API: {content[:200]}...")
+                raise AIClientError(f"Invalid JSON in response: {e}") from e
+
+        except RateLimitError as e:
+            logger.error(f"Rate limit exceeded: {e}")
+            raise AIClientError(f"Rate limit exceeded. Please try again later.") from e
+
+        except APITimeoutError as e:
+            logger.error(f"API timeout: {e}")
+            raise AIClientError(f"Request timed out after {self.timeout}s") from e
+
+        except APIConnectionError as e:
+            logger.error(f"Connection error: {e}")
+            raise AIClientError("Failed to connect to OpenAI API") from e
+
+        except APIError as e:
+            logger.error(f"API error: {e}")
+            raise AIClientError(f"OpenAI API error: {e.message}") from e
+
+        except AIClientError:
+            raise
+
+        except Exception as e:
+            logger.error(f"Unexpected error in Vision API: {e}", exc_info=True)
+            raise AIClientError(f"Unexpected error: {str(e)}") from e
+
     def complete_json(
         self,
         prompt: str,

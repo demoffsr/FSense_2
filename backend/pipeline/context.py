@@ -142,6 +142,25 @@ class ReflectionData:
 
 
 @dataclass
+class DetectedFlower:
+    """Single flower detected from image analysis."""
+    name: str = ""
+    color: Optional[str] = None
+    confidence: float = 0.0
+
+
+@dataclass
+class VisionAnalysisData:
+    """Output from VIA (Vision Image Analyzer)."""
+    main_flower: Optional[DetectedFlower] = None
+    secondary_flowers: list[DetectedFlower] = field(default_factory=list)
+    bouquet_description: str = ""
+    needs_clarification: bool = False
+    clarification_message: str = ""
+    raw_output: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class TimingRecord:
     """Timing record for a single agent."""
     agent_name: str = ""
@@ -188,11 +207,15 @@ class PipelineContext:
     user_input: str = ""
     region: str = "us"
     priors: UserPriors = field(default_factory=UserPriors)
+    image_base64: Optional[str] = None  # User-provided bouquet image
     
     # ─────────────────────────────────────────────────────────────────────
     # 3. AGENT OUTPUTS (each agent writes to its section)
     # ─────────────────────────────────────────────────────────────────────
-    
+
+    # VIA → Vision Image Analyzer (optional, runs if image_base64 provided)
+    vision: VisionAnalysisData = field(default_factory=VisionAnalysisData)
+
     # FIA → Flower Intent Agent
     intent: IntentData = field(default_factory=IntentData)
     

@@ -26,6 +26,7 @@ from backend.agents.base import BaseAgent
 from backend.core.console_logger import get_console_logger
 
 # Agent adapter imports
+from backend.agents.adapters.via_adapter import VIAAdapter
 from backend.agents.adapters.fia_adapter import FIAAdapter
 from backend.agents.adapters.eia_adapter import EIAAdapter
 from backend.agents.adapters.ril_adapter import RILAdapter
@@ -53,6 +54,7 @@ class PipelineOrchestrator:
     def __init__(self) -> None:
         """Initialize orchestrator with all agent adapters."""
         # Create agent instances
+        self._via = VIAAdapter()  # Vision Image Analyzer (optional)
         self._fia = FIAAdapter()
         self._eia = EIAAdapter()
         self._ril = RILAdapter()
@@ -66,12 +68,12 @@ class PipelineOrchestrator:
 
         self._step_counter = 0
         self._step_lock = threading.Lock()
-        self._total_steps = 10
+        self._total_steps = 10  # Updated dynamically if VIA runs
 
     @property
     def agent_names(self) -> list[str]:
         """Get ordered list of agent names."""
-        return ["FIA", "EIA", "RIL", "FMRA", "CIA", "AITB", "RFFA", "CRI", "SRFL", "SFA"]
+        return ["VIA", "FIA", "EIA", "RIL", "FMRA", "CIA", "AITB", "RFFA", "CRI", "SRFL", "SFA"]
 
     def run(self, ctx: PipelineContext) -> PipelineContext:
         """
@@ -91,6 +93,20 @@ class PipelineOrchestrator:
 
         console.pipeline_start(ctx.request_id, ctx.user_input, ctx.region)
         logger.info(f"Pipeline started (optimized): request_id={ctx.request_id}")
+
+        # Phase 0: Vision analysis (only if image provided)
+        if ctx.image_base64:
+            self._total_steps = 11  # Add VIA to step count
+            self._execute_agent(self._via, ctx)
+
+            # Check if clarification needed - early exit
+            if ctx.vision.needs_clarification:
+                logger.info("Vision analysis needs clarification, returning early")
+                # Build a clarification response instead of full pipeline
+                ctx.ui_payload = self._build_clarification_payload(ctx)
+                total_time = time.time() - start_time
+                console.pipeline_end(ctx.request_id, True, total_time)
+                return ctx
 
         # Phase 1: Input analysis (parallel)
         self._run_parallel(ctx, [self._fia, self._eia])
@@ -131,6 +147,30 @@ class PipelineOrchestrator:
                     future.result()  # Raise any exceptions
                 except Exception as e:
                     logger.error(f"Parallel agent error: {e}")
+
+    def _build_clarification_payload(self, ctx: PipelineContext) -> dict:
+        """Build a clarification response when vision analysis needs user input."""
+        # Collect flower options from vision analysis
+        options = []
+        if ctx.vision.main_flower:
+            options.append({
+                "name": ctx.vision.main_flower.name,
+                "description": f"Main flower detected with {ctx.vision.main_flower.confidence:.0%} confidence"
+            })
+        for flower in ctx.vision.secondary_flowers[:4]:
+            options.append({
+                "name": flower.name,
+                "description": f"Secondary flower ({flower.color or 'unknown color'})"
+            })
+
+        return {
+            "type": "clarification",
+            "message": ctx.vision.clarification_message or "I see multiple flowers in the image. Which one would you like to know more about?",
+            "options": options,
+            "bouquet_description": ctx.vision.bouquet_description,
+            "request_id": ctx.request_id,
+            "pipeline_version": "0.3.0",
+        }
 
     def _execute_agent(self, agent: BaseAgent, ctx: PipelineContext) -> None:
         """Execute a single agent with timing and error handling."""

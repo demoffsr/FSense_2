@@ -52,7 +52,29 @@ class FIAAdapter(BaseAgent):
         try:
             client = get_ai_client_fast()
 
-            prompt = f"""User message: "{ctx.user_input}"
+            # Check if we have vision analysis results
+            has_vision = ctx.vision and ctx.vision.main_flower and ctx.vision.main_flower.name
+
+            if has_vision:
+                # Use detected flower from image analysis
+                flower_name = ctx.vision.main_flower.name
+                prompt = f"""User uploaded an image of a flower bouquet.
+Detected flower: {flower_name}
+User message: "{ctx.user_input or 'What is this flower?'}"
+Region: {ctx.region.upper()}
+
+The user wants to learn about this flower. Set:
+- recipient: "self" (learning about a flower)
+- occasion: "identification" (flower identification from image)
+- tone: "curious"
+- emotion: "interest"
+- relationship_level: "unspecified"
+- keywords: include the flower name
+
+Analyze and extract intent dimensions."""
+            else:
+                # Normal text-based intent analysis
+                prompt = f"""User message: "{ctx.user_input}"
 Region: {ctx.region.upper()}
 
 Analyze this message and extract intent dimensions."""
