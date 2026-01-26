@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // MARK: - Chat Session (Persistable)
 
@@ -181,9 +182,21 @@ struct ChatState: Equatable {
     var inputText: String = ""
     var isInputEnabled: Bool = true
     var currentThinkingContent: ThinkingContent?
-    
+    var attachedImage: UIImage?
+
     // Expand/collapse state for thinking cards (by message ID)
     var expandedThinkingCards: Set<UUID> = []
+
+    // Custom Equatable implementation to handle UIImage
+    static func == (lhs: ChatState, rhs: ChatState) -> Bool {
+        lhs.phase == rhs.phase &&
+        lhs.messages == rhs.messages &&
+        lhs.inputText == rhs.inputText &&
+        lhs.isInputEnabled == rhs.isInputEnabled &&
+        lhs.currentThinkingContent == rhs.currentThinkingContent &&
+        lhs.attachedImage === rhs.attachedImage &&
+        lhs.expandedThinkingCards == rhs.expandedThinkingCards
+    }
 }
 
 // MARK: - Chat Action
@@ -200,6 +213,8 @@ enum ChatAction {
     case recommendationReady(FlowerRecommendation)
     case followUpReady([String])
     case reset
+    case attachImage(UIImage)
+    case removeAttachment
 }
 
 // MARK: - Mock Data

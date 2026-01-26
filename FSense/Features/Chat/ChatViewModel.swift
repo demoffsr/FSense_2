@@ -124,6 +124,12 @@ final class ChatViewModel: ObservableObject {
             
         case .reset:
             handleReset()
+
+        case .attachImage(let image):
+            state.attachedImage = image
+
+        case .removeAttachment:
+            state.attachedImage = nil
         }
     }
     
@@ -154,6 +160,10 @@ final class ChatViewModel: ObservableObject {
     var canSendMessage: Bool {
         !state.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && state.isInputEnabled
     }
+
+    var attachedImage: UIImage? {
+        state.attachedImage
+    }
     
     func isThinkingCardExpanded(_ messageId: UUID) -> Bool {
         state.expandedThinkingCards.contains(messageId)
@@ -167,11 +177,12 @@ final class ChatViewModel: ObservableObject {
     
     private func handleSendMessage() {
         guard canSendMessage else { return }
-        
+
         let userText = state.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         state.inputText = ""
+        state.attachedImage = nil // Clear attachment after sending
         state.isInputEnabled = false
-        
+
         // STATE 1: User message appears
         let userMessage = ChatMessage(
             content: .text(userText),
@@ -179,10 +190,10 @@ final class ChatViewModel: ObservableObject {
         )
         state.messages.append(userMessage)
         state.phase = .userInput
-        
+
         // Save to history
         saveToHistory()
-        
+
         // Start the AI response flow
         startAIResponseFlow(for: userText)
     }
