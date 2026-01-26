@@ -4,6 +4,7 @@ import SwiftUI
 struct MessageBubbleView: View {
 
     let message: ChatMessage
+    let steps: [ProgressStep]
     let isThinkingExpanded: Bool
     let onThinkingToggle: () -> Void
     var onExploreFlower: ((FlowerRecommendation) -> Void)? = nil
@@ -30,14 +31,16 @@ struct MessageBubbleView: View {
                 EmptyView()
             } else {
                 ThinkingCardView(
+                    steps: steps,
                     isExpanded: isThinkingExpanded,
                     onToggle: onThinkingToggle
                 )
             }
-            
+
         case .recommendation(let recommendation):
             RecommendationCardView(
                 recommendation: recommendation,
+                steps: steps,
                 isThinkingExpanded: isThinkingExpanded,
                 onThinkingToggle: onThinkingToggle,
                 onExplore: { onExploreFlower?(recommendation) }

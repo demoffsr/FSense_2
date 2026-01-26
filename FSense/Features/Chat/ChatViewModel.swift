@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// ViewModel for the AI Chat experience
 /// Implements a state machine for the conversation flow
@@ -12,6 +13,9 @@ final class ChatViewModel: ObservableObject {
     /// The last received payload from the API (for FlowerCard navigation)
     @Published private(set) var lastPayload: FlowerCardPayload?
 
+    /// Pipeline progress steps (forwarded from eventService to avoid multiple observers)
+    @Published private(set) var pipelineSteps: [ProgressStep] = []
+
     // MARK: - Session Management
 
     /// Current session ID for persistence (nil until first message is sent)
@@ -22,38 +26,52 @@ final class ChatViewModel: ObservableObject {
     private var thinkingTask: Task<Void, Never>?
     private let historyManager = ChatHistoryManager.shared
     private let eventService = PipelineEventService.shared
+    private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Timing Constants
 
-    private let acknowledgementDelay: UInt64 = 300_000_000 // 0.3s
-    
+    private let acknowledgementDelay: UInt64 = 100_000_000 // 0.1s (minimal UX feedback)
+
     // MARK: - Initialization
-    
+
     /// Create a new chat (session created lazily when first message is sent)
     init() {
         self.sessionId = nil
         state.messages = [.welcomeMessage]
+        setupEventServiceBinding()
     }
     
     /// Restore an existing chat session
     init(session: ChatSession) {
         self.sessionId = session.id
-        
+
         // Restore messages from session
         if session.messages.isEmpty {
             state.messages = [.welcomeMessage]
         } else {
             state.messages = session.messages
         }
-        
+
         // Restore expanded state for any thinking cards
         for message in state.messages {
             if case .thinking(let content) = message.content, !content.isComplete {
                 state.expandedThinkingCards.insert(message.id)
             }
         }
+
+        setupEventServiceBinding()
     }
-    
+
+    /// Subscribe to eventService.steps to avoid multiple @ObservedObject observers
+    private func setupEventServiceBinding() {
+        eventService.$steps
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] steps in
+                self?.pipelineSteps = steps
+            }
+            .store(in: &cancellables)
+    }
+
     // MARK: - Session Helpers
     
     /// Ensures a session exists, creating one if needed
@@ -126,7 +144,8 @@ final class ChatViewModel: ObservableObject {
             handleReset()
 
         case .attachImage(let image):
-            state.attachedImage = image
+            // Compress image to reduce memory usage (~200KB instead of 5-20MB)
+            state.attachedImage = compressImageForAttachment(image)
 
         case .removeAttachment:
             state.attachedImage = nil
@@ -223,10 +242,6 @@ final class ChatViewModel: ObservableObject {
             state.messages.append(ackMessage)
             state.phase = .acknowledgement
 
-            // Short pause before thinking
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            guard !Task.isCancelled else { return }
-
             // STATE 3: Start thinking mode with real API call
             await startThinkingProcessWithAPI(for: userQuery)
         }
@@ -246,19 +261,13 @@ final class ChatViewModel: ObservableObject {
         // Start SSE connection BEFORE API call
         eventService.start()
 
-        // Small delay to ensure SSE is connected
-        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-
-        // Make API call
+        // Make API call (SSE connects in parallel)
         var payload: FlowerCardPayload?
         do {
             payload = try await APIService.shared.getRecommendation(prompt: userQuery)
         } catch {
             print("[ChatViewModel] API Error: \(error.localizedDescription)")
         }
-
-        // Wait for final events
-        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
 
         guard !Task.isCancelled else { return }
 

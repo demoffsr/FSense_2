@@ -188,21 +188,15 @@ struct RecentChatRowView: View {
             // Priority: imageUrl > imageAsset > placeholder
             if let imageUrlString = session.flowerImageUrl,
                let imageUrl = URL(string: imageUrlString) {
-                // Remote AI-generated image
-                AsyncImage(url: imageUrl) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 46, height: 46)
-                            .clipShape(RoundedRectangle(cornerRadius: 9))
-                    case .failure, .empty:
-                        // Fallback to local asset or placeholder
-                        localImageOrPlaceholder
-                    @unknown default:
-                        localImageOrPlaceholder
-                    }
+                // Remote AI-generated image with caching
+                CachedAsyncImage(url: imageUrl) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 46, height: 46)
+                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                } placeholder: {
+                    localImageOrPlaceholder
                 }
             } else {
                 localImageOrPlaceholder

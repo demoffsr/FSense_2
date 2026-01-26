@@ -3,8 +3,7 @@ import SwiftUI
 /// Real-time pipeline progress card
 struct ThinkingCardView: View {
 
-    @ObservedObject var eventService = PipelineEventService.shared
-
+    let steps: [ProgressStep]
     let isExpanded: Bool
     let onToggle: () -> Void
 
@@ -63,8 +62,7 @@ struct ThinkingCardView: View {
             Divider()
                 .padding(.vertical, 10)
 
-            // Directly observe eventService.steps
-            ForEach(eventService.steps) { step in
+            ForEach(steps) { step in
                 ProgressStepRow(step: step)
             }
         }
@@ -131,6 +129,11 @@ struct ProgressStepRow: View {
 
 #Preview {
     ThinkingCardView(
+        steps: [
+            ProgressStep(id: "1", emoji: "🎯", text: "Analyzing intent", status: .completed),
+            ProgressStep(id: "2", emoji: "💞", text: "Understanding emotions", status: .active),
+            ProgressStep(id: "3", emoji: "🌸", text: "Matching flowers", status: .pending)
+        ],
         isExpanded: true,
         onToggle: {}
     )

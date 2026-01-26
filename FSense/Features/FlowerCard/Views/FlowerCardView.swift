@@ -23,26 +23,14 @@ struct FlowerCardView: View {
             // MARK: - Scrollable Content
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Anchor for tracking
-                    Color.clear
-                        .frame(height: 0)
-                        .id("top")
-                    
                     heroSection
                     contentSection
                 }
-                .background(
-                    GeometryReader { proxy in
-                        let offset = -proxy.frame(in: .global).minY
-                        Color.clear
-                            .onChange(of: offset) { _, newValue in
-                                scrollOffset = newValue
-                            }
-                            .onAppear {
-                                scrollOffset = offset
-                            }
-                    }
-                )
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { _, newValue in
+                scrollOffset = newValue
             }
             
             // MARK: - Back Button on Hero

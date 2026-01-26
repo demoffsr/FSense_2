@@ -13,25 +13,14 @@ struct AsyncFlowerImageView: View {
     var body: some View {
         Group {
             if let url = displayImageUrl {
-                // Display remote image
+                // Display remote image with caching
                 if let fullURL = constructFullURL(from: url) {
-                    AsyncImage(url: fullURL) { phase in
-                        switch phase {
-                        case .empty:
-                            placeholderView
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        case .failure(let error):
-                            // Fallback to local asset
-                            localAssetView
-                                .onAppear {
-                                    print("[AsyncImage] Failed to load: \(fullURL) - \(error)")
-                                }
-                        @unknown default:
-                            placeholderView
-                        }
+                    CachedAsyncImage(url: fullURL) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        localAssetView
                     }
                 } else {
                     localAssetView

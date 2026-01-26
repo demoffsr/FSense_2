@@ -54,6 +54,8 @@ final class PipelineEventService: ObservableObject {
         urlSession = nil
         buffer = Data()
         isConnected = false
+        pipelineActive = false
+        setupSteps()
     }
 
     private func setupSteps() {

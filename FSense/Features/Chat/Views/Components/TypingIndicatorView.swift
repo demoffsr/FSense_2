@@ -1,12 +1,12 @@
 import SwiftUI
+import Combine
 
 /// Simple typing indicator - optimized
 struct TypingIndicatorView: View {
-    
+
     @State private var dotIndex = 0
-    
-    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
-    
+    @State private var timerCancellable: AnyCancellable?
+
     var body: some View {
         HStack(spacing: 4) {
             ForEach(0..<3, id: \.self) { index in
@@ -15,8 +15,16 @@ struct TypingIndicatorView: View {
                     .frame(width: 6, height: 6)
             }
         }
-        .onReceive(timer) { _ in
-            dotIndex = (dotIndex + 1) % 3
+        .onAppear {
+            timerCancellable = Timer.publish(every: 0.4, on: .main, in: .common)
+                .autoconnect()
+                .sink { _ in
+                    dotIndex = (dotIndex + 1) % 3
+                }
+        }
+        .onDisappear {
+            timerCancellable?.cancel()
+            timerCancellable = nil
         }
     }
 }

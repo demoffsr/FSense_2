@@ -5,7 +5,6 @@ struct ChatView: View {
     
     @StateObject private var viewModel = ChatViewModel()
     @FocusState private var isInputFocused: Bool
-    @Namespace private var bottomID
     
     @State private var selectedFlower: Flower?
     @State private var navigateToFlowerDetail = false
@@ -33,53 +32,42 @@ struct ChatView: View {
     // MARK: - Messages
     
     private var messagesScrollView: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 16) {
-                    ForEach(Array(viewModel.orderedMessages.enumerated()), id: \.element.id) { index, message in
-                        ChatMessageRow(
-                            message: message,
-                            viewModel: viewModel,
-                            messages: viewModel.orderedMessages,
-                            messageIndex: index,
-                            onExploreFlower: { recommendation in
-                                // Use real payload data from API
-                                if let payload = viewModel.lastPayload {
-                                    print("[ChatView] Using real payload for: \(payload.header.name)")
-                                    selectedFlower = payload.toFlower()
-                                    print("[ChatView] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
-                                } else {
-                                    print("[ChatView] WARNING: No payload! Using fallback for: \(recommendation.flowerName)")
-                                    // Fallback if payload not available
-                                    selectedFlower = Flower(
-                                        name: recommendation.flowerName,
-                                        imageAsset: recommendation.imageAsset,
-                                        meanings: ["Love", "Appreciation"],
-                                        symbolismText: recommendation.explanation,
-                                        whyThisFlowerText: recommendation.meaning,
-                                        moodIntensityValue: 0.7
-                                    )
-                                }
-                                navigateToFlowerDetail = true
+        ScrollView(showsIndicators: false) {
+            LazyVStack(spacing: 16) {
+                ForEach(viewModel.orderedMessages) { message in
+                    ChatMessageRow(
+                        message: message,
+                        viewModel: viewModel,
+                        messages: viewModel.orderedMessages,
+                        onExploreFlower: { recommendation in
+                            // Use real payload data from API
+                            if let payload = viewModel.lastPayload {
+                                print("[ChatView] Using real payload for: \(payload.header.name)")
+                                selectedFlower = payload.toFlower()
+                                print("[ChatView] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
+                            } else {
+                                print("[ChatView] WARNING: No payload! Using fallback for: \(recommendation.flowerName)")
+                                // Fallback if payload not available
+                                selectedFlower = Flower(
+                                    name: recommendation.flowerName,
+                                    imageAsset: recommendation.imageAsset,
+                                    meanings: ["Love", "Appreciation"],
+                                    symbolismText: recommendation.explanation,
+                                    whyThisFlowerText: recommendation.meaning,
+                                    moodIntensityValue: 0.7
+                                )
                             }
-                        )
-                        .id(message.id)
-                    }
-                    
-                    Color.clear.frame(height: 1).id(bottomID)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-            }
-            .onChange(of: viewModel.messages.count) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(bottomID, anchor: .bottom)
-                    }
+                            navigateToFlowerDetail = true
+                        }
+                    )
+                    .id(message.id)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
         }
+        .defaultScrollAnchor(.bottom)
     }
     
     // MARK: - Chat Message Row Helper
@@ -88,12 +76,17 @@ struct ChatView: View {
         let message: ChatMessage
         @ObservedObject var viewModel: ChatViewModel
         let messages: [ChatMessage]
-        let messageIndex: Int
         var onExploreFlower: ((FlowerRecommendation) -> Void)?
+
+        /// Compute index lazily only when needed
+        private var messageIndex: Int {
+            messages.firstIndex(where: { $0.id == message.id }) ?? 0
+        }
 
         private var associatedThinkingMessageId: UUID? {
             guard case .recommendation = message.content else { return nil }
-            for i in stride(from: messageIndex - 1, through: 0, by: -1) {
+            let idx = messageIndex
+            for i in stride(from: idx - 1, through: 0, by: -1) {
                 if case .thinking = messages[i].content {
                     return messages[i].id
                 }
@@ -101,10 +94,11 @@ struct ChatView: View {
             }
             return nil
         }
-        
+
         private var isThinkingFollowedByRecommendation: Bool {
             guard case .thinking(let content) = message.content, content.isComplete else { return false }
-            for i in (messageIndex + 1)..<messages.count {
+            let idx = messageIndex
+            for i in (idx + 1)..<messages.count {
                 if case .recommendation = messages[i].content { return true }
                 if messages[i].sender == .user { break }
             }
@@ -115,6 +109,7 @@ struct ChatView: View {
             let thinkingId = associatedThinkingMessageId ?? message.id
             MessageBubbleView(
                 message: message,
+                steps: viewModel.pipelineSteps,
                 isThinkingExpanded: viewModel.isThinkingCardExpanded(thinkingId),
                 onThinkingToggle: { viewModel.send(.toggleThinkingCard(thinkingId)) },
                 onExploreFlower: onExploreFlower,

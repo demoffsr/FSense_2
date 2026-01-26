@@ -4,11 +4,10 @@ import SwiftUI
 struct RecommendationCardView: View {
 
     let recommendation: FlowerRecommendation
+    let steps: [ProgressStep]
     var isThinkingExpanded: Bool = false
     var onThinkingToggle: (() -> Void)? = nil
     var onExplore: (() -> Void)? = nil
-
-    @ObservedObject var eventService = PipelineEventService.shared
 
     // Custom smooth animation
     private var expandAnimation: Animation {
@@ -169,8 +168,7 @@ struct RecommendationCardView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 4)
 
-            // Use eventService.steps directly
-            ForEach(eventService.steps) { step in
+            ForEach(steps) { step in
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 13))

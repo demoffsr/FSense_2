@@ -1,6 +1,44 @@
 import Foundation
 import UIKit
 
+// MARK: - Image Compression Utility
+
+/// Compress image for chat attachment to reduce memory usage
+func compressImageForAttachment(_ image: UIImage, maxSize: CGSize = CGSize(width: 1024, height: 1024), compressionQuality: CGFloat = 0.7) -> UIImage {
+    let size = image.size
+
+    // Calculate scale to fit within maxSize while maintaining aspect ratio
+    let widthRatio = maxSize.width / size.width
+    let heightRatio = maxSize.height / size.height
+    let scale = min(widthRatio, heightRatio, 1.0) // Don't upscale
+
+    // If image is already small enough, just compress quality
+    guard scale < 1.0 else {
+        // Still compress to JPEG to reduce memory
+        if let data = image.jpegData(compressionQuality: compressionQuality),
+           let compressed = UIImage(data: data) {
+            return compressed
+        }
+        return image
+    }
+
+    let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+
+    // Resize image
+    let renderer = UIGraphicsImageRenderer(size: newSize)
+    let resized = renderer.image { _ in
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+    }
+
+    // Compress to JPEG
+    if let data = resized.jpegData(compressionQuality: compressionQuality),
+       let compressed = UIImage(data: data) {
+        return compressed
+    }
+
+    return resized
+}
+
 // MARK: - Chat Session (Persistable)
 
 /// Represents a saved chat session that can be restored

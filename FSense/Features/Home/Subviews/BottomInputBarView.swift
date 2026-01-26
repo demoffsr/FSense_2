@@ -263,7 +263,9 @@ struct ExpandedChatSheet: View {
 
     private var scrollToBottomButton: some View {
         Button {
-            scrollProxy?.scrollTo(bottomID, anchor: .bottom)
+            withAnimation(.easeOut(duration: 0.3)) {
+                scrollProxy?.scrollTo(bottomID, anchor: .bottom)
+            }
             showScrollToBottom = false
         } label: {
             Image(systemName: "chevron.down")
@@ -436,6 +438,7 @@ struct ExpandedChatSheet: View {
     private func messageRow(for message: ChatMessage) -> some View {
         MessageBubbleView(
             message: message,
+            steps: viewModel.pipelineSteps,
             isThinkingExpanded: viewModel.isThinkingCardExpanded(message.id),
             onThinkingToggle: { [weak viewModel] in viewModel?.send(.toggleThinkingCard(message.id)) },
             onExploreFlower: handleExploreFlower,
