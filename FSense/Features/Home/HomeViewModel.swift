@@ -18,10 +18,21 @@ final class HomeViewModel: ObservableObject {
     @Published var recentScans: [RecentScanItem] = []
     
     private var cancellables = Set<AnyCancellable>()
-    
+    private var isSetup = false
+
     init() {
+        // Defer setup to avoid blocking app launch
+        // Will be triggered on first onAppear
+    }
+
+    /// Setup Combine bindings - called lazily on first onAppear
+    private func setupBindingsIfNeeded() {
+        guard !isSetup else { return }
+        isSetup = true
+
         // Observe chat history changes
         chatHistory.$sessions
+            .removeDuplicates() // Skip redundant updates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] sessions in
                 self?.recentChats = sessions.filter { session in
@@ -70,7 +81,10 @@ final class HomeViewModel: ObservableObject {
             
         case .deleteChat(let session):
             chatHistory.deleteSession(session)
-            
+
+        case .renameChat(let session, let newTitle):
+            chatHistory.renameSession(session, newTitle: newTitle)
+
         case .plusTapped:
             // Start new chat
             break
@@ -85,6 +99,9 @@ final class HomeViewModel: ObservableObject {
     }
     
     private func refreshData() {
+        // Setup bindings on first refresh (lazy initialization)
+        setupBindingsIfNeeded()
+
         // Force refresh recent chats
         recentChats = chatHistory.chatSessions
     }

@@ -1,15 +1,17 @@
 import SwiftUI
+import PhotosUI
 
-/// Main chat view - optimized
+/// Main chat view - optimized for performance
 struct ChatView: View {
-    
+
     @StateObject private var viewModel = ChatViewModel()
     @FocusState private var isInputFocused: Bool
-    @Namespace private var bottomID
-    
+
     @State private var selectedFlower: Flower?
     @State private var navigateToFlowerDetail = false
-    
+    @State private var showImagePicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -21,6 +23,7 @@ struct ChatView: View {
             .navigationDestination(isPresented: $navigateToFlowerDetail) {
                 if let flower = selectedFlower {
                     FlowerCardView(flower: flower)
+                        .id(flower.id)
                 }
             }
         }
@@ -28,125 +31,153 @@ struct ChatView: View {
             viewModel.send(.onAppear)
         }
     }
-    
-    // MARK: - Messages
-    
+
+    // MARK: - Messages (Optimized with cached precomputed data)
+
     private var messagesScrollView: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 16) {
-                    ForEach(Array(viewModel.orderedMessages.enumerated()), id: \.element.id) { index, message in
-                        ChatMessageRow(
-                            message: message,
-                            viewModel: viewModel,
-                            messages: viewModel.orderedMessages,
-                            messageIndex: index,
-                            onExploreFlower: { recommendation in
-                                selectedFlower = Flower(
-                                    name: recommendation.flowerName,
-                                    imageAsset: recommendation.imageAsset,
-                                    meanings: ["Love", "Passion", "Romance"],
-                                    symbolismText: recommendation.explanation,
-                                    whyThisFlowerText: recommendation.meaning,
-                                    moodIntensityValue: 0.85
-                                )
-                                navigateToFlowerDetail = true
-                            }
-                        )
-                        .id(message.id)
-                    }
-                    
-                    Color.clear.frame(height: 1).id(bottomID)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-            }
-            .onChange(of: viewModel.messages.count) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(bottomID, anchor: .bottom)
-                    }
+        ScrollView(showsIndicators: false) {
+            LazyVStack(spacing: 16) {
+                let messages = viewModel.orderedMessages
+                let precomputed = viewModel.precomputedMessageData
+                let steps = viewModel.pipelineSteps
+
+                // Use indices to avoid Array() allocation - preserves LazyVStack laziness
+                ForEach(messages.indices, id: \.self) { index in
+                    let message = messages[index]
+                    let data = index < precomputed.count
+                        ? precomputed[index]
+                        : ChatViewModel.MessageRowData(thinkingId: message.id, hideCompletedThinking: false)
+
+                    ChatMessageRow(
+                        message: message,
+                        steps: steps,
+                        isThinkingExpanded: viewModel.isThinkingCardExpanded(data.thinkingId),
+                        thinkingId: data.thinkingId,
+                        hideCompletedThinking: data.hideCompletedThinking,
+                        onThinkingToggle: viewModel.send,
+                        onExploreFlower: handleExploreFlower
+                    )
+                    .id(message.id)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
         }
+        .defaultScrollAnchor(.bottom)
     }
-    
+
+    private func handleExploreFlower(_ recommendation: FlowerRecommendation) {
+        if let payload = viewModel.lastPayload {
+            print("[ChatView] Using real payload for: \(payload.header.name)")
+            selectedFlower = payload.toFlower()
+            print("[ChatView] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
+        } else {
+            print("[ChatView] WARNING: No payload! Using fallback for: \(recommendation.flowerName)")
+            selectedFlower = Flower(
+                name: recommendation.flowerName,
+                imageAsset: recommendation.imageAsset,
+                meanings: ["Love", "Appreciation"],
+                symbolismText: recommendation.explanation,
+                whyThisFlowerText: recommendation.meaning,
+                moodIntensityValue: 0.7
+            )
+        }
+        navigateToFlowerDetail = true
+    }
+
     // MARK: - Chat Message Row Helper
-    
+
     private struct ChatMessageRow: View {
         let message: ChatMessage
-        @ObservedObject var viewModel: ChatViewModel
-        let messages: [ChatMessage]
-        let messageIndex: Int
+        let steps: [ProgressStep]
+        let isThinkingExpanded: Bool
+        let thinkingId: UUID
+        let hideCompletedThinking: Bool
+        let onThinkingToggle: (ChatAction) -> Void
         var onExploreFlower: ((FlowerRecommendation) -> Void)?
-        
-        private var associatedThinkingContent: ThinkingContent? {
-            guard case .recommendation = message.content else { return nil }
-            for i in stride(from: messageIndex - 1, through: 0, by: -1) {
-                if case .thinking(let content) = messages[i].content {
-                    return content
-                }
-                if messages[i].sender == .user { break }
-            }
-            return nil
-        }
-        
-        private var associatedThinkingMessageId: UUID? {
-            guard case .recommendation = message.content else { return nil }
-            for i in stride(from: messageIndex - 1, through: 0, by: -1) {
-                if case .thinking = messages[i].content {
-                    return messages[i].id
-                }
-                if messages[i].sender == .user { break }
-            }
-            return nil
-        }
-        
-        private var isThinkingFollowedByRecommendation: Bool {
-            guard case .thinking(let content) = message.content, content.isComplete else { return false }
-            for i in (messageIndex + 1)..<messages.count {
-                if case .recommendation = messages[i].content { return true }
-                if messages[i].sender == .user { break }
-            }
-            return false
-        }
-        
+
         var body: some View {
-            let thinkingId = associatedThinkingMessageId ?? message.id
             MessageBubbleView(
                 message: message,
-                isThinkingExpanded: viewModel.isThinkingCardExpanded(thinkingId),
-                onThinkingToggle: { viewModel.send(.toggleThinkingCard(thinkingId)) },
+                steps: steps,
+                isThinkingExpanded: isThinkingExpanded,
+                onThinkingToggle: { onThinkingToggle(.toggleThinkingCard(thinkingId)) },
                 onExploreFlower: onExploreFlower,
-                associatedThinkingContent: associatedThinkingContent,
-                hideCompletedThinking: isThinkingFollowedByRecommendation
+                hideCompletedThinking: hideCompletedThinking
             )
         }
     }
-    
-    // MARK: - Input
-    
+
+    // MARK: - Input (with direct binding - no action dispatch per keystroke)
+
     private var chatInputView: some View {
         VStack(spacing: 0) {
             Divider()
-            
+
+            // Show attachment preview if image is attached
+            if let attachedImage = viewModel.attachedImage {
+                HStack {
+                    Image(uiImage: attachedImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 60, height: 60)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(alignment: .topTrailing) {
+                            Button {
+                                viewModel.send(.removeAttachment)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.white)
+                                    .background(Circle().fill(Color.black.opacity(0.6)))
+                            }
+                            .offset(x: 6, y: -6)
+                        }
+
+                    Text("Image attached")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+            }
+
             HStack(spacing: 12) {
-                HStack(spacing: 8) {
-                    TextField("Ask me about flowers...", text: Binding(
-                        get: { viewModel.inputText },
-                        set: { viewModel.send(.inputTextChanged($0)) }
-                    ))
-                    .font(.system(size: 16))
-                    .focused($isInputFocused)
-                    .disabled(!viewModel.isInputEnabled)
-                    .submitLabel(.send)
-                    .onSubmit {
-                        if viewModel.canSendMessage {
-                            viewModel.send(.sendMessage)
+                // Image picker button
+                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 18))
+                        .foregroundColor(.purple)
+                        .frame(width: 36, height: 36)
+                }
+                .onChange(of: selectedPhotoItem) { oldValue, newValue in
+                    Task {
+                        if let item = newValue,
+                           let data = try? await item.loadTransferable(type: Data.self),
+                           let image = UIImage(data: data) {
+                            viewModel.send(.attachImage(image))
                         }
                     }
-                    
+                }
+                .disabled(!viewModel.isInputEnabled)
+
+                HStack(spacing: 8) {
+                    // Direct binding to viewModel.inputText - no action dispatch per keystroke
+                    TextField("Ask me about flowers...", text: $viewModel.inputText)
+                        .font(.system(size: 16))
+                        .focused($isInputFocused)
+                        .disabled(!viewModel.isInputEnabled)
+                        .submitLabel(.send)
+                        .onSubmit {
+                            if viewModel.canSendMessage {
+                                viewModel.send(.sendMessage)
+                            }
+                        }
+
                     Button {
                         viewModel.send(.sendMessage)
                         isInputFocused = false

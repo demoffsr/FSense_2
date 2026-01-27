@@ -4,9 +4,18 @@ struct HomeView: View {
 
     @StateObject private var viewModel = HomeViewModel()
     @StateObject private var chatSheetController = ChatSheetController()
+    @StateObject private var chatViewModel = ChatViewModel()
 
     // HEADER HEIGHT — меняй это значение, высота изменится
     private let headerHeight: CGFloat = 240
+
+    // Rename alert state
+    @State private var showRenameAlert = false
+    @State private var sessionToRename: ChatSession?
+
+    // Delete confirmation alert state
+    @State private var showDeleteConfirmation = false
+    @State private var sessionToDelete: ChatSession?
 
     var body: some View {
         NavigationStack {
@@ -23,28 +32,26 @@ struct HomeView: View {
                         HomeGradientBackground()
 
                         // Header content
-                        VStack(spacing: 16) {
+                        VStack(spacing: 12) {
                             HomeHeaderView()
                             MeaningBannerView()
                             ScanCTAView()
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, topInset + 8)
+                        .padding(.top, topInset + 2)
                     }
                     .frame(height: headerHeight + topInset)
-
-                    // ══════════════════════════════════════════════════════════
-                    // 2. WHITE FADE — переход
-                    // ══════════════════════════════════════════════════════════
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(0), location: 0.12),
-                            .init(color: .white, location: 0.36)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 32)
+                    .overlay(alignment: .bottom) {
+                        // ══════════════════════════════════════════════════════════
+                        // 2. WHITE FADE — переход (накладывается на низ хедера)
+                        // ══════════════════════════════════════════════════════════
+                        LinearGradient(
+                            colors: [.white.opacity(0), .white],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 20)
+                    }
 
                     // ══════════════════════════════════════════════════════════
                     // 3. WHITE CONTENT — заголовок + скролл карточек
@@ -61,6 +68,7 @@ struct HomeView: View {
                             }
                         )
                         .padding(.horizontal, 16)
+                        .padding(.top, 16)
                         
                         // Scrollable cards (только карточки скроллятся)
                         ScrollView(showsIndicators: false) {
@@ -69,6 +77,14 @@ struct HomeView: View {
                                 onChatTapped: { session in
                                     // Open chat with smooth bottom sheet animation
                                     chatSheetController.openChat(session: session)
+                                },
+                                onRenameChat: { session in
+                                    sessionToRename = session
+                                    showRenameAlert = true
+                                },
+                                onDeleteChat: { session in
+                                    sessionToDelete = session
+                                    showDeleteConfirmation = true
                                 }
                             )
                             .padding(.horizontal, 16)
@@ -81,17 +97,38 @@ struct HomeView: View {
                 }
                 .ignoresSafeArea(edges: .top)
                 .overlay(alignment: .bottom) {
-                    BottomInputBarView(controller: chatSheetController)
+                    BottomInputBarView(controller: chatSheetController, viewModel: chatViewModel)
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
             }
             .navigationBarHidden(true)
             .navigationDestination(for: Flower.self) { flower in
                 FlowerCardView(flower: flower)
+                    .id(flower.id) // Force view recreation on flower change
             }
         }
         .onAppear {
             viewModel.send(.onAppear)
+        }
+        .textFieldAlert(
+            isPresented: $showRenameAlert,
+            title: "Rename Chat",
+            message: "Enter a new name for this chat",
+            placeholder: "Chat name",
+            initialText: sessionToRename?.title ?? "",
+            confirmButtonTitle: "Rename"
+        ) { newTitle in
+            if let session = sessionToRename {
+                viewModel.send(.renameChat(session, newTitle: newTitle))
+            }
+        }
+        .alert("Delete Chat", isPresented: $showDeleteConfirmation, presenting: sessionToDelete) { session in
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                viewModel.send(.deleteChat(session))
+            }
+        } message: { session in
+            Text("Are you sure you want to delete \"\(session.title)\"? This action cannot be undone.")
         }
     }
 }
