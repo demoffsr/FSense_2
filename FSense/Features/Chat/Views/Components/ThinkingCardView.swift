@@ -7,6 +7,9 @@ struct ThinkingCardView: View {
     let isExpanded: Bool
     let onToggle: () -> Void
 
+    // Static shadow color to avoid recreation on each render
+    private static let shadowColor = Color.black.opacity(0.1)
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -21,7 +24,7 @@ struct ThinkingCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .cornerRadius(16)
-        .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
+        .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -57,6 +60,17 @@ struct ThinkingCardView: View {
 
     // MARK: - Expanded Content
 
+    /// Stable identifier for animation - count of completed/active steps
+    private var stepsAnimationKey: Int {
+        steps.reduce(0) { acc, step in
+            switch step.status {
+            case .completed: return acc + 10
+            case .active: return acc + 1
+            case .pending: return acc
+            }
+        }
+    }
+
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
@@ -66,7 +80,7 @@ struct ThinkingCardView: View {
                 ProgressStepRow(step: step)
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: steps.map(\.status))
+        .animation(.easeInOut(duration: 0.15), value: stepsAnimationKey)
     }
 }
 
@@ -75,6 +89,13 @@ struct ThinkingCardView: View {
 struct ProgressStepRow: View {
 
     let step: ProgressStep
+
+    // Static colors to avoid recreation on each render
+    private static let pendingTextColor = Color.gray.opacity(0.5)
+    private static let activeTextColor = Color.black
+    private static let completedTextColor = Color.black.opacity(0.7)
+    private static let pendingCircleColor = Color.gray.opacity(0.2)
+    private static let activePulseColor = Color.purple.opacity(0.5)
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -97,17 +118,16 @@ struct ProgressStepRow: View {
         switch step.status {
         case .pending:
             Circle()
-                .fill(Color.gray.opacity(0.2))
+                .fill(Self.pendingCircleColor)
                 .frame(width: 8, height: 8)
 
         case .active:
-            // Pulsing animation for active
             Circle()
                 .fill(Color.purple)
                 .frame(width: 8, height: 8)
                 .overlay(
                     Circle()
-                        .stroke(Color.purple.opacity(0.5), lineWidth: 2)
+                        .stroke(Self.activePulseColor, lineWidth: 2)
                         .scaleEffect(1.5)
                 )
 
@@ -120,9 +140,9 @@ struct ProgressStepRow: View {
 
     private var textColor: Color {
         switch step.status {
-        case .pending: return .gray.opacity(0.5)
-        case .active: return .black
-        case .completed: return .black.opacity(0.7)
+        case .pending: return Self.pendingTextColor
+        case .active: return Self.activeTextColor
+        case .completed: return Self.completedTextColor
         }
     }
 }

@@ -19,6 +19,13 @@ final class PipelineEventService: ObservableObject {
     private var dataTask: URLSessionDataTask?
     private var buffer = Data()
 
+    /// Pending data for batch processing
+    private var pendingData: [Data] = []
+    private var batchTask: Task<Void, Never>?
+
+    /// Batch processing interval (50ms)
+    private let batchIntervalNanoseconds: UInt64 = 50_000_000
+
     private init() {
         setupSteps()
     }
@@ -53,6 +60,9 @@ final class PipelineEventService: ObservableObject {
         urlSession?.invalidateAndCancel()
         urlSession = nil
         buffer = Data()
+        pendingData = []
+        batchTask?.cancel()
+        batchTask = nil
         isConnected = false
         pipelineActive = false
         setupSteps()
@@ -93,7 +103,7 @@ final class PipelineEventService: ObservableObject {
 
         let delegate = SSEDelegate { [weak self] data in
             Task { @MainActor in
-                self?.handleData(data)
+                self?.handleDataBatched(data)
             }
         }
 
@@ -113,9 +123,33 @@ final class PipelineEventService: ObservableObject {
         #endif
     }
 
-    // MARK: - Data Handling
+    // MARK: - Data Handling (Batched)
 
-    private func handleData(_ data: Data) {
+    /// Queue data for batch processing to reduce Task overhead
+    private func handleDataBatched(_ data: Data) {
+        pendingData.append(data)
+
+        // Schedule batch processing with debounce
+        batchTask?.cancel()
+        batchTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
+
+            // Wait for batch interval
+            try? await Task.sleep(nanoseconds: self.batchIntervalNanoseconds)
+            guard !Task.isCancelled else { return }
+
+            // Process all pending data
+            let batch = self.pendingData
+            self.pendingData = []
+
+            for data in batch {
+                self.processData(data)
+            }
+        }
+    }
+
+    /// Process individual data chunk
+    private func processData(_ data: Data) {
         buffer.append(data)
 
         // Process complete SSE messages (end with \n\n)
@@ -213,10 +247,10 @@ struct SSEEvent: Decodable {
 
 // MARK: - URLSession Delegate for Real-time Streaming
 
-private class SSEDelegate: NSObject, URLSessionDataDelegate {
-    let onData: (Data) -> Void
+private final class SSEDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    let onData: @Sendable (Data) -> Void
 
-    init(onData: @escaping (Data) -> Void) {
+    init(onData: @escaping @Sendable (Data) -> Void) {
         self.onData = onData
     }
 

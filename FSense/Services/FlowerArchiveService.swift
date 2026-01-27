@@ -11,7 +11,10 @@ final class FlowerArchiveService: ObservableObject {
     private let userDefaultsKey = "FlowerArchive"
 
     private init() {
-        loadArchive()
+        // Load archive asynchronously to avoid blocking main thread at startup
+        Task { @MainActor in
+            await loadArchiveAsync()
+        }
     }
 
     // MARK: - Archive Statistics
@@ -74,19 +77,27 @@ final class FlowerArchiveService: ObservableObject {
         }
     }
 
-    private func loadArchive() {
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey) else {
-            return
-        }
+    /// Load archive asynchronously to prevent blocking main thread
+    private func loadArchiveAsync() async {
+        let key = userDefaultsKey
 
-        do {
-            let decoder = JSONDecoder()
-            archivedFlowers = try decoder.decode([ArchivedFlower].self, from: data)
-            print("[Archive] Loaded \(archivedFlowers.count) flowers")
-        } catch {
-            print("[Archive] Failed to load: \(error)")
-            archivedFlowers = []
-        }
+        // Read AND decode on background thread to fully avoid blocking UI
+        let decoded = await Task.detached(priority: .userInitiated) {
+            guard let data = UserDefaults.standard.data(forKey: key) else {
+                return [ArchivedFlower]()
+            }
+
+            do {
+                let decoder = JSONDecoder()
+                return try decoder.decode([ArchivedFlower].self, from: data)
+            } catch {
+                print("[Archive] Failed to decode: \(error)")
+                return [ArchivedFlower]()
+            }
+        }.value
+
+        archivedFlowers = decoded
+        print("[Archive] Loaded \(archivedFlowers.count) flowers")
     }
 }
 

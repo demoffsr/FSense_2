@@ -1,6 +1,67 @@
 import Foundation
 import UIKit
 
+// MARK: - Image Storage Manager
+
+/// Manages file-based storage for chat images to reduce memory usage
+/// Images are stored in the app's caches directory and referenced by path
+final class ImageStorageManager: @unchecked Sendable {
+    static let shared = ImageStorageManager()
+
+    private let fileManager = FileManager.default
+    private let cacheDirectory: URL
+
+    private init() {
+        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        cacheDirectory = caches.appendingPathComponent("ChatImages", isDirectory: true)
+
+        // Create directory if needed
+        try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+    }
+
+    /// Save image to disk and return the relative path
+    func saveImage(_ image: UIImage, messageId: UUID) -> String? {
+        let compressed = compressImageForAttachment(image)
+        guard let data = compressed.jpegData(compressionQuality: 0.7) else { return nil }
+
+        let filename = "\(messageId.uuidString).jpg"
+        let url = cacheDirectory.appendingPathComponent(filename)
+
+        do {
+            try data.write(to: url)
+            return filename
+        } catch {
+            print("[ImageStorage] Failed to save image: \(error)")
+            return nil
+        }
+    }
+
+    /// Load image from disk by path
+    func loadImage(path: String) -> UIImage? {
+        let url = cacheDirectory.appendingPathComponent(path)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }
+
+    /// Delete image from disk
+    func deleteImage(path: String) {
+        let url = cacheDirectory.appendingPathComponent(path)
+        try? fileManager.removeItem(at: url)
+    }
+
+    /// Clean up orphaned images (optional maintenance)
+    func cleanupOrphanedImages(validPaths: Set<String>) {
+        guard let contents = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil) else { return }
+
+        for url in contents {
+            let filename = url.lastPathComponent
+            if !validPaths.contains(filename) {
+                try? fileManager.removeItem(at: url)
+            }
+        }
+    }
+}
+
 // MARK: - Image Utilities
 
 /// Convert UIImage to base64 string for API transmission
@@ -95,8 +156,16 @@ struct ChatSession: Identifiable, Codable, Equatable {
     
     /// Generate title from first user message
     mutating func updateTitleFromMessages() {
-        if let firstUserMessage = messages.first(where: { $0.sender == .user }),
-           case .text(let text) = firstUserMessage.content {
+        if let firstUserMessage = messages.first(where: { $0.sender == .user }) {
+            let text: String
+            switch firstUserMessage.content {
+            case .text(let messageText):
+                text = messageText
+            case .textWithImage(let messageText, _):
+                text = messageText
+            default:
+                return
+            }
             // Take first 40 characters or until newline
             let truncated = String(text.prefix(40))
             title = truncated.count < text.count ? truncated + "..." : truncated
@@ -157,12 +226,12 @@ enum ThinkingStepStatus: String, Equatable, Codable {
 // MARK: - Chat Message
 
 /// Represents a single message in the chat
-struct ChatMessage: Identifiable, Equatable, Codable {
+struct ChatMessage: Identifiable, Equatable, Hashable, Codable {
     let id: UUID
     let content: MessageContent
     let sender: MessageSender
     let timestamp: Date
-    
+
     init(
         id: UUID = UUID(),
         content: MessageContent,
@@ -174,6 +243,11 @@ struct ChatMessage: Identifiable, Equatable, Codable {
         self.sender = sender
         self.timestamp = timestamp
     }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(timestamp)
+    }
 }
 
 enum MessageSender: String, Equatable, Codable {
@@ -184,6 +258,7 @@ enum MessageSender: String, Equatable, Codable {
 /// Different types of message content
 enum MessageContent: Equatable, Codable {
     case text(String)
+    case textWithImage(String, imageData: Data) // Text message with attached image
     case acknowledgement(String)
     case thinking(ThinkingContent)
     case recommendation(FlowerRecommendation)

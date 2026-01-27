@@ -6,9 +6,23 @@ import Combine
 @MainActor
 final class ChatViewModel: ObservableObject {
 
-    // MARK: - Published State
+    // MARK: - Granular Published State (for isolated UI updates)
+    // Split from monolithic ChatState to prevent TextField input from triggering message list re-render
 
-    @Published private(set) var state = ChatState()
+    /// Messages array - only triggers update when messages change
+    @Published private(set) var messages: [ChatMessage] = []
+
+    /// Input text - isolated to prevent message list re-render on typing
+    @Published var inputText: String = ""
+
+    /// Input enabled state
+    @Published private(set) var isInputEnabled: Bool = true
+
+    /// Current conversation phase
+    @Published private(set) var phase: ChatPhase = .idle
+
+    /// Attached image for sending
+    @Published private(set) var attachedImage: UIImage?
 
     /// The last received payload from the API (for FlowerCard navigation)
     @Published private(set) var lastPayload: FlowerCardPayload?
@@ -18,6 +32,60 @@ final class ChatViewModel: ObservableObject {
 
     /// Expanded thinking cards - separate @Published for efficient UI updates
     @Published private(set) var expandedThinkingCards: Set<UUID> = []
+
+    // MARK: - Cached Precomputed Data
+
+    /// Cached message row data - invalidated when messages change
+    private var cachedMessageRowData: [MessageRowData] = []
+    private var cachedMessagesHash: Int = 0
+
+    struct MessageRowData: Equatable {
+        let thinkingId: UUID
+        let hideCompletedThinking: Bool
+    }
+
+    /// Get precomputed data with caching
+    var precomputedMessageData: [MessageRowData] {
+        let currentHash = messages.hashValue
+        if currentHash != cachedMessagesHash {
+            cachedMessagesHash = currentHash
+            cachedMessageRowData = computeMessageRowData()
+        }
+        return cachedMessageRowData
+    }
+
+    private func computeMessageRowData() -> [MessageRowData] {
+        var result: [MessageRowData] = []
+        result.reserveCapacity(messages.count)
+
+        for (index, message) in messages.enumerated() {
+            var thinkingId = message.id
+            if case .recommendation = message.content {
+                for i in stride(from: index - 1, through: 0, by: -1) {
+                    if case .thinking = messages[i].content {
+                        thinkingId = messages[i].id
+                        break
+                    }
+                    if messages[i].sender == .user { break }
+                }
+            }
+
+            var hideCompletedThinking = false
+            if case .thinking(let content) = message.content, content.isComplete {
+                for i in (index + 1)..<messages.count {
+                    if case .recommendation = messages[i].content {
+                        hideCompletedThinking = true
+                        break
+                    }
+                    if messages[i].sender == .user { break }
+                }
+            }
+
+            result.append(MessageRowData(thinkingId: thinkingId, hideCompletedThinking: hideCompletedThinking))
+        }
+
+        return result
+    }
 
     // MARK: - Session Management
 
@@ -40,23 +108,23 @@ final class ChatViewModel: ObservableObject {
     /// Create a new chat (session created lazily when first message is sent)
     init() {
         self.sessionId = nil
-        state.messages = [.welcomeMessage]
+        messages = [.welcomeMessage]
         setupEventServiceBinding()
     }
-    
+
     /// Restore an existing chat session
     init(session: ChatSession) {
         self.sessionId = session.id
 
         // Restore messages from session
         if session.messages.isEmpty {
-            state.messages = [.welcomeMessage]
+            messages = [.welcomeMessage]
         } else {
-            state.messages = session.messages
+            messages = session.messages
         }
 
         // Restore expanded state for any thinking cards
-        for message in state.messages {
+        for message in messages {
             if case .thinking(let content) = message.content, !content.isComplete {
                 expandedThinkingCards.insert(message.id)
             }
@@ -68,6 +136,7 @@ final class ChatViewModel: ObservableObject {
     /// Subscribe to eventService.steps to avoid multiple @ObservedObject observers
     private func setupEventServiceBinding() {
         eventService.$steps
+            .removeDuplicates() // Skip redundant updates when steps haven't actually changed
             .receive(on: DispatchQueue.main)
             .sink { [weak self] steps in
                 self?.pipelineSteps = steps
@@ -76,7 +145,7 @@ final class ChatViewModel: ObservableObject {
     }
 
     // MARK: - Session Helpers
-    
+
     /// Ensures a session exists, creating one if needed
     private func ensureSessionExists() {
         if sessionId == nil {
@@ -84,193 +153,191 @@ final class ChatViewModel: ObservableObject {
             sessionId = newSession.id
         }
     }
-    
+
     /// Load an existing session into the view model
     func loadSession(_ session: ChatSession) {
         // Cancel any ongoing tasks
         thinkingTask?.cancel()
-        
+
         // Set session ID
         sessionId = session.id
-        
+
         // Reset state
-        state = ChatState()
-        
+        resetState()
+
         // Restore messages from session
         if session.messages.isEmpty {
-            state.messages = [.welcomeMessage]
+            messages = [.welcomeMessage]
         } else {
-            state.messages = session.messages
+            messages = session.messages
         }
-        
+
         // Restore expanded state for any thinking cards
-        for message in state.messages {
+        for message in messages {
             if case .thinking(let content) = message.content, !content.isComplete {
                 expandedThinkingCards.insert(message.id)
             }
         }
     }
-    
+
+    // MARK: - Computed Properties
+
+    /// Messages in their natural chronological order
+    var orderedMessages: [ChatMessage] {
+        messages
+    }
+
+    var canSendMessage: Bool {
+        let hasText = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasImage = attachedImage != nil
+        return (hasText || hasImage) && isInputEnabled
+    }
+
+    /// Check if reset would have any effect (for optimization)
+    var needsReset: Bool {
+        sessionId != nil || messages.count > 1 || phase != .idle
+    }
+
+    func isThinkingCardExpanded(_ messageId: UUID) -> Bool {
+        expandedThinkingCards.contains(messageId)
+    }
+
     // MARK: - Action Handler
-    
+
     func send(_ action: ChatAction) {
         switch action {
         case .onAppear:
-            handleOnAppear()
-            
+            break // Future: Analytics, restore state, etc.
+
         case .inputTextChanged(let text):
-            state.inputText = text
-            
+            inputText = text
+
         case .sendMessage:
             handleSendMessage()
-            
+
         case .suggestionTapped(let suggestion):
-            state.inputText = suggestion
+            inputText = suggestion
             handleSendMessage()
-            
+
         case .toggleThinkingCard(let messageId):
             handleToggleThinkingCard(messageId)
-            
-        case .thinkingStepCompleted(let index):
-            handleThinkingStepCompleted(index)
-            
+
+        case .thinkingStepCompleted:
+            break // Handled internally in the flow
+
         case .allThinkingComplete:
-            handleAllThinkingComplete()
-            
+            phase = .recommendation
+
         case .recommendationReady(let recommendation):
             handleRecommendationReady(recommendation)
-            
+
         case .followUpReady(let suggestions):
             handleFollowUpReady(suggestions)
-            
+
         case .reset:
             handleReset()
 
         case .attachImage(let image):
-            // Compress image to reduce memory usage (~200KB instead of 5-20MB)
-            state.attachedImage = compressImageForAttachment(image)
+            attachedImage = compressImageForAttachment(image)
 
         case .removeAttachment:
-            state.attachedImage = nil
+            attachedImage = nil
         }
     }
-    
-    // MARK: - Computed Properties
-    
-    var messages: [ChatMessage] {
-        state.messages
-    }
-    
-    /// Messages in their natural chronological order
-    /// Each thinking card belongs to its specific AI response cycle
-    var orderedMessages: [ChatMessage] {
-        state.messages
-    }
-    
-    var inputText: String {
-        state.inputText
-    }
-    
-    var isInputEnabled: Bool {
-        state.isInputEnabled
-    }
-    
-    var currentPhase: ChatPhase {
-        state.phase
-    }
-    
-    var canSendMessage: Bool {
-        // Allow sending if there's text OR an attached image (or both)
-        let hasText = !state.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasImage = state.attachedImage != nil
-        return (hasText || hasImage) && state.isInputEnabled
-    }
 
-    var attachedImage: UIImage? {
-        state.attachedImage
-    }
-    
-    func isThinkingCardExpanded(_ messageId: UUID) -> Bool {
-        expandedThinkingCards.contains(messageId)
-    }
-    
     // MARK: - Private Handlers
-    
-    private func handleOnAppear() {
-        // Future: Analytics, restore state, etc.
-    }
-    
+
     private func handleSendMessage() {
         guard canSendMessage else { return }
 
-        let userText = state.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let attachedImage = state.attachedImage  // Capture before clearing
+        let userText = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentAttachedImage = attachedImage  // Capture before clearing
 
-        state.inputText = ""
-        state.attachedImage = nil // Clear attachment after sending
-        state.isInputEnabled = false
+        inputText = ""
+        attachedImage = nil
+        isInputEnabled = false
 
         // STATE 1: User message appears
-        let userMessage = ChatMessage(
-            content: .text(userText),
-            sender: .user
-        )
-        state.messages.append(userMessage)
-        state.phase = .userInput
+        let messageContent: MessageContent
+        if let image = currentAttachedImage, let imageData = image.jpegData(compressionQuality: 0.7) {
+            messageContent = .textWithImage(userText.isEmpty ? "Attached Image review" : userText, imageData: imageData)
+        } else {
+            messageContent = .text(userText)
+        }
+
+        let userMessage = ChatMessage(content: messageContent, sender: .user)
+        messages.append(userMessage)
+        phase = .userInput
 
         // Save to history
         saveToHistory()
 
-        // Start the AI response flow (with optional image)
-        startAIResponseFlow(for: userText, image: attachedImage)
+        // Start the AI response flow
+        startAIResponseFlow(for: userText, image: currentAttachedImage)
     }
-    
+
     // MARK: - Persistence
-    
-    /// Save current messages to chat history
+
     private func saveToHistory() {
         ensureSessionExists()
         guard let sessionId = sessionId else { return }
-        historyManager.saveMessages(state.messages, to: sessionId)
+        historyManager.saveMessages(messages, to: sessionId)
     }
-    
+
     private func startAIResponseFlow(for userQuery: String, image: UIImage? = nil) {
-        thinkingTask?.cancel()
+        if let existingTask = thinkingTask {
+            existingTask.cancel()
+            eventService.stop()
+        }
 
         thinkingTask = Task {
-            // STATE 2: Immediate acknowledgement
-            try? await Task.sleep(nanoseconds: acknowledgementDelay)
-            guard !Task.isCancelled else { return }
+            await withTaskCancellationHandler {
+                try? await Task.sleep(nanoseconds: acknowledgementDelay)
+                guard !Task.isCancelled else { return }
 
-            let acknowledgement = generateAcknowledgement(for: userQuery, hasImage: image != nil)
-            let ackMessage = ChatMessage(
-                content: .acknowledgement(acknowledgement),
-                sender: .ai
-            )
-            state.messages.append(ackMessage)
-            state.phase = .acknowledgement
+                let acknowledgement = generateAcknowledgement(for: userQuery, hasImage: image != nil)
+                let ackMessage = ChatMessage(content: .acknowledgement(acknowledgement), sender: .ai)
+                messages.append(ackMessage)
+                phase = .acknowledgement
 
-            // STATE 3: Start thinking mode with real API call (include image if provided)
-            await startThinkingProcessWithAPI(for: userQuery, image: image)
+                await startThinkingProcessWithAPI(for: userQuery, image: image)
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    self?.cleanupPartialState()
+                }
+            }
         }
     }
 
+    private func cleanupPartialState() {
+        messages.removeAll { message in
+            switch message.content {
+            case .thinking(let content) where !content.isComplete:
+                return true
+            case .acknowledgement:
+                return true
+            default:
+                return false
+            }
+        }
+
+        isInputEnabled = true
+        phase = .idle
+        eventService.stop()
+    }
+
     private func startThinkingProcessWithAPI(for userQuery: String, image: UIImage? = nil) async {
-        // Add thinking card placeholder to messages
         let thinkingMessage = ChatMessage(
             content: .thinking(ThinkingContent(steps: [], isExpanded: true, isComplete: false)),
             sender: .ai
         )
 
-        state.messages.append(thinkingMessage)
+        messages.append(thinkingMessage)
         expandedThinkingCards.insert(thinkingMessage.id)
-        state.phase = .thinking
+        phase = .thinking
 
-        // Start SSE connection BEFORE API call
         eventService.start()
 
-        // Make API call (SSE connects in parallel)
-        // Pass image if provided for vision analysis
         var payload: FlowerCardPayload?
         do {
             payload = try await APIService.shared.getRecommendation(prompt: userQuery, image: image)
@@ -280,14 +347,11 @@ final class ChatViewModel: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        // Stop SSE listening
         eventService.stop()
 
-        // Remove standalone thinking card (recommendation has its own)
-        state.messages.removeAll { $0.id == thinkingMessage.id }
+        messages.removeAll { $0.id == thinkingMessage.id }
         expandedThinkingCards.remove(thinkingMessage.id)
 
-        // STATE 4: Show recommendation
         if let payload = payload {
             lastPayload = payload
             await showRecommendation(from: payload)
@@ -295,21 +359,14 @@ final class ChatViewModel: ObservableObject {
             await showError()
         }
     }
-    
+
     private func showRecommendation(from payload: FlowerCardPayload) async {
         let recommendation = payload.toFlowerRecommendation()
-        let recMessage = ChatMessage(
-            content: .recommendation(recommendation),
-            sender: .ai
-        )
-        state.messages.append(recMessage)
-        state.phase = .recommendation
-
-        // Save to history (with recommendation)
+        let recMessage = ChatMessage(content: .recommendation(recommendation), sender: .ai)
+        messages.append(recMessage)
+        phase = .recommendation
         saveToHistory()
-
-        // Re-enable input - wait for user, no follow-up suggestions
-        state.isInputEnabled = true
+        isInputEnabled = true
     }
 
     private func showError() async {
@@ -317,73 +374,60 @@ final class ChatViewModel: ObservableObject {
             content: .text("I'm sorry, I couldn't process your request right now. Please try again."),
             sender: .ai
         )
-        state.messages.append(errorMessage)
-        state.phase = .idle
-
-        // Save to history
+        messages.append(errorMessage)
+        phase = .idle
         saveToHistory()
-
-        // Re-enable input
-        state.isInputEnabled = true
+        isInputEnabled = true
     }
-    
+
     private func handleToggleThinkingCard(_ messageId: UUID) {
-        // Toggle the expanded state - @Published handles UI updates automatically
         if expandedThinkingCards.contains(messageId) {
             expandedThinkingCards.remove(messageId)
         } else {
             expandedThinkingCards.insert(messageId)
         }
     }
-    
-    private func handleThinkingStepCompleted(_ index: Int) {
-        // Handled internally in the flow
-    }
-    
-    private func handleAllThinkingComplete() {
-        state.phase = .recommendation
-    }
-    
+
     private func handleRecommendationReady(_ recommendation: FlowerRecommendation) {
-        let message = ChatMessage(
-            content: .recommendation(recommendation),
-            sender: .ai
-        )
-        state.messages.append(message)
-        state.phase = .recommendation
+        let message = ChatMessage(content: .recommendation(recommendation), sender: .ai)
+        messages.append(message)
+        phase = .recommendation
     }
-    
+
     private func handleFollowUpReady(_ suggestions: [String]) {
-        let message = ChatMessage(
-            content: .followUp(suggestions),
-            sender: .ai
-        )
-        state.messages.append(message)
-        state.phase = .followUp
-        state.isInputEnabled = true
+        let message = ChatMessage(content: .followUp(suggestions), sender: .ai)
+        messages.append(message)
+        phase = .followUp
+        isInputEnabled = true
     }
-    
+
     private func handleReset() {
+        // Early exit if already in reset state
+        guard sessionId != nil || messages.count > 1 || phase != .idle else { return }
+
         thinkingTask?.cancel()
         eventService.stop()
-
-        // Clear session ID - new session will be created lazily when user sends a message
         sessionId = nil
-
-        // Clear last payload
         lastPayload = nil
-
-        // Clear expanded thinking cards
         expandedThinkingCards.removeAll()
-
-        state = ChatState()
-        state.messages = [.welcomeMessage]
+        inputText = ""
+        isInputEnabled = true
+        phase = .idle
+        attachedImage = nil
+        messages = [.welcomeMessage]
     }
-    
-    // MARK: - Acknowledgement Generator (Mock)
+
+    private func resetState() {
+        messages = []
+        inputText = ""
+        isInputEnabled = true
+        phase = .idle
+        attachedImage = nil
+    }
+
+    // MARK: - Acknowledgement Generator
 
     private func generateAcknowledgement(for query: String, hasImage: Bool = false) -> String {
-        // Handle image uploads
         if hasImage {
             if query.isEmpty {
                 return "I see you've shared a beautiful bouquet! Let me identify the flowers for you."
@@ -400,7 +444,6 @@ final class ChatViewModel: ObservableObject {
             "I can feel the care in your words. Let me find something meaningful."
         ]
 
-        // Simple mock logic - in production, this would be context-aware
         if query.lowercased().contains("birthday") {
             return "A birthday gift! Let me think about something that captures the joy of this celebration."
         } else if query.lowercased().contains("anniversary") {

@@ -14,6 +14,9 @@ struct RecommendationCardView: View {
         .interpolatingSpring(stiffness: 300, damping: 30)
     }
 
+    // Static shadow color to avoid recreation
+    private static let shadowColor = Color.black.opacity(0.08)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Image
@@ -27,7 +30,8 @@ struct RecommendationCardView: View {
         }
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
+        .shadow(color: Self.shadowColor, radius: 8, x: 0, y: 4)
+        // Note: drawingGroup() removed - it breaks expand/collapse animations in reasoningSection
     }
 
     // MARK: - Image Section
@@ -48,10 +52,6 @@ struct RecommendationCardView: View {
                 topTrailingRadius: 24
             )
         )
-        .onAppear {
-            print("[RecommendationCard] imageUrl: \(recommendation.imageUrl ?? "nil")")
-            print("[RecommendationCard] imageCacheKey: \(recommendation.imageCacheKey ?? "nil")")
-        }
     }
 
     // MARK: - Content Section

@@ -59,12 +59,11 @@ struct BottomInputBarView: View {
             .onChange(of: controller.sessionToLoad) { _, newSession in
                 if let session = newSession {
                     viewModel.loadSession(session)
-                } else {
-                    viewModel.send(.reset)
                 }
+                // Don't call reset here - it's handled by onChange(isExpanded)
             }
             .onChange(of: controller.isExpanded) { _, isExpanded in
-                if isExpanded && controller.sessionToLoad == nil {
+                if isExpanded && controller.sessionToLoad == nil && viewModel.needsReset {
                     viewModel.send(.reset)
                 }
             }
@@ -158,6 +157,9 @@ struct ExpandedChatSheet: View {
     @Namespace private var bottomID
     @Namespace private var toolbarNamespace
 
+    // Cancellable task for scroll cleanup on disappear
+    @State private var scrollTask: Task<Void, Never>?
+
     // MARK: - Static Constants (performance optimization)
     private static let inputBgColor = Color(red: 0.98, green: 0.98, blue: 0.98)
     private static let shadowColor = Color.black.opacity(0.15)
@@ -197,16 +199,18 @@ struct ExpandedChatSheet: View {
             }
         }
         .onAppear {
-            showPlusButton = true
-            // Auto-focus input when sheet opens
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isInputFocused = true
+            // Show plus button immediately without animation
+            withTransaction(Transaction(animation: nil)) {
+                showPlusButton = true
             }
+            // Focus immediately - keyboard is pre-warmed via KeyboardWarmer
+            isInputFocused = true
         }
         .onDisappear {
             showPlusButton = false
+            // Cancel pending scroll task to prevent updates after view disappears
+            scrollTask?.cancel()
         }
-        .animation(.easeOut(duration: 0.15), value: showPlusButton)
     }
 
     // MARK: - Messages Scroll View
@@ -216,9 +220,29 @@ struct ExpandedChatSheet: View {
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 16) {
-                        ForEach(viewModel.orderedMessages, id: \.id) { message in
-                            messageRow(for: message)
-                                .id(message.id)
+                        // Use cached precomputed data from ViewModel
+                        let messages = viewModel.orderedMessages
+                        let precomputed = viewModel.precomputedMessageData
+                        let steps = viewModel.pipelineSteps
+
+                        // Use indices to avoid Array() allocation - preserves LazyVStack laziness
+                        ForEach(messages.indices, id: \.self) { index in
+                            let message = messages[index]
+                            let data = index < precomputed.count
+                                ? precomputed[index]
+                                : ChatViewModel.MessageRowData(thinkingId: message.id, hideCompletedThinking: false)
+
+                            MessageBubbleView(
+                                message: message,
+                                steps: steps,
+                                isThinkingExpanded: viewModel.isThinkingCardExpanded(data.thinkingId),
+                                onThinkingToggle: { [weak viewModel] in
+                                    viewModel?.send(.toggleThinkingCard(data.thinkingId))
+                                },
+                                onExploreFlower: handleExploreFlower,
+                                hideCompletedThinking: data.hideCompletedThinking
+                            )
+                            .id(message.id)
                         }
 
                         Color.clear.frame(height: 1).id(bottomID)
@@ -241,7 +265,11 @@ struct ExpandedChatSheet: View {
                 .defaultScrollAnchor(.bottom)
                 .onAppear { scrollProxy = proxy }
                 .onChange(of: viewModel.messages.count) { _, _ in
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    // Cancel previous scroll task if pending
+                    scrollTask?.cancel()
+                    scrollTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        guard !Task.isCancelled else { return }
                         proxy.scrollTo(bottomID, anchor: .bottom)
                         showScrollToBottom = false
                     }
@@ -409,10 +437,11 @@ struct ExpandedChatSheet: View {
         .shadow(color: Self.lightShadowColor, radius: 12, x: 0, y: 4)
     }
 
+    /// Direct binding to viewModel.inputText - no action dispatch per keystroke
     private var inputTextBinding: Binding<String> {
         Binding(
             get: { viewModel.inputText },
-            set: { viewModel.send(.inputTextChanged($0)) }
+            set: { viewModel.inputText = $0 }
         )
     }
 
@@ -432,18 +461,6 @@ struct ExpandedChatSheet: View {
         guard viewModel.canSendMessage else { return }
         viewModel.send(.sendMessage)
         isInputFocused = false
-    }
-
-    @ViewBuilder
-    private func messageRow(for message: ChatMessage) -> some View {
-        MessageBubbleView(
-            message: message,
-            steps: viewModel.pipelineSteps,
-            isThinkingExpanded: viewModel.isThinkingCardExpanded(message.id),
-            onThinkingToggle: { [weak viewModel] in viewModel?.send(.toggleThinkingCard(message.id)) },
-            onExploreFlower: handleExploreFlower,
-            hideCompletedThinking: false
-        )
     }
 
     private func handleExploreFlower(_ recommendation: FlowerRecommendation) {
