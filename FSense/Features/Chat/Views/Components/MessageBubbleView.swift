@@ -3,21 +3,23 @@ import SwiftUI
 /// Message bubble - optimized for performance
 struct MessageBubbleView: View {
 
+    // MARK: - Input Properties (let first, then var with defaults)
+
     let message: ChatMessage
     let steps: [ProgressStep]
     let isThinkingExpanded: Bool
     let onThinkingToggle: () -> Void
+
     var onExploreFlower: ((FlowerRecommendation) -> Void)? = nil
-
-    /// Whether the thinking is complete (used to hide standalone thinking card)
     var hideCompletedThinking: Bool = false
-
-    /// Whether to show typewriter animation for AI text messages
     var shouldAnimate: Bool = false
 
-    // Static colors to avoid recreation on each render
+    // MARK: - Static Cached Properties
+
     private static let shadowColor = Color.black.opacity(0.1)
     private static let imageShadowColor = Color.black.opacity(0.15)
+
+    // MARK: - Body
 
     var body: some View {
         switch message.content {

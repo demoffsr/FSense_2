@@ -232,6 +232,70 @@ actor APIService {
             throw APIError.unknown(httpResponse.statusCode)
         }
     }
+
+    /// Send a simple chat message (Ask mode) - no flower pipeline
+    /// Uses gpt-4o-mini for fast responses
+    /// - Parameters:
+    ///   - prompt: User's message
+    ///   - context: Optional conversation context
+    ///   - image: Optional image attachment
+    /// - Returns: Text response from AI
+    func sendAskMessage(
+        prompt: String,
+        context: ChatContextV2? = nil,
+        image: UIImage? = nil
+    ) async throws -> String {
+        let endpoint = "\(baseURL)/api/ask"
+
+        guard let url = URL(string: endpoint) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Convert image to base64 if provided
+        var imageBase64: String? = nil
+        if let image = image {
+            imageBase64 = imageToBase64(image)
+        }
+
+        let body = AskRequest(
+            prompt: prompt,
+            region: context?.region ?? "US",
+            imageBase64: imageBase64,
+            context: context
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            let result = try decoder.decode(AskResponse.self, from: data)
+            if !result.success {
+                throw APIError.serverError(result.error ?? "Unknown error")
+            }
+            return result.message
+
+        case 400..<500:
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.detail)
+            }
+            throw APIError.clientError(httpResponse.statusCode)
+
+        case 500..<600:
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+
+        default:
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
 }
 
 // MARK: - Request/Response Models
@@ -255,6 +319,28 @@ private struct RecommendResponse: Decodable {
 
 private struct APIErrorResponse: Decodable {
     let detail: String
+}
+
+// MARK: - Ask API Models
+
+private struct AskRequest: Encodable {
+    let prompt: String
+    let region: String
+    let imageBase64: String?
+    let context: ChatContextV2?
+
+    enum CodingKeys: String, CodingKey {
+        case prompt
+        case region
+        case imageBase64 = "image_base64"
+        case context
+    }
+}
+
+private struct AskResponse: Decodable {
+    let success: Bool
+    let message: String
+    let error: String?
 }
 
 // MARK: - V2 API Models
@@ -379,6 +465,139 @@ private struct ChatResponseRaw: Decodable {
             recommendationData = nil
             textData = try container.decodeIfPresent(TextResponseData.self, forKey: .data)
         }
+    }
+}
+
+// MARK: - API Errors
+
+// MARK: - Scan API
+
+extension APIService {
+
+    /// Scan a flower image and get quick identification
+    /// - Parameters:
+    ///   - image: UIImage to analyze
+    ///   - mode: Single flower or bouquet mode
+    /// - Returns: QuickScanResult with flower identification
+    func scanFlower(image: UIImage, mode: ScanMode) async throws -> QuickScanResult {
+        let endpoint = "\(apiBaseURL)/api/scan"
+
+        guard let url = URL(string: endpoint) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        guard let imageBase64 = imageToBase64(image) else {
+            throw APIError.serverError("Failed to encode image")
+        }
+
+        let body = ScanRequestBody(
+            imageBase64: imageBase64,
+            scanMode: mode.rawValue,
+            region: "US"
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            let result = try decoder.decode(QuickScanResponse.self, from: data)
+            guard let scanData = result.data else {
+                throw APIError.serverError(result.error ?? "No scan data returned")
+            }
+            return scanData
+
+        case 400..<500:
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.detail)
+            }
+            throw APIError.clientError(httpResponse.statusCode)
+
+        case 500..<600:
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+
+        default:
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
+
+    /// Get detailed scan information
+    /// - Parameters:
+    ///   - requestId: Request ID from quick scan
+    ///   - flowerId: Flower ID to get details for
+    /// - Returns: ScanDetailResult with full flower information
+    func getScanDetail(requestId: String, flowerId: String) async throws -> ScanDetailResult {
+        let endpoint = "\(apiBaseURL)/api/scan/detail"
+
+        guard let url = URL(string: endpoint) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = ScanDetailRequestBody(requestId: requestId, flowerId: flowerId)
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            let result = try decoder.decode(ScanDetailResponse.self, from: data)
+            guard let detailData = result.data else {
+                throw APIError.serverError(result.error ?? "No detail data returned")
+            }
+            return detailData
+
+        case 400..<500:
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.detail)
+            }
+            throw APIError.clientError(httpResponse.statusCode)
+
+        case 500..<600:
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+
+        default:
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
+}
+
+// MARK: - Scan Request Bodies
+
+private struct ScanRequestBody: Encodable {
+    let imageBase64: String
+    let scanMode: String
+    let region: String
+
+    enum CodingKeys: String, CodingKey {
+        case imageBase64 = "image_base64"
+        case scanMode = "scan_mode"
+        case region
+    }
+}
+
+private struct ScanDetailRequestBody: Encodable {
+    let requestId: String
+    let flowerId: String
+
+    enum CodingKeys: String, CodingKey {
+        case requestId = "request_id"
+        case flowerId = "flower_id"
     }
 }
 

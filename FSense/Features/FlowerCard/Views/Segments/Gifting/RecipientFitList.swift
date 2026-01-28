@@ -2,10 +2,13 @@ import SwiftUI
 
 /// List showing how appropriate this flower is for different recipient types
 struct RecipientFitList: View {
-    
+
     let recipients: [RecipientFit]
     @State private var selectedRecipient: RecipientFit?
-    
+
+    // Static shadow color to avoid recreation on each render
+    private static let shadowColor = Color.black.opacity(0.1)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Header
@@ -28,7 +31,8 @@ struct RecipientFitList: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(.white)
         .cornerRadius(24)
-        .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
+        .compositingGroup()
+        .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
         .navigationDestination(item: $selectedRecipient) { recipient in
             RecipientProfileView(recipient: recipient)
         }
@@ -75,7 +79,6 @@ struct RecipientFitList: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .background(.white)
         .cornerRadius(16)
-        .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
     }
     
     // MARK: - Helpers

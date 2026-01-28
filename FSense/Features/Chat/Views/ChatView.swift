@@ -4,13 +4,18 @@ import PhotosUI
 /// Main chat view - optimized for performance
 struct ChatView: View {
 
+    // MARK: - State & StateObject (property ordering per swiftui-view-refactor guidelines)
+
     @StateObject private var viewModel = ChatViewModel()
-    @FocusState private var isInputFocused: Bool
 
     @State private var selectedFlower: Flower?
     @State private var navigateToFlowerDetail = false
     @State private var showImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
+
+    @FocusState private var isInputFocused: Bool
+
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {

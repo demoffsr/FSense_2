@@ -10,7 +10,10 @@ final class HomeViewModel: ObservableObject {
     
     /// Access to chat history
     let chatHistory = ChatHistoryManager.shared
-    
+
+    /// Access to scan history
+    let scanHistory = ScanHistoryManager.shared
+
     /// Per-session view models (granular dependencies for performance)
     @Published private(set) var sessionViewModels: [UUID: ChatSessionViewModel] = [:]
 
@@ -22,9 +25,22 @@ final class HomeViewModel: ObservableObject {
 
     /// Legacy accessor for compatibility (TODO: remove after migration)
     @Published var recentChats: [ChatSession] = []
-    
-    /// Recent scan items (mock for now)
-    @Published var recentScans: [RecentScanItem] = []
+
+    /// Recent scan items from ScanHistoryManager
+    var recentScans: [RecentScanItem] {
+        scanHistory.sessions.prefix(10).map { session in
+            RecentScanItem(
+                id: session.id,
+                flowerName: session.flowerName,
+                subtitle: session.scientificName ?? session.relativeDate,
+                imageAsset: nil,
+                imagePath: session.imagePath,
+                scannedAt: session.scannedAt,
+                confidence: session.confidence,
+                requestId: session.requestId
+            )
+        }
+    }
     
     private var cancellables = Set<AnyCancellable>()
     private var isSetup = false

@@ -190,6 +190,35 @@ struct ChatSession: Identifiable, Codable, Equatable {
     }
 }
 
+// MARK: - Chat Mode
+
+/// Chat interaction mode - determines how messages are processed
+enum ChatMode: String, Codable, Equatable {
+    case ask   // Simple GPT chat - no flower pipeline
+    case find  // Full flower recommendation pipeline (default)
+
+    var displayName: String {
+        switch self {
+        case .ask: return "Ask"
+        case .find: return "Find"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .ask: return "Speak mode"
+        case .find: return "Search mode"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .ask: return "bubble.left.and.bubble.right"
+        case .find: return "globe"
+        }
+    }
+}
+
 // MARK: - Chat State Machine
 
 /// Represents the current state of the chat conversation
@@ -346,6 +375,11 @@ enum ChatAction {
     case reset
     case attachImage(UIImage)
     case removeAttachment
+    // Mode actions
+    case setMode(ChatMode)
+    case toggleMode(ChatMode)  // Toggles mode on/off (nil = general mode)
+    case showModeSheet
+    case hideModeSheet
 }
 
 // MARK: - Mock Data

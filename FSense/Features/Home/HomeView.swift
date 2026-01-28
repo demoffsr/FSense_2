@@ -9,6 +9,13 @@ struct HomeView: View {
     // HEADER HEIGHT — меняй это значение, высота изменится
     private let headerHeight: CGFloat = 240
 
+    /// Static gradient to avoid recreation on each render
+    private static let whiteFadeGradient = LinearGradient(
+        colors: [.white.opacity(0), .white],
+        startPoint: .top,
+        endPoint: .bottom
+    )
+
     // Rename alert state
     @State private var showRenameAlert = false
     @State private var sessionToRename: ChatSession?
@@ -45,12 +52,8 @@ struct HomeView: View {
                         // ══════════════════════════════════════════════════════════
                         // 2. WHITE FADE — переход (накладывается на низ хедера)
                         // ══════════════════════════════════════════════════════════
-                        LinearGradient(
-                            colors: [.white.opacity(0), .white],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 20)
+                        Self.whiteFadeGradient
+                            .frame(height: 20)
                     }
 
                     // ══════════════════════════════════════════════════════════

@@ -47,6 +47,12 @@ final class ChatViewModel: ObservableObject {
     /// Message IDs that should show typewriter animation (new AI messages only)
     @Published private(set) var animatingMessageIds: Set<UUID> = []
 
+    /// Current chat mode - determines how messages are processed (nil = general mode)
+    @Published private(set) var chatMode: ChatMode?
+
+    /// Controls the mode selection bottom sheet
+    @Published var showModeSheet: Bool = false
+
     // MARK: - Cached Precomputed Data
 
     /// Cached message row data - automatically invalidated via didSet on messages
@@ -66,27 +72,50 @@ final class ChatViewModel: ObservableObject {
         var result: [MessageRowData] = []
         result.reserveCapacity(messages.count)
 
+        // O(n) approach: Build index maps in single passes instead of nested O(n²) loops
+
+        // Pass 1: Build thinking card map (recommendation index -> thinking card id)
+        // Track the last thinking index seen, reset on user message
+        var thinkingCardMap: [Int: UUID] = [:]
+        var lastThinkingIndex: Int? = nil
+
         for (index, message) in messages.enumerated() {
-            var thinkingId = message.id
-            if case .recommendation = message.content {
-                for i in stride(from: index - 1, through: 0, by: -1) {
-                    if case .thinking = messages[i].content {
-                        thinkingId = messages[i].id
-                        break
-                    }
-                    if messages[i].sender == .user { break }
+            if case .thinking = message.content {
+                lastThinkingIndex = index
+            } else if case .recommendation = message.content {
+                if let thinkingIdx = lastThinkingIndex {
+                    thinkingCardMap[index] = messages[thinkingIdx].id
                 }
+                lastThinkingIndex = nil
+            } else if message.sender == .user {
+                lastThinkingIndex = nil
             }
+        }
+
+        // Pass 2: Build set of thinking indices that have recommendations following
+        var thinkingHasRecommendation: Set<Int> = []
+        var lastThinkingIdx: Int? = nil
+
+        for (index, message) in messages.enumerated() {
+            if case .thinking = message.content {
+                lastThinkingIdx = index
+            } else if case .recommendation = message.content {
+                if let idx = lastThinkingIdx {
+                    thinkingHasRecommendation.insert(idx)
+                }
+                lastThinkingIdx = nil
+            } else if message.sender == .user {
+                lastThinkingIdx = nil
+            }
+        }
+
+        // Pass 3: Build result using O(1) lookups
+        for (index, message) in messages.enumerated() {
+            let thinkingId = thinkingCardMap[index] ?? message.id
 
             var hideCompletedThinking = false
             if case .thinking(let content) = message.content, content.isComplete {
-                for i in (index + 1)..<messages.count {
-                    if case .recommendation = messages[i].content {
-                        hideCompletedThinking = true
-                        break
-                    }
-                    if messages[i].sender == .user { break }
-                }
+                hideCompletedThinking = thinkingHasRecommendation.contains(index)
             }
 
             result.append(MessageRowData(thinkingId: thinkingId, hideCompletedThinking: hideCompletedThinking))
@@ -266,6 +295,25 @@ final class ChatViewModel: ObservableObject {
 
         case .removeAttachment:
             attachedImage = nil
+
+        case .setMode(let mode):
+            chatMode = mode
+            showModeSheet = false
+
+        case .toggleMode(let mode):
+            // If same mode selected, deselect it (go to general mode)
+            if chatMode == mode {
+                chatMode = nil
+            } else {
+                chatMode = mode
+            }
+            showModeSheet = false
+
+        case .showModeSheet:
+            showModeSheet = true
+
+        case .hideModeSheet:
+            showModeSheet = false
         }
     }
 
@@ -322,32 +370,77 @@ final class ChatViewModel: ObservableObject {
             eventService.stop()
         }
 
+        let currentMode = chatMode
+
         thinkingTask = Task {
             await withTaskCancellationHandler {
-                // Step 1: Classify intent FIRST (before any UI response)
                 let context = buildChatContextV2()
-                let classification = try? await APIService.shared.classifyIntent(
-                    prompt: userQuery,
-                    context: context
-                )
 
-                guard !Task.isCancelled else { return }
+                // Branch based on chat mode
+                switch currentMode {
+                case .ask:
+                    // Ask mode: simple GPT chat without flower pipeline
+                    await handleAskModeQuery(userQuery, image: image, context: context)
 
-                let intent = classification?.intent ?? "flower_request"
-
-                // Step 2: Route based on intent
-                if intent == "off_topic" || intent == "clarification" {
-                    // Non-flower query: get text response directly (no acknowledgement)
-                    await handleNonFlowerQuery(userQuery, image: image, context: context)
-                } else {
-                    // Flower request: show acknowledgement + pipeline
+                case .find:
+                    // Find mode: skip intent classification, go straight to flower pipeline
                     await handleFlowerRequest(userQuery, image: image, context: context)
+
+                case nil:
+                    // General mode: use existing intent classification + pipeline logic
+                    let classification = try? await APIService.shared.classifyIntent(
+                        prompt: userQuery,
+                        context: context
+                    )
+
+                    guard !Task.isCancelled else { return }
+
+                    let intent = classification?.intent ?? "flower_request"
+
+                    // Route based on intent
+                    if intent == "off_topic" || intent == "clarification" {
+                        // Non-flower query: get text response directly (no acknowledgement)
+                        await handleNonFlowerQuery(userQuery, image: image, context: context)
+                    } else {
+                        // Flower request: show acknowledgement + pipeline
+                        await handleFlowerRequest(userQuery, image: image, context: context)
+                    }
                 }
             } onCancel: {
                 Task { @MainActor [weak self] in
                     self?.cleanupPartialState()
                 }
             }
+        }
+    }
+
+    /// Handle Ask mode queries - simple GPT chat without flower pipeline
+    private func handleAskModeQuery(_ query: String, image: UIImage?, context: ChatContextV2) async {
+        // Show typing indicator while waiting for response
+        let typingMessage = ChatMessage(content: .typing, sender: .ai)
+        messages.append(typingMessage)
+        let typingMessageId = typingMessage.id
+
+        do {
+            let response = try await APIService.shared.sendAskMessage(
+                prompt: query,
+                context: context,
+                image: image
+            )
+
+            guard !Task.isCancelled else {
+                messages.removeAll { $0.id == typingMessageId }
+                return
+            }
+
+            // Remove typing indicator
+            messages.removeAll { $0.id == typingMessageId }
+
+            await showTextResponse(response)
+        } catch {
+            // Remove typing indicator on error
+            messages.removeAll { $0.id == typingMessageId }
+            await showError()
         }
     }
 

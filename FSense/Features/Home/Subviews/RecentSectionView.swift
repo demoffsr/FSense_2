@@ -39,6 +39,11 @@ struct RecentCardsListView: View {
     var onRenameChat: ((ChatSession) -> Void)? = nil
     var onDeleteChat: ((ChatSession) -> Void)? = nil
 
+    /// O(1) session lookup dictionary - built once per render instead of 3x O(n) per row
+    private var sessionLookup: [UUID: ChatSession] {
+        Dictionary(uniqueKeysWithValues: viewModel.chatHistory.sessions.map { ($0.id, $0) })
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             if viewModel.state.selectedTab == .chats {
@@ -48,7 +53,7 @@ struct RecentCardsListView: View {
             }
         }
     }
-    
+
     // MARK: - Chats List
 
     @ViewBuilder
@@ -60,35 +65,35 @@ struct RecentCardsListView: View {
                 subtitle: "Start a conversation to get flower recommendations"
             )
         } else {
-            ForEach(viewModel.recentChatViewModels) { viewModel in
+            let lookup = sessionLookup // Capture once for all rows
+            ForEach(viewModel.recentChatViewModels) { chatVM in
                 Button {
-                    // Need to get session from history by ID
-                    if let session = self.viewModel.chatHistory.sessions.first(where: { $0.id == viewModel.id }) {
+                    if let session = lookup[chatVM.id] {
                         onChatTapped?(session)
                     }
                 } label: {
                     RecentChatRowView(
-                        viewModel: viewModel,
+                        viewModel: chatVM,
                         onRename: {
-                            if let session = self.viewModel.chatHistory.sessions.first(where: { $0.id == viewModel.id }) {
+                            if let session = lookup[chatVM.id] {
                                 onRenameChat?(session)
                             }
                         },
                         onDelete: {
-                            if let session = self.viewModel.chatHistory.sessions.first(where: { $0.id == viewModel.id }) {
+                            if let session = lookup[chatVM.id] {
                                 onDeleteChat?(session)
                             }
                         }
                     )
                 }
-                .id(viewModel.id) // Explicit identity for SwiftUI
+                .id(chatVM.id) // Explicit identity for SwiftUI
                 .buttonStyle(.plain)
             }
         }
     }
     
     // MARK: - Scans List
-    
+
     @ViewBuilder
     private var scansList: some View {
         if viewModel.recentScans.isEmpty {
@@ -99,13 +104,134 @@ struct RecentCardsListView: View {
             )
         } else {
             ForEach(viewModel.recentScans) { scan in
-                RecentItemRowView(
-                    title: scan.flowerName,
-                    forLabel: "",
-                    forValue: scan.subtitle,
-                    imageName: scan.imageAsset
-                )
+                RecentScanRowView(scan: scan)
             }
+        }
+    }
+}
+
+// MARK: - Recent Scan Row
+
+struct RecentScanRowView: View {
+    let scan: RecentScanItem
+    @State private var showingScanDetail = false
+
+    /// Static gradient for placeholder
+    private static let placeholderGradient = LinearGradient(
+        colors: [Color.green.opacity(0.2), Color.teal.opacity(0.2)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    var body: some View {
+        Button {
+            showingScanDetail = true
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                // Thumbnail
+                thumbnail
+
+                // Text content
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(scan.flowerName)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                            .lineLimit(1)
+
+                        if let confidence = scan.confidence, confidence >= 0.8 {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.green)
+                        }
+                    }
+
+                    Text(scan.subtitle)
+                        .font(.system(size: 13))
+                        .foregroundColor(.black.opacity(0.5))
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                // Confidence badge
+                if let confidence = scan.confidence {
+                    Text("\(Int(confidence * 100))%")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(confidenceColor(confidence))
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white)
+            .cornerRadius(16)
+            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 0)
+        }
+        .buttonStyle(.plain)
+        // TODO: Add navigation to scan detail when tapped
+        // .fullScreenCover(isPresented: $showingScanDetail) { ... }
+    }
+
+    private var thumbnail: some View {
+        Group {
+            if let imagePath = scan.imagePath {
+                // Load from saved image
+                if let image = loadImage(from: imagePath) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 46, height: 46)
+                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                } else {
+                    placeholderThumbnail
+                }
+            } else if let imageAsset = scan.imageAsset {
+                // Local asset
+                Image(imageAsset)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 46, height: 46)
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+            } else {
+                placeholderThumbnail
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 9)
+                .inset(by: 0.5)
+                .stroke(Color(red: 0.95, green: 0.95, blue: 0.95), lineWidth: 1)
+        )
+    }
+
+    private var placeholderThumbnail: some View {
+        RoundedRectangle(cornerRadius: 9)
+            .fill(Self.placeholderGradient)
+            .frame(width: 46, height: 46)
+            .overlay(
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 18))
+                    .foregroundColor(.green.opacity(0.6))
+            )
+    }
+
+    private func loadImage(from path: String) -> UIImage? {
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("scan_images/\(path)")
+        return UIImage(contentsOfFile: url.path)
+    }
+
+    private func confidenceColor(_ confidence: Double) -> Color {
+        if confidence >= 0.8 {
+            return .green
+        } else if confidence >= 0.6 {
+            return .orange
+        } else {
+            return .red
         }
     }
 }
@@ -116,6 +242,13 @@ struct RecentChatRowView: View {
     let viewModel: ChatSessionViewModel
     var onRename: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
+
+    /// Static gradient to avoid recreation on each render
+    private static let placeholderGradient = LinearGradient(
+        colors: [Color.purple.opacity(0.2), Color.pink.opacity(0.2)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -209,18 +342,9 @@ struct RecentChatRowView: View {
                     .frame(width: 46, height: 46)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
             } else {
-                // Placeholder gradient
+                // Placeholder gradient (uses static property to avoid recreation)
                 RoundedRectangle(cornerRadius: 9)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.purple.opacity(0.2),
-                                Color.pink.opacity(0.2)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Self.placeholderGradient)
                     .frame(width: 46, height: 46)
                     .overlay(
                         Image(systemName: "bubble.left.fill")

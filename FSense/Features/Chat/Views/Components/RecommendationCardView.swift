@@ -15,6 +15,13 @@ struct RecommendationCardView: View {
     // Static shadow color to avoid recreation
     private static let shadowColor = Color.black.opacity(0.08)
 
+    // Static button gradient to avoid recreation on each render
+    private static let buttonGradient = LinearGradient(
+        colors: [Color.purple, Color.purple.opacity(0.8)],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Image
@@ -79,13 +86,7 @@ struct RecommendationCardView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.purple, Color.purple.opacity(0.8)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .background(Self.buttonGradient)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -166,7 +167,7 @@ struct RecommendationCardView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 4)
 
-            ForEach(steps) { step in
+            ForEach(steps, id: \.id) { step in
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 13))

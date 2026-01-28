@@ -196,8 +196,6 @@ struct ExpandedChatSheet: View {
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showScrollToBottom = false
     @State private var showPlusButton = false
-    @State private var showImagePicker = false
-    @State private var imageSource: ImageSource = .photoLibrary
     @Namespace private var bottomID
 
     // Cancellable task for scroll cleanup on disappear
@@ -488,15 +486,7 @@ struct ExpandedChatSheet: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.black)
                 .frame(width: 36, height: 36)
-        }
-        .buttonStyle(.plain)
-        .background {
-            Circle()
-                .fill(.ultraThinMaterial)
-        }
-        .overlay {
-            Circle()
-                .stroke(.white.opacity(0.25), lineWidth: 1)
+                .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: .circle)
         }
         .padding(.bottom, 12)
         .transition(.scale.combined(with: .opacity))
@@ -514,15 +504,7 @@ struct ExpandedChatSheet: View {
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.black)
                 .frame(width: 42, height: 36)
-        }
-        .buttonStyle(.plain)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(.white.opacity(0.25), lineWidth: 1)
+                .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: .rect(cornerRadius: 12))
         }
     }
 
@@ -567,14 +549,7 @@ struct ExpandedChatSheet: View {
             }
             .buttonStyle(.plain)
         }
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-        }
-        .overlay {
-            Capsule()
-                .stroke(.white.opacity(0.25), lineWidth: 1)
-        }
+        .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: .capsule)
     }
 
     // MARK: - Archive Current Chat
@@ -621,8 +596,8 @@ struct ExpandedChatSheet: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                // Plus button - animated appearance
+            HStack(alignment: .bottom, spacing: 12) {
+                // Plus button - animated appearance, aligned to bottom of input
                 if showPlusButton {
                     plusButton
                         .transition(.scale.combined(with: .opacity))
@@ -635,37 +610,14 @@ struct ExpandedChatSheet: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(Color(white: 0.97))
-        .sheet(isPresented: $showImagePicker) {
-            ImagePickerView(source: imageSource, selectedImage: attachmentBinding)
+        .sheet(isPresented: $viewModel.showModeSheet) {
+            ChatModeSheet(viewModel: viewModel, isPresented: $viewModel.showModeSheet)
         }
     }
 
-    private var attachmentBinding: Binding<UIImage?> {
-        Binding(
-            get: { viewModel.attachedImage },
-            set: { image in
-                if let image = image {
-                    viewModel.send(.attachImage(image))
-                }
-            }
-        )
-    }
-
     private var plusButton: some View {
-        Menu {
-            Button {
-                imageSource = .photoLibrary
-                showImagePicker = true
-            } label: {
-                Label("Photo Library", systemImage: "photo.on.rectangle")
-            }
-
-            Button {
-                imageSource = .camera
-                showImagePicker = true
-            } label: {
-                Label("Camera", systemImage: "camera")
-            }
+        Button {
+            viewModel.send(.showModeSheet)
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 18, weight: .medium))
@@ -677,21 +629,56 @@ struct ExpandedChatSheet: View {
     }
 
     private var textFieldContainer: some View {
-        HStack(spacing: 8) {
-            TextField("Ask me about flowers...", text: inputTextBinding)
-                .font(.system(size: 16))
-                .focused($isInputFocused)
-                .disabled(!viewModel.isInputEnabled)
-                .submitLabel(.send)
-                .onSubmit(sendMessageIfCan)
+        VStack(alignment: .leading, spacing: 8) {
+            // Mode badge - only shown when mode is selected, tap to toggle off
+            if viewModel.chatMode != nil {
+                modeBadge
+            }
 
-            sendButton
+            // Text field row
+            HStack(spacing: 8) {
+                TextField("Ask me about...", text: inputTextBinding)
+                    .font(.system(size: 16))
+                    .focused($isInputFocused)
+                    .disabled(!viewModel.isInputEnabled)
+                    .submitLabel(.send)
+                    .onSubmit(sendMessageIfCan)
+
+                sendButton
+            }
         }
-        .padding(.leading, 18)
+        .padding(.leading, 16)
         .padding(.trailing, 10)
-        .frame(height: 50)
-        .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: Capsule())
+        .padding(.vertical, 12)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: Self.lightShadowColor, radius: 4, x: 0, y: 2)
+    }
+
+    @ViewBuilder
+    private var modeBadge: some View {
+        if let mode = viewModel.chatMode {
+            Button {
+                viewModel.send(.toggleMode(mode))  // Tap to toggle off
+            } label: {
+                HStack(alignment: .center, spacing: 10) {
+                    Text(mode.displayName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Color(red: 0.91, green: 0.04, blue: 0.79))  // #E80AC9
+                .cornerRadius(10)
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 2)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .inset(by: 0.5)
+                        .stroke(.white, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     /// Direct binding to viewModel.inputText - no action dispatch per keystroke

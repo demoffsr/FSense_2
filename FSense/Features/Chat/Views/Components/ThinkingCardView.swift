@@ -24,6 +24,7 @@ struct ThinkingCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .cornerRadius(16)
+        .compositingGroup()
         .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
@@ -76,7 +77,7 @@ struct ThinkingCardView: View {
             Divider()
                 .padding(.vertical, 10)
 
-            ForEach(steps) { step in
+            ForEach(steps, id: \.id) { step in
                 ProgressStepRow(step: step)
             }
         }

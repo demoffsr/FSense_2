@@ -1,14 +1,28 @@
 import SwiftUI
 
 struct FlowerCardView: View {
-    
-    @StateObject private var viewModel: FlowerCardViewModel
+
+    // MARK: - Environment
+
     @Environment(\.dismiss) private var dismiss
 
+    // MARK: - State
+
+    @StateObject private var viewModel: FlowerCardViewModel
     @State private var showOverlayToolbar = false
+
+    // MARK: - Constants
 
     private let heroHeight: CGFloat = 360
     private let toolbarThreshold: CGFloat = 250
+
+    // MARK: - Static Properties (cached to avoid recreation)
+
+    private static let heroGradient = LinearGradient(
+        colors: [.black.opacity(0.3), .clear, .black.opacity(0.7)],
+        startPoint: .top,
+        endPoint: .bottom
+    )
     
     init(flower: Flower) {
         _viewModel = StateObject(wrappedValue: FlowerCardViewModel(flower: flower))
@@ -68,11 +82,7 @@ struct FlowerCardView: View {
             .frame(height: heroHeight)
             .clipped()
 
-            LinearGradient(
-                colors: [.black.opacity(0.3), .clear, .black.opacity(0.7)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            Self.heroGradient
             
             HStack {
                 Text(viewModel.flower?.name ?? "Flower")

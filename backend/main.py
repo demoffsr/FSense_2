@@ -171,6 +171,21 @@ class IntentClassificationResponse(BaseModel):
     shouldShowProgress: bool
 
 
+class AskRequest(BaseModel):
+    """Request body for simple GPT chat (Ask mode)."""
+    prompt: str = Field(..., min_length=1, description="User's message")
+    region: str = Field(default="US", description="Geographic region")
+    image_base64: Optional[str] = Field(default=None, description="Base64-encoded image")
+    context: Optional[ChatContextV2Request] = Field(default=None, description="Conversation context")
+
+
+class AskResponse(BaseModel):
+    """Response for Ask mode - simple text response."""
+    success: bool = True
+    message: str
+    error: Optional[str] = None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # LOG STREAMING
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -477,6 +492,217 @@ async def chat_v2(request: ChatRequestV2Extended):
         type=result["type"],
         data=result["data"],
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ASK MODE - SIMPLE GPT CHAT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/ask", response_model=AskResponse)
+async def ask_simple(request: AskRequest):
+    """
+    Simple GPT chat endpoint (Ask mode) - no flower pipeline.
+
+    This endpoint provides a fast, general-purpose chat response
+    without running the full 10-agent flower recommendation pipeline.
+    Uses gpt-4o-mini for speed.
+
+    Args:
+        request: Contains prompt, optional context, region, and image
+
+    Returns:
+        AskResponse with simple text message
+    """
+
+    # Build conversation context if provided
+    conversation_context = ""
+    if request.context and request.context.conversationHistory:
+        history_lines = []
+        for msg in request.context.conversationHistory[-5:]:  # Last 5 messages for context
+            role = "User" if msg.role == "user" else "FSense"
+            history_lines.append(f"{role}: {msg.content}")
+        if history_lines:
+            conversation_context = "\n\nRecent conversation:\n" + "\n".join(history_lines)
+
+    # System prompt for Ask mode
+    system_prompt = """You are FSense, a friendly and knowledgeable flower expert assistant.
+You help users with questions about flowers, their meanings, care tips, and occasions.
+Keep responses helpful, warm, and concise (2-3 sentences when possible).
+If asked about something unrelated to flowers, politely redirect to flower-related topics.
+Respond in the same language as the user's message."""
+
+    user_prompt = request.prompt
+    if conversation_context:
+        user_prompt = f"{conversation_context}\n\nUser: {request.prompt}"
+
+    try:
+        # Use the fast AI client (gpt-4o-mini) for quick responses
+        from backend.core.ai_client import get_ai_client_fast
+        client = get_ai_client_fast()
+        response = client.complete(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            temperature=0.7,
+            max_tokens=500,
+        )
+
+        return AskResponse(
+            success=True,
+            message=response,
+        )
+    except Exception as e:
+        logger.error(f"Ask mode error: {e}")
+        return AskResponse(
+            success=False,
+            message="I'm sorry, I couldn't process your request right now.",
+            error=str(e),
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FLOWER SCAN ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from backend.pipeline.scan_orchestrator import run_scan
+from backend.schemas.scan_payload import ScanMode
+
+
+class ScanRequest(BaseModel):
+    """Request body for flower scan."""
+    image_base64: str = Field(..., description="Base64-encoded image data")
+    scan_mode: str = Field(default="single", description="Scan mode: 'single' or 'bouquet'")
+    region: str = Field(default="US", description="Geographic region")
+
+
+class QuickScanResponse(BaseModel):
+    """Response for quick scan."""
+    success: bool = True
+    data: Dict[str, Any]
+    error: Optional[str] = None
+
+
+class ScanDetailRequest(BaseModel):
+    """Request for scan detail (uses cached result from quick scan)."""
+    request_id: str = Field(..., description="Request ID from quick scan")
+    flower_id: str = Field(..., description="Flower ID to get details for")
+
+
+class ScanDetailResponse(BaseModel):
+    """Response for scan detail."""
+    success: bool = True
+    data: Dict[str, Any]
+    error: Optional[str] = None
+
+
+# In-memory cache for scan results (for demo; production would use Redis)
+_scan_cache: Dict[str, dict] = {}
+
+
+@app.post("/api/scan", response_model=QuickScanResponse)
+async def scan_flower(request: ScanRequest):
+    """
+    Scan a flower image and get quick identification.
+
+    This endpoint analyzes the uploaded image and returns:
+    - Primary flower identification with confidence score
+    - Additional flowers (if bouquet mode)
+    - Request ID for fetching details later
+
+    Expected response time: ~2-3 seconds
+
+    Args:
+        request: Contains base64 image, scan mode, and region
+
+    Returns:
+        QuickScanPayload with flower identification
+    """
+    # Validate scan mode
+    scan_mode = request.scan_mode.lower()
+    if scan_mode not in ("single", "bouquet"):
+        raise HTTPException(status_code=400, detail="Invalid scan_mode. Use 'single' or 'bouquet'.")
+
+    # Run scan pipeline in thread pool
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: run_scan(
+            image_base64=request.image_base64,
+            scan_mode=scan_mode,
+            region=request.region,
+        )
+    )
+
+    if not result["success"]:
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error", "Failed to scan flower")
+        )
+
+    # Cache the detail payload for later retrieval
+    if result.get("quick") and result.get("detail"):
+        request_id = result["quick"].get("requestId")
+        if request_id:
+            _scan_cache[request_id] = result["detail"]
+
+    return QuickScanResponse(
+        success=True,
+        data=result["quick"],
+    )
+
+
+@app.post("/api/scan/detail", response_model=ScanDetailResponse)
+async def get_scan_detail(request: ScanDetailRequest):
+    """
+    Get detailed information for a scanned flower.
+
+    Uses the request_id from a previous quick scan to retrieve
+    full botanical, care, and meaning information.
+
+    Expected response time: ~100ms (cached) or ~1-2s (regenerate)
+
+    Args:
+        request: Contains request_id from quick scan
+
+    Returns:
+        ScanDetailPayload with full flower information
+    """
+    # Check cache first
+    if request.request_id in _scan_cache:
+        return ScanDetailResponse(
+            success=True,
+            data=_scan_cache[request.request_id],
+        )
+
+    # Not in cache - could regenerate, but for now return error
+    raise HTTPException(
+        status_code=404,
+        detail="Scan result not found. Please perform a new scan."
+    )
+
+
+@app.get("/api/scan/{request_id}")
+async def get_scan_by_id(request_id: str):
+    """
+    Get scan result by request ID.
+
+    Useful for retrieving previously scanned flower details.
+
+    Args:
+        request_id: Request ID from a previous scan
+
+    Returns:
+        Cached scan detail payload
+
+    Raises:
+        404: Scan not found
+    """
+    if request_id in _scan_cache:
+        return {
+            "success": True,
+            "data": _scan_cache[request_id],
+        }
+
+    raise HTTPException(status_code=404, detail="Scan not found")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
