@@ -408,7 +408,8 @@ struct ExpandedChatSheet: View {
                                     viewModel?.send(.toggleThinkingCard(data.thinkingId))
                                 },
                                 onExploreFlower: handleExploreFlower,
-                                hideCompletedThinking: data.hideCompletedThinking
+                                hideCompletedThinking: data.hideCompletedThinking,
+                                shouldAnimate: viewModel.shouldAnimateMessage(message.id)
                             )
                             .searchHighlight(
                                 isHighlighted: highlightedMessageId == message.id,
