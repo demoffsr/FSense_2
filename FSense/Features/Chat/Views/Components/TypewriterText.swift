@@ -34,11 +34,12 @@ struct TypewriterText: View {
         self.animationInterval = 1.0 / charsPerSecond
     }
 
-    private var displayedText: String {
+    /// Returns displayed portion as Substring (O(1), no allocation) or full text
+    private var displayedText: Substring {
         if !isAnimationEnabled || displayedCharacterCount >= textLength {
-            return fullText
+            return fullText[...]
         }
-        return String(fullText.prefix(displayedCharacterCount))
+        return fullText.prefix(displayedCharacterCount)
     }
 
     var body: some View {

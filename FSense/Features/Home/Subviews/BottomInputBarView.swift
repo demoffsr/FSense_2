@@ -68,7 +68,7 @@ struct BottomInputBarView: View {
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .overlay(borderOverlay)
             .compositingGroup()
-            .shadow(color: Self.shadowColor, radius: 16, x: 0, y: -12)
+            .shadow(color: Self.shadowColor, radius: 8, x: 0, y: -6)
             .sheet(isPresented: $controller.isExpanded) {
                 ExpandedChatSheet(controller: controller, viewModel: viewModel)
                     .presentationDetents([.large])
@@ -161,8 +161,7 @@ struct BottomInputBarView: View {
         .padding(.trailing, 10)
         .frame(height: 50)
         .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: Capsule())
-        .compositingGroup()
-        .shadow(color: Self.lightShadowColor, radius: 12, x: 0, y: 4)
+        .shadow(color: Self.lightShadowColor, radius: 4, x: 0, y: 2)
         .contentShape(Capsule())
         .onTapGesture { controller.openNewChat() }
         .padding(.horizontal, 20)
@@ -209,6 +208,7 @@ struct ExpandedChatSheet: View {
     @State private var searchText = ""
     @State private var highlightedMessageId: UUID?
     @State private var searchMatchCache: [UUID: Bool] = [:]  // Cached search results
+    @State private var searchDebounceTask: Task<Void, Never>?  // Debounce for search performance
     @FocusState private var isSearchFocused: Bool
 
     // Archive alert state
@@ -308,30 +308,39 @@ struct ExpandedChatSheet: View {
             }
         }
         .onChange(of: searchText) { _, newText in
-            // Scroll to first matching message when search text changes
+            // Cancel previous debounce task
+            searchDebounceTask?.cancel()
+
+            // Clear immediately if empty
             guard isSearching, !newText.isEmpty else {
                 highlightedMessageId = nil
                 searchMatchCache = [:]
                 return
             }
 
-            // Rebuild search cache for all messages
-            var newCache: [UUID: Bool] = [:]
-            var firstMatchId: UUID?
-            for message in viewModel.orderedMessages {
-                let matches = message.matchesSearch(newText)
-                newCache[message.id] = matches
-                if matches && firstMatchId == nil {
-                    firstMatchId = message.id
-                }
-            }
-            searchMatchCache = newCache
+            // Debounce search to avoid O(n) on every keystroke (150ms delay)
+            searchDebounceTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                guard !Task.isCancelled else { return }
 
-            // Scroll to first match
-            if let matchId = firstMatchId {
-                scrollToMessage(matchId)
-            } else {
-                highlightedMessageId = nil
+                // Rebuild search cache for all messages
+                var newCache: [UUID: Bool] = [:]
+                var firstMatchId: UUID?
+                for message in viewModel.orderedMessages {
+                    let matches = message.matchesSearch(newText)
+                    newCache[message.id] = matches
+                    if matches && firstMatchId == nil {
+                        firstMatchId = message.id
+                    }
+                }
+                searchMatchCache = newCache
+
+                // Scroll to first match
+                if let matchId = firstMatchId {
+                    scrollToMessage(matchId)
+                } else {
+                    highlightedMessageId = nil
+                }
             }
         }
         .overlay(alignment: .top) {
@@ -662,8 +671,7 @@ struct ExpandedChatSheet: View {
                 .foregroundStyle(.black)
                 .frame(width: 50, height: 50)
                 .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: .circle)
-                .compositingGroup()
-                .shadow(color: Self.lightShadowColor, radius: 12, x: 0, y: 4)
+                .shadow(color: Self.lightShadowColor, radius: 4, x: 0, y: 2)
         }
     }
 
@@ -682,8 +690,7 @@ struct ExpandedChatSheet: View {
         .padding(.trailing, 10)
         .frame(height: 50)
         .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: Capsule())
-        .compositingGroup()
-        .shadow(color: Self.lightShadowColor, radius: 12, x: 0, y: 4)
+        .shadow(color: Self.lightShadowColor, radius: 4, x: 0, y: 2)
     }
 
     /// Direct binding to viewModel.inputText - no action dispatch per keystroke

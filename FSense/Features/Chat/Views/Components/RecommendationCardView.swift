@@ -10,7 +10,7 @@ struct RecommendationCardView: View {
     var onExplore: (() -> Void)? = nil
 
     // Static animation to avoid recreation on every render
-    private static let Self.expandAnimation: Animation = .interpolatingSpring(stiffness: 300, damping: 30)
+    private static let expandAnimation: Animation = .interpolatingSpring(stiffness: 300, damping: 30)
 
     // Static shadow color to avoid recreation
     private static let shadowColor = Color.black.opacity(0.08)

@@ -81,7 +81,7 @@ struct MessageBubbleView: View {
                 .padding(14)
                 .background(Color.white)
                 .cornerRadius(16)
-                .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
+                .shadow(color: Self.shadowColor, radius: 6, x: 0, y: 2)
         }
     }
 
@@ -103,7 +103,7 @@ struct MessageBubbleView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .background(Color.white)
                     .cornerRadius(16)
-                    .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
+                    .shadow(color: Self.shadowColor, radius: 6, x: 0, y: 2)
             }
         }
     }
@@ -125,7 +125,7 @@ struct MessageBubbleView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white)
             .cornerRadius(16)
-            .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
+            .shadow(color: Self.shadowColor, radius: 6, x: 0, y: 2)
 
             Spacer(minLength: 40)
         }
@@ -139,7 +139,7 @@ struct MessageBubbleView: View {
                 .padding(14)
                 .background(Color.white)
                 .cornerRadius(16)
-                .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
+                .shadow(color: Self.shadowColor, radius: 6, x: 0, y: 2)
 
             Spacer()
         }
@@ -170,7 +170,7 @@ private struct LazyImageView: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(Color.white, lineWidth: 1)
                     )
-                    .shadow(color: Self.imageShadowColor, radius: 16, x: 0, y: 0)
+                    .shadow(color: Self.imageShadowColor, radius: 8, x: 0, y: 0)
             } else {
                 // Placeholder while loading
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -195,8 +195,8 @@ private struct LazyImageView: View {
             return
         }
 
-        // Load in background to avoid blocking UI
-        Task.detached(priority: .userInitiated) {
+        // Load in background with lower priority to not compete with UI rendering
+        Task.detached(priority: .utility) {
             let image = UIImage(data: imageData)
 
             await MainActor.run {
