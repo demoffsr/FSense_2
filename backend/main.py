@@ -116,6 +116,61 @@ class ErrorResponse(BaseModel):
     error: str
 
 
+# V2 Chat API Models
+class ChatContextRequest(BaseModel):
+    """Context from previous interaction."""
+    lastFlowerName: Optional[str] = None
+    lastEmotion: Optional[str] = None
+    region: str = "US"
+
+
+class ChatRequestV2(BaseModel):
+    """Request body for v2 chat API with clarification support."""
+    prompt: str = Field(..., min_length=1, description="User's message")
+    region: str = Field(default="US", description="Geographic region")
+    image_base64: Optional[str] = Field(default=None, description="Base64-encoded image")
+    context: Optional[ChatContextRequest] = Field(default=None, description="Previous interaction context")
+
+
+class ChatResponseV2(BaseModel):
+    """Response for v2 chat API - can be recommendation or text."""
+    success: bool = True
+    type: str  # "recommendation" or "text"
+    data: Dict[str, Any]
+    error: Optional[str] = None
+
+
+# V2 Context Models with conversation history
+class ConversationMessageRequest(BaseModel):
+    """A single message in conversation history."""
+    role: str  # "user" or "assistant"
+    content: str
+    messageType: Optional[str] = None  # "text" or "recommendation"
+    flowerName: Optional[str] = None
+
+
+class ChatContextV2Request(BaseModel):
+    """Extended context with full conversation history."""
+    conversationHistory: list[ConversationMessageRequest] = []
+    lastFlowerName: Optional[str] = None
+    lastEmotion: Optional[str] = None
+    region: str = "US"
+
+
+class ChatRequestV2Extended(BaseModel):
+    """Request body for v2 chat API with extended context."""
+    prompt: str = Field(..., min_length=1, description="User's message")
+    region: str = Field(default="US", description="Geographic region")
+    image_base64: Optional[str] = Field(default=None, description="Base64-encoded image")
+    context: Optional[ChatContextV2Request] = Field(default=None, description="Extended context with history")
+
+
+class IntentClassificationResponse(BaseModel):
+    """Response from intent classification endpoint."""
+    intent: str  # "flower_request", "clarification", "off_topic"
+    shouldShowProgress: bool
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # LOG STREAMING
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -295,6 +350,132 @@ async def recommend(request: RecommendRequest, http_request: Request):
         success=True,
         data=result["data"],
         session_id=session_id,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V2 CHAT API WITH CLARIFICATION SUPPORT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from backend.pipeline.runner import run_flower_chat_v2, build_conversation_summary
+
+
+@app.post("/api/chat/classify", response_model=IntentClassificationResponse)
+async def classify_intent(request: ChatRequestV2Extended):
+    """
+    Fast intent classification without full pipeline.
+
+    Returns:
+        {
+            "intent": "flower_request" | "clarification" | "off_topic",
+            "shouldShowProgress": bool
+        }
+    """
+    from backend.agents.adapters.intent_classifier_agent import IntentClassifierAgent
+    from backend.schemas.chat_response import ChatContext
+
+    # Build context from request
+    chat_context = None
+    conversation_summary = None
+
+    if request.context:
+        chat_context = ChatContext(
+            last_flower_name=request.context.lastFlowerName,
+            last_emotion=request.context.lastEmotion,
+            region=request.context.region,
+        )
+
+        # Build conversation summary from history
+        if request.context.conversationHistory:
+            history_dicts = [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "message_type": msg.messageType,
+                    "flower_name": msg.flowerName,
+                }
+                for msg in request.context.conversationHistory
+            ]
+            conversation_summary = build_conversation_summary(history_dicts)
+
+    # Run classification in thread pool
+    loop = asyncio.get_event_loop()
+    classifier = IntentClassifierAgent()
+
+    result = await loop.run_in_executor(
+        None,
+        lambda: classifier.classify(request.prompt, chat_context, conversation_summary)
+    )
+
+    return IntentClassificationResponse(
+        intent=result.intent.value,
+        shouldShowProgress=result.intent.value == "flower_request"
+    )
+
+
+@app.post("/api/chat", response_model=ChatResponseV2)
+async def chat_v2(request: ChatRequestV2Extended):
+    """
+    V2 Chat API with clarification support.
+
+    This endpoint supports both flower recommendations and text responses:
+    - flower_request: Returns full FlowerCardPayload
+    - clarification: Returns quick text response
+    - off_topic: Returns polite redirect message
+
+    Args:
+        request: Contains prompt, optional context with conversation history, region, and image
+
+    Returns:
+        ChatResponseV2 with type="recommendation" or type="text"
+    """
+    # Convert context if provided
+    context_dict = None
+    conversation_summary = None
+
+    if request.context:
+        context_dict = {
+            "lastFlowerName": request.context.lastFlowerName,
+            "lastEmotion": request.context.lastEmotion,
+            "region": request.context.region,
+        }
+
+        # Build conversation summary from history
+        if request.context.conversationHistory:
+            history_dicts = [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "message_type": msg.messageType,
+                    "flower_name": msg.flowerName,
+                }
+                for msg in request.context.conversationHistory
+            ]
+            conversation_summary = build_conversation_summary(history_dicts)
+
+    # Run v2 pipeline in thread pool
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: run_flower_chat_v2(
+            prompt=request.prompt,
+            region=request.region,
+            image_base64=request.image_base64,
+            context=context_dict,
+            conversation_summary=conversation_summary,
+        )
+    )
+
+    if not result["success"]:
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error", "Failed to process message")
+        )
+
+    return ChatResponseV2(
+        success=True,
+        type=result["type"],
+        data=result["data"],
     )
 
 

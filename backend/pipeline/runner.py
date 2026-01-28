@@ -14,7 +14,7 @@ Response Format:
 - Failure: {"success": false, "error": "Human-readable message"}
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 import logging
 import traceback
 
@@ -34,6 +34,46 @@ logger = logging.getLogger(__name__)
 # - Success: {"success": True, "data": FlowerCardPayload}
 # - Error: {"success": False, "error": "message"}
 PipelineResponse = Dict[str, Any]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONVERSATION HISTORY HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def build_conversation_summary(history: List[Dict[str, Any]], max_messages: int = 10) -> str:
+    """
+    Convert conversation history into a text summary for AI prompts.
+
+    Args:
+        history: List of conversation messages with 'role' and 'content' keys
+        max_messages: Maximum number of recent messages to include (default: 10)
+
+    Returns:
+        Formatted string with conversation history
+    """
+    if not history:
+        return ""
+
+    # Take last N messages for context
+    recent = history[-max_messages:]
+
+    lines = []
+    for msg in recent:
+        role = "User" if msg.get("role") == "user" else "Assistant"
+        content = msg.get("content", "")
+
+        # Truncate very long messages
+        if len(content) > 200:
+            content = content[:200] + "..."
+
+        # Add flower context if present
+        flower_name = msg.get("flower_name") or msg.get("flowerName")
+        if flower_name and msg.get("message_type") == "recommendation":
+            lines.append(f"{role}: [Recommended: {flower_name}]")
+        else:
+            lines.append(f"{role}: {content}")
+
+    return "\n".join(lines)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -141,6 +181,155 @@ def run_flower_chat(
         logger.error(f"Pipeline error: {e}", exc_info=True)
         return {
             "success": False,
+            "error": f"An unexpected error occurred: {str(e)}",
+        }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# V2 API WITH CLARIFICATION SUPPORT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run_flower_chat_v2(
+    prompt: str,
+    region: str = "US",
+    image_base64: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None,
+    conversation_summary: Optional[str] = None,
+) -> PipelineResponse:
+    """
+    Run the flower chat with clarification support (v2 API).
+
+    NEW ENTRYPOINT FOR iOS - supports both recommendations and text responses.
+
+    This version classifies the user's intent first:
+    - flower_request: Runs full 10-agent pipeline, returns FlowerCardPayload
+    - clarification: Returns quick text response about flowers
+    - off_topic: Returns polite redirect message
+
+    Args:
+        prompt: User's chat message
+        region: Geographic region for cultural context (default: "US")
+        image_base64: Optional base64-encoded image
+        context: Optional context from previous interaction:
+            - lastFlowerName: Previous flower ID
+            - lastEmotion: Previous emotion/occasion
+            - region: User's region
+
+    Returns:
+        On recommendation: {"success": True, "type": "recommendation", "data": FlowerCardPayload}
+        On text response: {"success": True, "type": "text", "data": {"message": "..."}}
+        On failure: {"success": False, "type": "text", "error": "..."}
+
+    Example:
+        >>> # Flower request
+        >>> result = run_flower_chat_v2("I want to apologize to my wife")
+        >>> result["type"]  # "recommendation"
+
+        >>> # Clarification question
+        >>> result = run_flower_chat_v2("Are roses suitable for apology?")
+        >>> result["type"]  # "text"
+        >>> result["data"]["message"]  # "Yes, roses are excellent for..."
+    """
+    from backend.agents.adapters.intent_classifier_agent import IntentClassifierAgent
+    from backend.agents.adapters.quick_reply_agent import QuickReplyAgent
+    from backend.schemas.chat_response import ChatContext, IntentType, ResponseType
+
+    # Validate input
+    validation = validate_input(prompt)
+    if not validation.is_valid:
+        return {
+            "success": False,
+            "type": ResponseType.TEXT.value,
+            "error": validation.error_message,
+        }
+
+    prompt = validation.sanitized_input
+    region = validate_region(region)
+
+    # Parse context from iOS
+    chat_context = None
+    if context:
+        chat_context = ChatContext(
+            last_flower_name=context.get("lastFlowerName"),
+            last_emotion=context.get("lastEmotion"),
+            region=context.get("region", region),
+        )
+
+    try:
+        # Step 1: Classify intent
+        classifier = IntentClassifierAgent()
+        classification = classifier.classify(prompt, chat_context, conversation_summary)
+
+        logger.info(
+            f"Intent classified: {classification.intent.value} "
+            f"(confidence={classification.confidence:.2f}, "
+            f"flower={classification.extracted_flower}, "
+            f"type={classification.clarification_type})"
+        )
+
+        # Step 2: Route based on intent
+        if classification.intent == IntentType.FLOWER_REQUEST:
+            # Full pipeline
+            result = run_flower_chat(prompt, region, image_base64)
+
+            # Wrap in v2 format
+            if result["success"]:
+                return {
+                    "success": True,
+                    "type": ResponseType.RECOMMENDATION.value,
+                    "data": result["data"],
+                }
+            else:
+                return {
+                    "success": False,
+                    "type": ResponseType.TEXT.value,
+                    "error": result.get("error", "Unknown error"),
+                }
+
+        elif classification.intent == IntentType.CLARIFICATION:
+            # Quick text response
+            quick_agent = QuickReplyAgent()
+            response = quick_agent.generate_response(
+                message=prompt,
+                classifier_output=classification,
+                context=chat_context,
+                conversation_summary=conversation_summary,
+            )
+
+            return {
+                "success": True,
+                "type": ResponseType.TEXT.value,
+                "data": {"message": response.message},
+            }
+
+        else:  # OFF_TOPIC
+            quick_agent = QuickReplyAgent()
+            response = quick_agent.generate_response(
+                message=prompt,
+                classifier_output=classification,
+                context=chat_context,
+                conversation_summary=conversation_summary,
+            )
+
+            return {
+                "success": True,
+                "type": ResponseType.TEXT.value,
+                "data": {"message": response.message},
+            }
+
+    except SettingsError as e:
+        logger.error(f"Settings error in v2: {e}")
+        return {
+            "success": False,
+            "type": ResponseType.TEXT.value,
+            "error": "Backend configuration error. Please contact support.",
+        }
+
+    except Exception as e:
+        logger.error(f"Pipeline v2 error: {e}", exc_info=True)
+        return {
+            "success": False,
+            "type": ResponseType.TEXT.value,
             "error": f"An unexpected error occurred: {str(e)}",
         }
 

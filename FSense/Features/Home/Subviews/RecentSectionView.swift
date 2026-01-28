@@ -50,30 +50,38 @@ struct RecentCardsListView: View {
     }
     
     // MARK: - Chats List
-    
+
     @ViewBuilder
     private var chatsList: some View {
-        if viewModel.recentChats.isEmpty {
+        if viewModel.recentChatViewModels.isEmpty {
             EmptyStateView(
                 icon: "bubble.left.and.bubble.right",
                 title: "No chats yet",
                 subtitle: "Start a conversation to get flower recommendations"
             )
         } else {
-            ForEach(viewModel.recentChats) { session in
+            ForEach(viewModel.recentChatViewModels) { viewModel in
                 Button {
-                    onChatTapped?(session)
+                    // Need to get session from history by ID
+                    if let session = self.viewModel.chatHistory.sessions.first(where: { $0.id == viewModel.id }) {
+                        onChatTapped?(session)
+                    }
                 } label: {
                     RecentChatRowView(
-                        session: session,
+                        viewModel: viewModel,
                         onRename: {
-                            onRenameChat?(session)
+                            if let session = self.viewModel.chatHistory.sessions.first(where: { $0.id == viewModel.id }) {
+                                onRenameChat?(session)
+                            }
                         },
                         onDelete: {
-                            onDeleteChat?(session)
+                            if let session = self.viewModel.chatHistory.sessions.first(where: { $0.id == viewModel.id }) {
+                                onDeleteChat?(session)
+                            }
                         }
                     )
                 }
+                .id(viewModel.id) // Explicit identity for SwiftUI
                 .buttonStyle(.plain)
             }
         }
@@ -105,7 +113,7 @@ struct RecentCardsListView: View {
 // MARK: - Recent Chat Row
 
 struct RecentChatRowView: View {
-    let session: ChatSession
+    let viewModel: ChatSessionViewModel
     var onRename: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
 
@@ -116,18 +124,18 @@ struct RecentChatRowView: View {
 
             // Text content
             VStack(alignment: .leading, spacing: 4) {
-                Text(displayTitle)
+                Text(viewModel.displayTitle)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.black)
                     .lineLimit(1)
 
-                if !session.subtitle.isEmpty {
-                    Text(session.subtitle)
+                if !viewModel.subtitle.isEmpty {
+                    Text(viewModel.subtitle)
                         .font(.system(size: 13))
                         .foregroundColor(.black.opacity(0.5))
                         .lineLimit(1)
                 } else {
-                    Text(timeAgo)
+                    Text(viewModel.timeAgo)
                         .font(.system(size: 13))
                         .foregroundColor(.black.opacity(0.5))
                 }
@@ -165,28 +173,10 @@ struct RecentChatRowView: View {
         .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 0)
     }
     
-    private var displayTitle: String {
-        if session.title == "New Chat" {
-            // Try to get first user message
-            if let firstUser = session.messages.first(where: { $0.sender == .user }),
-               case .text(let text) = firstUser.content {
-                let truncated = String(text.prefix(40))
-                return truncated.count < text.count ? truncated + "..." : truncated
-            }
-        }
-        return session.title
-    }
-    
-    private var timeAgo: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: session.updatedAt, relativeTo: Date())
-    }
-    
     private var thumbnail: some View {
         Group {
             // Priority: imageUrl > imageAsset > placeholder
-            if let imageUrlString = session.flowerImageUrl,
+            if let imageUrlString = viewModel.flowerImageUrl,
                let imageUrl = URL(string: imageUrlString) {
                 // Remote AI-generated image with caching
                 CachedAsyncImage(url: imageUrl) { image in
@@ -211,7 +201,7 @@ struct RecentChatRowView: View {
 
     private var localImageOrPlaceholder: some View {
         Group {
-            if let imageName = session.flowerImageAsset {
+            if let imageName = viewModel.flowerImageAsset {
                 // Local asset image
                 Image(imageName)
                     .resizable()

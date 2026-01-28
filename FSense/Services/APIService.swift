@@ -107,6 +107,131 @@ actor APIService {
             return false
         }
     }
+
+    // MARK: - V2 API with Clarification Support
+
+    /// Classify intent to determine if progress bar should be shown
+    /// - Parameters:
+    ///   - prompt: User's message
+    ///   - context: Extended context with conversation history
+    /// - Returns: IntentClassification with shouldShowProgress flag
+    func classifyIntent(
+        prompt: String,
+        context: ChatContextV2? = nil
+    ) async throws -> IntentClassification {
+        let endpoint = "\(baseURL)/api/chat/classify"
+
+        guard let url = URL(string: endpoint) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = ChatRequestV2Extended(
+            prompt: prompt,
+            region: context?.region ?? "US",
+            imageBase64: nil,
+            context: context
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            return try decoder.decode(IntentClassification.self, from: data)
+
+        case 400..<500:
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.detail)
+            }
+            throw APIError.clientError(httpResponse.statusCode)
+
+        case 500..<600:
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+
+        default:
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
+
+    /// Send a message to the chat API (v2)
+    /// Supports both flower recommendations and clarification text responses
+    /// - Parameters:
+    ///   - prompt: User's message
+    ///   - context: Extended context with conversation history
+    ///   - region: Geographic region
+    ///   - image: Optional image
+    /// - Returns: ChatResponse which can be either recommendation or text
+    func sendMessage(
+        prompt: String,
+        context: ChatContextV2? = nil,
+        region: String = "US",
+        image: UIImage? = nil
+    ) async throws -> ChatResponse {
+        let endpoint = "\(baseURL)/api/chat"
+
+        guard let url = URL(string: endpoint) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Convert image to base64 if provided
+        var imageBase64: String? = nil
+        if let image = image {
+            imageBase64 = imageToBase64(image)
+        }
+
+        let body = ChatRequestV2Extended(
+            prompt: prompt,
+            region: region,
+            imageBase64: imageBase64,
+            context: context
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            let result = try decoder.decode(ChatResponseRaw.self, from: data)
+
+            if !result.success {
+                throw APIError.serverError(result.error ?? "Unknown error")
+            }
+
+            return ChatResponse(
+                type: result.type,
+                recommendation: result.type == .recommendation ? result.recommendationData : nil,
+                textMessage: result.type == .text ? result.textData?.message : nil
+            )
+
+        case 400..<500:
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.detail)
+            }
+            throw APIError.clientError(httpResponse.statusCode)
+
+        case 500..<600:
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+
+        default:
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
 }
 
 // MARK: - Request/Response Models
@@ -130,6 +255,131 @@ private struct RecommendResponse: Decodable {
 
 private struct APIErrorResponse: Decodable {
     let detail: String
+}
+
+// MARK: - V2 API Models
+
+/// Context from previous chat interaction (legacy, kept for backwards compatibility)
+struct ChatContext: Codable {
+    let lastFlowerName: String?
+    let lastEmotion: String?
+    let region: String
+
+    init(lastFlowerName: String? = nil, lastEmotion: String? = nil, region: String = "US") {
+        self.lastFlowerName = lastFlowerName
+        self.lastEmotion = lastEmotion
+        self.region = region
+    }
+}
+
+// MARK: - V2 Extended Context Models
+
+/// A single message in conversation history
+struct ConversationMessage: Codable {
+    let role: String           // "user" or "assistant"
+    let content: String        // Message text
+    let messageType: String?   // "text" or "recommendation"
+    let flowerName: String?    // Flower name if recommendation
+
+    init(role: String, content: String, messageType: String? = nil, flowerName: String? = nil) {
+        self.role = role
+        self.content = content
+        self.messageType = messageType
+        self.flowerName = flowerName
+    }
+}
+
+/// Extended context with full conversation history
+struct ChatContextV2: Codable {
+    let conversationHistory: [ConversationMessage]
+    let lastFlowerName: String?
+    let lastEmotion: String?
+    let region: String
+
+    init(
+        conversationHistory: [ConversationMessage] = [],
+        lastFlowerName: String? = nil,
+        lastEmotion: String? = nil,
+        region: String = "US"
+    ) {
+        self.conversationHistory = conversationHistory
+        self.lastFlowerName = lastFlowerName
+        self.lastEmotion = lastEmotion
+        self.region = region
+    }
+}
+
+/// Response from intent classification endpoint
+struct IntentClassification: Decodable {
+    let intent: String
+    let shouldShowProgress: Bool
+}
+
+/// Response type from v2 API
+enum ChatResponseType: String, Codable {
+    case recommendation
+    case text
+}
+
+/// Unified chat response
+struct ChatResponse {
+    let type: ChatResponseType
+    let recommendation: FlowerCardPayload?
+    let textMessage: String?
+
+    var isRecommendation: Bool { type == .recommendation }
+    var isText: Bool { type == .text }
+}
+
+private struct ChatRequestV2Extended: Encodable {
+    let prompt: String
+    let region: String
+    let imageBase64: String?
+    let context: ChatContextV2?
+
+    enum CodingKeys: String, CodingKey {
+        case prompt
+        case region
+        case imageBase64 = "image_base64"
+        case context
+    }
+}
+
+private struct TextResponseData: Decodable {
+    let message: String
+}
+
+private struct ChatResponseRaw: Decodable {
+    let success: Bool
+    let type: ChatResponseType
+    let error: String?
+
+    // For recommendation type
+    let recommendationData: FlowerCardPayload?
+
+    // For text type
+    let textData: TextResponseData?
+
+    enum CodingKeys: String, CodingKey {
+        case success, type, error, data
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        success = try container.decode(Bool.self, forKey: .success)
+        type = try container.decode(ChatResponseType.self, forKey: .type)
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+
+        // Decode data based on type
+        if type == .recommendation {
+            recommendationData = try container.decodeIfPresent(FlowerCardPayload.self, forKey: .data)
+            textData = nil
+        } else {
+            recommendationData = nil
+            textData = try container.decodeIfPresent(TextResponseData.self, forKey: .data)
+        }
+    }
 }
 
 // MARK: - API Errors
