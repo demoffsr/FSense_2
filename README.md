@@ -2,29 +2,53 @@
 
 > AI-powered flower recommendation system that understands context, emotion, and meaning
 
-**Version 0.1.2** • Built with SwiftUI + Python
+**Version 0.13** • Built with SwiftUI + Python
 An intelligent assistant that helps you find the perfect flower for any occasion.
 
 ---
 
-## ✨ What's New in v0.1.2
+## ✨ What's New in v0.13
 
-### ⚡️ Instant Chat Opening
-- **Pre-warmed keyboard** loads on app launch for zero-delay typing
-- Removed 300ms focus delay → chat opens in **<50ms**
-- Eliminated double reset on chat open
-- Idempotent state management for smoother UX
+### 💾 Persistent Chat Sessions
+- **Auto-save conversations** with timestamp and preview
+- **Seamless session loading** when reopening chat
+- Smart session management with ChatHistoryManager
+- Never lose your conversation context
 
-### 🖼️ Bouquet Image Analysis
-- Upload bouquet photos for **GPT-4 Vision** analysis
-- Identifies flowers in complex arrangements
-- Smart context understanding from images
+### 🔍 In-Chat Search
+- **Full-text search** across all messages in current session
+- **Live highlighting** with smooth scroll to matches
+- Keyboard-first UX with instant focus
+- Clean search bar that slides from top
 
-### 💎 UI/UX Polish
-- Refined chat interface with glass morphism effects
-- Smooth gradient transitions on home screen
-- Optimized scroll performance with lazy loading
-- Enhanced message bubbles and thinking cards
+### 🗄️ Chat Archive
+- **Archive completed conversations** from menu
+- Dedicated archive view in Profile tab
+- **Success toast notification** with auto-dismiss
+- Keep your active chats organized
+
+### 💎 Unified Glass Effect UI
+- **Single frosted background** for all toolbar buttons
+- Replaced double glass backgrounds with `.ultraThinMaterial`
+- Consistent design language: New Chat, Search, Menu buttons
+- Clean white stroke overlays for depth
+
+### ⬇️ Smart Scroll-to-Bottom Button
+- **Shows when scrolling up** from bottom
+- **Hides when reaching bottom** manually or via tap
+- Stays visible until user action (no flickering)
+- Matches toolbar button style with frosted glass
+
+### ⌨️ Typewriter Text Animation
+- Smooth character-by-character reveal for AI responses
+- Natural reading pace with configurable speed
+- SwiftUI-native implementation with `TimelineView`
+
+### 🎨 Visual Refinements
+- **Unified background color** (Color(white: 0.97)) for chat and input areas
+- Removed unused namespace properties for cleaner code
+- Enhanced button foreground styles (`.foregroundStyle(.black)`)
+- Better visual hierarchy throughout chat interface
 
 ---
 
@@ -35,22 +59,37 @@ An intelligent assistant that helps you find the perfect flower for any occasion
 - Real-time thinking visualization (10-agent pipeline)
 - Personalized flower recommendations
 - Follow-up suggestions
+- **Persistent sessions** that survive app restarts
+
+### 🔍 Search & Archive
+- **In-chat full-text search** with live highlighting
+- **Archive management** to organize conversations
+- Quick access to recent and archived chats
+- Session metadata (timestamp, message count)
 
 ### 📸 Visual Recognition
 - Attach photos from library or camera
-- Analyze existing bouquets
+- Analyze existing bouquets with **GPT-4 Vision**
 - Visual context for better recommendations
 
+### 💬 Chat Experience
+- **Instant keyboard response** (pre-warmed on launch)
+- Typewriter animation for AI messages
+- Smart scroll behavior with floating bottom button
+- Smooth glass morphism effects throughout
+
 ### 💾 Session Management
-- Persistent chat history
-- Quick access to recent conversations
+- **Auto-save** every conversation
 - Rename and organize chats
+- Archive completed conversations
+- Delete individual sessions
 
 ### 🎨 Native iOS Experience
 - SwiftUI with iOS 26+ optimizations
-- Glass morphism design language
+- **Unified glass design language**
 - Haptic feedback
 - Dark mode ready
+- Native sheet presentations
 
 ---
 
@@ -59,28 +98,53 @@ An intelligent assistant that helps you find the perfect flower for any occasion
 ### iOS App (SwiftUI)
 ```
 FSense/
-├── App/              # Entry point, environment
-├── Features/         # Home, Chat, FlowerCard, Scan, Profile
-├── Services/         # API, History, Archive, Pipeline events
-└── Shared/           # Components, utilities, KeyboardWarmer
+├── App/                      # Entry point, environment
+├── Features/
+│   ├── Home/                 # Collapsed chat bar with glass UI
+│   ├── Chat/                 # Full-screen chat with search
+│   ├── FlowerCard/           # Recommendation details
+│   ├── Scan/                 # Camera & image recognition
+│   └── Profile/              # History, archive, settings
+├── Services/
+│   ├── ChatHistoryManager    # Session persistence
+│   ├── ChatArchiveService    # Archive management
+│   ├── APIService            # Backend communication
+│   └── KeyboardWarmer        # Pre-warm keyboard
+└── Shared/                   # Components, utilities
 ```
 
 ### Python Backend (Agent Pipeline)
 ```
 backend/
-├── pipeline/         # Orchestrator, context, runner
-├── agents/adapters/  # 10 specialized agents (FIA, EIA, RIL, etc.)
-├── schemas/          # Pydantic models (FlowerCardPayload)
-└── core/             # Settings, AI client
+├── pipeline/                 # Orchestrator, context, runner
+├── agents/adapters/          # 10 specialized agents
+│   ├── fia.py               # Flower Intent Agent
+│   ├── eia.py               # Emotion Intelligence Agent
+│   ├── ril.py               # Relationship Intelligence Layer
+│   ├── fmra.py              # Flower Matching & Ranking
+│   ├── cia.py               # Context Intensity Agent
+│   ├── aitb.py              # Adaptive Intelligence & Tone
+│   ├── rffa.py              # Risk & Fit Assessment
+│   ├── cri.py               # Cultural & Regional Intelligence
+│   ├── srfl.py              # Self-Reflection Layer
+│   └── sfa.py               # Symbolic Flower Agent (final)
+├── schemas/                  # Pydantic models
+│   ├── flower_card_payload.py
+│   └── pipeline_enums.py
+└── core/                     # Settings, AI client
 ```
 
 ### Agent Flow
 ```
-User Input → FIA → EIA → RIL → FMRA → CIA → AITB → RFFA → CRI → SRFL → SFA → Recommendation
+User Input → PipelineContext → FIA → EIA → RIL → FMRA → CIA →
+             AITB → RFFA → CRI → SRFL → SFA → FlowerCardPayload
 ```
 
-**Single Source of Truth:** All data flows through `PipelineContext`
-**Final Assembler:** Only SFA writes the iOS payload
+**Design Principles:**
+- **Single Source of Truth:** All data flows through `PipelineContext`
+- **Final Assembler:** Only SFA writes the iOS payload (`ui_payload`)
+- **Stateless Agents:** No direct agent-to-agent communication
+- **Idempotent Operations:** Safe to retry any step
 
 ---
 
@@ -88,8 +152,13 @@ User Input → FIA → EIA → RIL → FMRA → CIA → AITB → RFFA → CRI �
 
 ### iOS Development
 1. Open `FSense_2.xcodeproj` in Xcode
-2. Select your device/simulator
+2. Select your device/simulator (iOS 26+)
 3. Build & Run (`Cmd+R`)
+
+**Instant Features:**
+- Keyboard pre-warmed on launch
+- Chat opens in <50ms
+- Session auto-loads if returning to conversation
 
 ### Backend Development
 ```bash
@@ -111,46 +180,64 @@ python -m backend.pipeline.runner "I want to apologize to my wife" --pretty
 
 ## 📊 Performance Metrics
 
-| Metric | Before | After (v0.1.2) |
-|--------|--------|----------------|
-| Chat Open Delay | 400-600ms | **<50ms** ⚡️ |
-| Keyboard Focus | Cold start | Pre-warmed 🔥 |
-| Message Render | Full re-render | Cached + Lazy 📦 |
-| State Updates | Multiple resets | Idempotent ✅ |
+| Metric | v0.1.2 | v0.13 | Improvement |
+|--------|--------|-------|-------------|
+| Chat Open Delay | <50ms | <50ms | ✅ Maintained |
+| Session Persistence | ❌ None | ✅ Full | 🎉 New |
+| In-Chat Search | ❌ None | ✅ Live | 🎉 New |
+| UI Consistency | ⚠️ Mixed | ✅ Unified | 📈 Better |
+| Scroll Button UX | ⚠️ Glitchy | ✅ Smooth | 📈 Fixed |
+| Chat Archive | ❌ None | ✅ Full | 🎉 New |
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **SwiftUI** - Declarative UI framework
-- **Combine** - Reactive programming
+- **SwiftUI** - Declarative UI framework (iOS 26+)
+- **Combine** - Reactive state management
 - **Swift Concurrency** - Async/await, actors
-- **UIKit** - Keyboard pre-warming, camera
+- **UIKit** - Keyboard pre-warming, camera integration
 
 ### Backend
 - **Python 3.11+** - Core runtime
-- **OpenAI GPT-4** - LLM for agents
-- **GPT-4 Vision** - Image analysis
-- **Pydantic** - Schema validation
+- **OpenAI GPT-4** - LLM for agent pipeline
+- **GPT-4 Vision** - Bouquet image analysis
+- **Pydantic** - Schema validation & type safety
 - **pytest** - Testing framework
+
+### Design System
+- **Glass Morphism** - `.ultraThinMaterial` with white stroke overlays
+- **SF Symbols** - Native iOS icons
+- **Dynamic Type** - Accessibility-ready typography
+- **Haptics** - Tactile feedback for interactions
 
 ---
 
 ## 📝 Development Commands
 
+### iOS
 ```bash
-# iOS Build
+# Build
 xcodebuild -project FSense_2.xcodeproj -scheme FSense_2 -configuration Debug
 
-# Python Tests
+# Clean build folder
+rm -rf ~/Library/Developer/Xcode/DerivedData
+```
+
+### Backend
+```bash
+# Run all tests
 PYTHONPATH=. pytest backend/tests/ -v
 
-# Run Single Test
+# Run single test
 PYTHONPATH=. pytest backend/tests/test_pipeline_smoke.py::test_run_flower_chat_success -v
 
-# Pipeline CLI
+# Test pipeline interactively
 python -m backend.pipeline.runner "Your message here" --pretty
+
+# Check test coverage
+PYTHONPATH=. pytest backend/tests/ --cov=backend --cov-report=html
 ```
 
 ---
@@ -158,25 +245,72 @@ python -m backend.pipeline.runner "Your message here" --pretty
 ## 🎨 Design Philosophy
 
 1. **Instant Feedback** - No loading spinners, progressive enhancement
-2. **Glass Morphism** - Modern, translucent UI elements
-3. **Context-Aware** - AI understands emotion, culture, relationships
-4. **Native Feel** - Respect iOS design patterns and interactions
+2. **Unified Glass Language** - Consistent frosted UI across all controls
+3. **Context Preservation** - Sessions persist, search highlights, archive organizes
+4. **Native Feel** - Respect iOS patterns (sheets, toolbars, haptics)
+5. **Accessibility First** - Dynamic Type, VoiceOver, reduce motion
+
+---
+
+## 🔍 Feature Deep Dive
+
+### Chat Session Persistence
+```swift
+// Auto-save on every message
+ChatHistoryManager.shared.saveSession(session)
+
+// Load session when reopening chat
+if let session = controller.sessionToLoad {
+    viewModel.loadSession(session)
+}
+```
+
+Sessions include:
+- Message history (user + AI)
+- Attached images
+- Timestamp metadata
+- Preview text (first user message)
+
+### In-Chat Search
+- **Trigger:** Tap search icon in toolbar
+- **Focus:** Auto-focus search field with keyboard
+- **Highlight:** Yellow background on matching messages
+- **Scroll:** Smooth animation to first match
+- **Exit:** Clear highlights and return to input
+
+### Archive System
+```swift
+// Archive current session
+ChatArchiveService.shared.archiveSession(session)
+
+// Remove from active history
+ChatHistoryManager.shared.deleteSession(session)
+
+// View archives in Profile tab
+ChatArchiveView() // Standalone list view
+```
 
 ---
 
 ## 🔮 Roadmap
 
-### v0.2.0 (Next)
+### v0.14 (Next Sprint)
+- [ ] Search across **all sessions** (not just current)
+- [ ] Export chat as PDF/text
+- [ ] Session tags and categories
+- [ ] Pin important conversations
+
+### v0.2.0
 - [ ] Multi-language support (localization)
-- [ ] Flower dictionary with search
+- [ ] Flower dictionary with visual search
 - [ ] Share recommendations to social media
-- [ ] Widget for quick access
+- [ ] Home screen widget
 
 ### v0.3.0
-- [ ] Voice input for chat
-- [ ] AR flower visualization
-- [ ] Local florist integration
-- [ ] Offline mode
+- [ ] Voice input for chat (Whisper API)
+- [ ] AR flower visualization (ARKit)
+- [ ] Local florist integration (Maps)
+- [ ] Offline mode with cached recommendations
 
 ---
 
@@ -192,5 +326,15 @@ This is a private project. For questions or collaboration inquiries, please cont
 
 ---
 
+## 🙏 Acknowledgments
+
+- **OpenAI GPT-4** - Powering the agent pipeline
+- **SwiftUI** - Making native iOS development delightful
+- **Glass Morphism** - Modern UI design trend
+
+---
+
 **Made with ❤️ and 🌸**
 *Helping you say it with flowers*
+
+> "The earth laughs in flowers." — Ralph Waldo Emerson
