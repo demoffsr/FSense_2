@@ -32,23 +32,19 @@ enum ChatDesign {
         /// Muted text
         static let textMuted = Color.black.opacity(0.4)
         
-        /// Accent gradient
-        static var accentGradient: LinearGradient {
-            LinearGradient(
-                colors: [accentPurple, accentPink],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-        
-        /// Vertical accent gradient (for bars)
-        static var verticalAccentGradient: LinearGradient {
-            LinearGradient(
-                colors: [accentPurple, accentPink],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
+        /// Accent gradient (static to avoid recreation)
+        static let accentGradient = LinearGradient(
+            colors: [accentPurple, accentPink],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        /// Vertical accent gradient (for bars) - static to avoid recreation
+        static let verticalAccentGradient = LinearGradient(
+            colors: [accentPurple, accentPink],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         
         /// Soft purple tint for backgrounds
         static let softPurpleTint = accentPurple.opacity(0.06)

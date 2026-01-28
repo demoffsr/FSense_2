@@ -13,6 +13,7 @@ enum HomeAction {
     case tabChanged(RecentTab)
     case chatSessionTapped(ChatSession)
     case deleteChat(ChatSession)
+    case renameChat(ChatSession, newTitle: String)
     case plusTapped
     case inputChanged(String)
     case sendTapped
