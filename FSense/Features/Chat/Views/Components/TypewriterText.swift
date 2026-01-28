@@ -11,25 +11,34 @@ struct TypewriterText: View {
     @State private var displayedCharacterCount: Int = 0
     @State private var timerCancellable: AnyCancellable?
 
-    private var displayedText: String {
-        if !isAnimationEnabled || displayedCharacterCount >= fullText.count {
-            return fullText
-        }
-        return String(fullText.prefix(displayedCharacterCount))
-    }
+    // Cached values computed once on init to avoid repeated calculations
+    private let textLength: Int
+    private let animationInterval: TimeInterval
 
-    /// Adaptive speed: longer messages type faster to keep total duration reasonable
-    private var interval: TimeInterval {
-        let length = fullText.count
+    init(fullText: String, messageId: UUID, isAnimationEnabled: Bool, onComplete: (() -> Void)? = nil) {
+        self.fullText = fullText
+        self.messageId = messageId
+        self.isAnimationEnabled = isAnimationEnabled
+        self.onComplete = onComplete
+
+        // Cache text length and interval calculation
+        self.textLength = fullText.count
         let charsPerSecond: Double
-        if length < 200 {
+        if textLength < 200 {
             charsPerSecond = 60
-        } else if length < 500 {
+        } else if textLength < 500 {
             charsPerSecond = 90
         } else {
             charsPerSecond = 120
         }
-        return 1.0 / charsPerSecond
+        self.animationInterval = 1.0 / charsPerSecond
+    }
+
+    private var displayedText: String {
+        if !isAnimationEnabled || displayedCharacterCount >= textLength {
+            return fullText
+        }
+        return String(fullText.prefix(displayedCharacterCount))
     }
 
     var body: some View {
@@ -39,25 +48,25 @@ struct TypewriterText: View {
             .onChange(of: isAnimationEnabled) { _, newValue in
                 if !newValue {
                     // Animation disabled - show full text immediately
-                    displayedCharacterCount = fullText.count
+                    displayedCharacterCount = textLength
                     cleanup()
                 }
             }
     }
 
     private func startAnimationIfNeeded() {
-        guard isAnimationEnabled, displayedCharacterCount < fullText.count else {
+        guard isAnimationEnabled, displayedCharacterCount < textLength else {
             // If animation not needed or already complete, ensure full text is shown
-            if displayedCharacterCount < fullText.count && !isAnimationEnabled {
-                displayedCharacterCount = fullText.count
+            if displayedCharacterCount < textLength && !isAnimationEnabled {
+                displayedCharacterCount = textLength
             }
             return
         }
 
-        timerCancellable = Timer.publish(every: interval, on: .main, in: .common)
+        timerCancellable = Timer.publish(every: animationInterval, on: .main, in: .common)
             .autoconnect()
             .sink { _ in
-                if displayedCharacterCount < fullText.count {
+                if displayedCharacterCount < textLength {
                     displayedCharacterCount += 1
                 } else {
                     cleanup()

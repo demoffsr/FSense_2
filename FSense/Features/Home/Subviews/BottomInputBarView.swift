@@ -208,6 +208,7 @@ struct ExpandedChatSheet: View {
     @State private var isSearching = false
     @State private var searchText = ""
     @State private var highlightedMessageId: UUID?
+    @State private var searchMatchCache: [UUID: Bool] = [:]  // Cached search results
     @FocusState private var isSearchFocused: Bool
 
     // Archive alert state
@@ -310,12 +311,25 @@ struct ExpandedChatSheet: View {
             // Scroll to first matching message when search text changes
             guard isSearching, !newText.isEmpty else {
                 highlightedMessageId = nil
+                searchMatchCache = [:]
                 return
             }
 
-            // Find first matching message and scroll to it
-            if let firstMatch = viewModel.orderedMessages.first(where: { $0.matchesSearch(newText) }) {
-                scrollToMessage(firstMatch.id)
+            // Rebuild search cache for all messages
+            var newCache: [UUID: Bool] = [:]
+            var firstMatchId: UUID?
+            for message in viewModel.orderedMessages {
+                let matches = message.matchesSearch(newText)
+                newCache[message.id] = matches
+                if matches && firstMatchId == nil {
+                    firstMatchId = message.id
+                }
+            }
+            searchMatchCache = newCache
+
+            // Scroll to first match
+            if let matchId = firstMatchId {
+                scrollToMessage(matchId)
             } else {
                 highlightedMessageId = nil
             }
@@ -390,7 +404,7 @@ struct ExpandedChatSheet: View {
                             .searchHighlight(
                                 isHighlighted: highlightedMessageId == message.id,
                                 isSearchActive: isSearching && !searchText.isEmpty,
-                                matchesSearch: message.matchesSearch(searchText)
+                                matchesSearch: searchMatchCache[message.id] ?? false
                             )
                             .id(message.id)
                         }

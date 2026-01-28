@@ -9,10 +9,8 @@ struct RecommendationCardView: View {
     var onThinkingToggle: (() -> Void)? = nil
     var onExplore: (() -> Void)? = nil
 
-    // Custom smooth animation
-    private var expandAnimation: Animation {
-        .interpolatingSpring(stiffness: 300, damping: 30)
-    }
+    // Static animation to avoid recreation on every render
+    private static let Self.expandAnimation: Animation = .interpolatingSpring(stiffness: 300, damping: 30)
 
     // Static shadow color to avoid recreation
     private static let shadowColor = Color.black.opacity(0.08)
@@ -118,7 +116,7 @@ struct RecommendationCardView: View {
             .padding(.vertical, 14)
             .contentShape(Rectangle())
             .onTapGesture {
-                withAnimation(expandAnimation) {
+                withAnimation(Self.expandAnimation) {
                     onThinkingToggle?()
                 }
             }
@@ -142,7 +140,7 @@ struct RecommendationCardView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.gray)
                 .rotationEffect(.degrees(isThinkingExpanded ? 180 : 0))
-                .animation(expandAnimation, value: isThinkingExpanded)
+                .animation(Self.expandAnimation, value: isThinkingExpanded)
         }
     }
 
@@ -156,7 +154,7 @@ struct RecommendationCardView: View {
         }
         .frame(height: isThinkingExpanded ? nil : 0, alignment: .top)
         .clipped()
-        .animation(expandAnimation, value: isThinkingExpanded)
+        .animation(Self.expandAnimation, value: isThinkingExpanded)
     }
 
     private var reasoningStepsContent: some View {

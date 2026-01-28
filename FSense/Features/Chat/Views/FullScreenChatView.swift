@@ -70,7 +70,10 @@ struct FullScreenChatView: View {
     private var messagesScrollView: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 16) {
-                ForEach(viewModel.orderedMessages) { message in
+                // Use indices to preserve LazyVStack laziness optimization
+                let messages = viewModel.orderedMessages
+                ForEach(messages.indices, id: \.self) { index in
+                    let message = messages[index]
                     MessageBubbleView(
                         message: message,
                         steps: viewModel.pipelineSteps,
