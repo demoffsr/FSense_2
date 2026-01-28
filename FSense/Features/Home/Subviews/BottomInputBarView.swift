@@ -7,8 +7,28 @@ final class ChatSheetController: ObservableObject {
     @Published var isExpanded = false
     @Published var sessionToLoad: ChatSession?
 
+    private let stateManager = ActiveChatStateManager.shared
+    private let historyManager = ChatHistoryManager.shared
+
+    /// Open chat - determines whether to restore session, draft, or start fresh
     func openNewChat() {
-        sessionToLoad = nil
+        let state = stateManager.prepareForSheetOpen()
+
+        switch state {
+        case .fresh:
+            sessionToLoad = nil
+        case .draftOnly:
+            // Draft will be restored by ExpandedChatSheet
+            sessionToLoad = nil
+        case .existingSession(let sessionId, _):
+            // Restore existing session
+            if let session = historyManager.getSession(by: sessionId) {
+                sessionToLoad = session
+            } else {
+                sessionToLoad = nil
+            }
+        }
+
         isExpanded = true
     }
 
@@ -62,9 +82,34 @@ struct BottomInputBarView: View {
                 }
                 // Don't call reset here - it's handled by onChange(isExpanded)
             }
-            .onChange(of: controller.isExpanded) { _, isExpanded in
-                if isExpanded && controller.sessionToLoad == nil && viewModel.needsReset {
-                    viewModel.send(.reset)
+            .onChange(of: controller.isExpanded) { wasExpanded, isExpanded in
+                if isExpanded {
+                    // Opening the sheet
+                    let state = ActiveChatStateManager.shared.prepareForSheetOpen()
+
+                    switch state {
+                    case .fresh:
+                        if controller.sessionToLoad == nil && viewModel.needsReset {
+                            viewModel.send(.reset)
+                        }
+                    case .draftOnly(let draftText):
+                        // Restore draft text only
+                        if viewModel.needsReset {
+                            viewModel.send(.reset)
+                        }
+                        viewModel.inputText = draftText
+                    case .existingSession(_, let draftText):
+                        // Session is loaded via sessionToLoad, restore draft
+                        if !draftText.isEmpty {
+                            viewModel.inputText = draftText
+                        }
+                    }
+                } else {
+                    // Closing the sheet - save current state
+                    ActiveChatStateManager.shared.onSheetClose(
+                        currentDraft: viewModel.inputText,
+                        currentSessionId: viewModel.currentSessionId
+                    )
                 }
             }
     }
@@ -160,6 +205,12 @@ struct ExpandedChatSheet: View {
     // Cancellable task for scroll cleanup on disappear
     @State private var scrollTask: Task<Void, Never>?
 
+    // Search state
+    @State private var isSearching = false
+    @State private var searchText = ""
+    @State private var highlightedMessageId: UUID?
+    @FocusState private var isSearchFocused: Bool
+
     // MARK: - Static Constants (performance optimization)
     private static let inputBgColor = Color(red: 0.98, green: 0.98, blue: 0.98)
     private static let shadowColor = Color.black.opacity(0.15)
@@ -174,21 +225,42 @@ struct ExpandedChatSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Search bar (when active) - padding matches input area style
+                if isSearching {
+                    ChatSearchBar(
+                        searchText: $searchText,
+                        isSearching: $isSearching,
+                        isFocused: $isSearchFocused
+                    )
+                    .padding(.top, 24)
+                    .padding(.bottom, 12)
+                    .background(Color(white: 0.97))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 // Messages scroll area
                 messagesScrollView
 
                 // Input area - automatically moves with keyboard in native sheet
-                inputArea
+                if !isSearching {
+                    inputArea
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.9), value: isSearching)
             .background(Color(white: 0.97))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("Chat")
-                        .font(.headline)
+                    if !isSearching {
+                        Text("Chat")
+                            .font(.headline)
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    toolbarButtons
+                    if !isSearching {
+                        toolbarButtons
+                    }
                 }
             }
             .navigationDestination(isPresented: $navigateToFlowerDetail) {
@@ -208,8 +280,59 @@ struct ExpandedChatSheet: View {
         }
         .onDisappear {
             showPlusButton = false
+            isSearching = false
+            searchText = ""
             // Cancel pending scroll task to prevent updates after view disappears
             scrollTask?.cancel()
+        }
+        .onChange(of: isSearching) { _, newValue in
+            if newValue {
+                // Dismiss input keyboard and focus search field
+                isInputFocused = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    isSearchFocused = true
+                }
+            } else {
+                // Dismiss search keyboard
+                isSearchFocused = false
+                // Clear highlight when exiting search
+                highlightedMessageId = nil
+            }
+        }
+        .onChange(of: searchText) { _, newText in
+            // Scroll to first matching message when search text changes
+            guard isSearching, !newText.isEmpty else {
+                highlightedMessageId = nil
+                return
+            }
+
+            // Find first matching message and scroll to it
+            if let firstMatch = viewModel.orderedMessages.first(where: { $0.matchesSearch(newText) }) {
+                scrollToMessage(firstMatch.id)
+            } else {
+                highlightedMessageId = nil
+            }
+        }
+    }
+
+    // MARK: - Scroll to Message
+
+    private func scrollToMessage(_ messageId: UUID) {
+        guard let proxy = scrollProxy else { return }
+
+        // Highlight the message temporarily
+        highlightedMessageId = messageId
+
+        withAnimation(.easeInOut(duration: 0.3)) {
+            proxy.scrollTo(messageId, anchor: .center)
+        }
+
+        // Remove highlight after 1.5 seconds
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation(.easeOut(duration: 0.3)) {
+                highlightedMessageId = nil
+            }
         }
     }
 
@@ -241,6 +364,11 @@ struct ExpandedChatSheet: View {
                                 },
                                 onExploreFlower: handleExploreFlower,
                                 hideCompletedThinking: data.hideCompletedThinking
+                            )
+                            .searchHighlight(
+                                isHighlighted: highlightedMessageId == message.id,
+                                isSearchActive: isSearching && !searchText.isEmpty,
+                                matchesSearch: message.matchesSearch(searchText)
                             )
                             .id(message.id)
                         }
@@ -279,8 +407,8 @@ struct ExpandedChatSheet: View {
                 }
             }
 
-            // Floating scroll-to-bottom button (only when scrolled up)
-            if showScrollToBottom {
+            // Floating scroll-to-bottom button (only when scrolled up and not searching)
+            if showScrollToBottom && !isSearching {
                 scrollToBottomButton
             }
         }
@@ -320,7 +448,10 @@ struct ExpandedChatSheet: View {
                     .glassEffect()
                     .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
                     .onTapGesture {
-                        print("Search tapped")
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            isInputFocused = false
+                            isSearching = true
+                        }
                     }
 
                 // Menu button

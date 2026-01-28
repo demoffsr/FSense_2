@@ -10,10 +10,21 @@ final class ChatViewModel: ObservableObject {
     // Split from monolithic ChatState to prevent TextField input from triggering message list re-render
 
     /// Messages array - only triggers update when messages change
-    @Published private(set) var messages: [ChatMessage] = []
+    /// Cache is automatically invalidated via didSet
+    @Published private(set) var messages: [ChatMessage] = [] {
+        didSet {
+            // Invalidate cache when messages actually change
+            cachedMessageRowData = computeMessageRowData()
+        }
+    }
 
     /// Input text - isolated to prevent message list re-render on typing
-    @Published var inputText: String = ""
+    @Published var inputText: String = "" {
+        didSet {
+            // Update state manager on text changes for draft persistence
+            stateManager.updateDraft(inputText)
+        }
+    }
 
     /// Input enabled state
     @Published private(set) var isInputEnabled: Bool = true
@@ -35,23 +46,17 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Cached Precomputed Data
 
-    /// Cached message row data - invalidated when messages change
+    /// Cached message row data - automatically invalidated via didSet on messages
     private var cachedMessageRowData: [MessageRowData] = []
-    private var cachedMessagesHash: Int = 0
 
     struct MessageRowData: Equatable {
         let thinkingId: UUID
         let hideCompletedThinking: Bool
     }
 
-    /// Get precomputed data with caching
+    /// Get precomputed data (cached, updated automatically when messages change)
     var precomputedMessageData: [MessageRowData] {
-        let currentHash = messages.hashValue
-        if currentHash != cachedMessagesHash {
-            cachedMessagesHash = currentHash
-            cachedMessageRowData = computeMessageRowData()
-        }
-        return cachedMessageRowData
+        cachedMessageRowData
     }
 
     private func computeMessageRowData() -> [MessageRowData] {
@@ -91,6 +96,12 @@ final class ChatViewModel: ObservableObject {
 
     /// Current session ID for persistence (nil until first message is sent)
     private var sessionId: UUID?
+
+    /// Read-only accessor for current session ID
+    var currentSessionId: UUID? { sessionId }
+
+    /// Reference to state manager for active session tracking
+    private let stateManager = ActiveChatStateManager.shared
 
     // MARK: - Private Properties
 
@@ -272,6 +283,11 @@ final class ChatViewModel: ObservableObject {
         // Save to history
         saveToHistory()
 
+        // Notify state manager about active session
+        if let sessionId = sessionId {
+            stateManager.setActiveSession(sessionId)
+        }
+
         // Start the AI response flow
         startAIResponseFlow(for: userText, image: currentAttachedImage)
     }
@@ -282,6 +298,9 @@ final class ChatViewModel: ObservableObject {
         ensureSessionExists()
         guard let sessionId = sessionId else { return }
         historyManager.saveMessages(messages, to: sessionId)
+
+        // Notify state manager about active session
+        stateManager.setActiveSession(sessionId)
     }
 
     private func startAIResponseFlow(for userQuery: String, image: UIImage? = nil) {
@@ -327,37 +346,155 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func startThinkingProcessWithAPI(for userQuery: String, image: UIImage? = nil) async {
-        let thinkingMessage = ChatMessage(
-            content: .thinking(ThinkingContent(steps: [], isExpanded: true, isComplete: false)),
-            sender: .ai
-        )
+        // Build extended context with conversation history
+        let context = buildChatContextV2()
 
-        messages.append(thinkingMessage)
-        expandedThinkingCards.insert(thinkingMessage.id)
-        phase = .thinking
-
-        eventService.start()
-
-        var payload: FlowerCardPayload?
+        // Step 1: Quick classification to determine if progress bar should be shown
+        var shouldShowProgress = true
         do {
-            payload = try await APIService.shared.getRecommendation(prompt: userQuery, image: image)
+            let classification = try await APIService.shared.classifyIntent(
+                prompt: userQuery,
+                context: context
+            )
+            shouldShowProgress = classification.shouldShowProgress
+        } catch {
+            // On error, default to showing progress (conservative approach)
+            print("[ChatViewModel] Classification error: \(error.localizedDescription)")
+        }
+
+        guard !Task.isCancelled else { return }
+
+        // Step 2: Show thinking only for recommendations
+        var thinkingMessageId: UUID?
+        if shouldShowProgress {
+            let thinkingMessage = ChatMessage(
+                content: .thinking(ThinkingContent(steps: [], isExpanded: true, isComplete: false)),
+                sender: .ai
+            )
+            messages.append(thinkingMessage)
+            expandedThinkingCards.insert(thinkingMessage.id)
+            thinkingMessageId = thinkingMessage.id
+            phase = .thinking
+            eventService.start()
+        }
+
+        // Step 3: Main API call
+        var response: ChatResponse?
+        do {
+            response = try await APIService.shared.sendMessage(
+                prompt: userQuery,
+                context: context,
+                image: image
+            )
         } catch {
             print("[ChatViewModel] API Error: \(error.localizedDescription)")
         }
 
         guard !Task.isCancelled else { return }
 
-        eventService.stop()
+        // Step 4: Cleanup thinking state if shown
+        if let thinkingId = thinkingMessageId {
+            eventService.stop()
+            messages.removeAll { $0.id == thinkingId }
+            expandedThinkingCards.remove(thinkingId)
+        }
 
-        messages.removeAll { $0.id == thinkingMessage.id }
-        expandedThinkingCards.remove(thinkingMessage.id)
-
-        if let payload = payload {
-            lastPayload = payload
-            await showRecommendation(from: payload)
+        // Step 5: Handle response
+        if let response = response {
+            switch response.type {
+            case .recommendation:
+                if let payload = response.recommendation {
+                    lastPayload = payload
+                    await showRecommendation(from: payload)
+                } else {
+                    await showError()
+                }
+            case .text:
+                if let textMessage = response.textMessage {
+                    await showTextResponse(textMessage)
+                } else {
+                    await showError()
+                }
+            }
         } else {
             await showError()
         }
+    }
+
+    /// Build extended context with full conversation history
+    private func buildChatContextV2() -> ChatContextV2 {
+        var history: [ConversationMessage] = []
+        var lastFlowerName: String?
+        var lastEmotion: String?
+
+        for message in messages {
+            switch message.content {
+            case .text(let text):
+                history.append(ConversationMessage(
+                    role: message.sender == .user ? "user" : "assistant",
+                    content: text,
+                    messageType: "text",
+                    flowerName: nil
+                ))
+
+            case .textWithImage(let text, _):
+                history.append(ConversationMessage(
+                    role: message.sender == .user ? "user" : "assistant",
+                    content: text,
+                    messageType: "text",
+                    flowerName: nil
+                ))
+
+            case .recommendation(let rec):
+                lastFlowerName = rec.flowerName
+                // Extract emotion from meaning field (e.g., "Deep love and passion")
+                lastEmotion = extractEmotion(from: rec.meaning)
+                history.append(ConversationMessage(
+                    role: "assistant",
+                    content: "Recommended: \(rec.flowerName)",
+                    messageType: "recommendation",
+                    flowerName: rec.flowerName
+                ))
+
+            case .acknowledgement, .thinking, .followUp, .typing:
+                // Skip transient messages
+                break
+            }
+        }
+
+        return ChatContextV2(
+            conversationHistory: history,
+            lastFlowerName: lastFlowerName,
+            lastEmotion: lastEmotion,
+            region: "US" // TODO: Get from user settings
+        )
+    }
+
+    /// Extract emotion/occasion from recommendation subtitle
+    private func extractEmotion(from subtitle: String) -> String? {
+        // Common patterns: "Perfect for apology", "Ideal for birthday"
+        let patterns = ["for ", "на "]
+        for pattern in patterns {
+            if let range = subtitle.lowercased().range(of: pattern) {
+                let startIndex = range.upperBound
+                let remaining = subtitle[startIndex...]
+                // Take first word or two
+                let words = remaining.split(separator: " ").prefix(2)
+                if !words.isEmpty {
+                    return words.joined(separator: " ")
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Show a text response from the AI (for clarification questions)
+    private func showTextResponse(_ text: String) async {
+        let textMessage = ChatMessage(content: .text(text), sender: .ai)
+        messages.append(textMessage)
+        phase = .idle
+        saveToHistory()
+        isInputEnabled = true
     }
 
     private func showRecommendation(from payload: FlowerCardPayload) async {
@@ -415,6 +552,9 @@ final class ChatViewModel: ObservableObject {
         phase = .idle
         attachedImage = nil
         messages = [.welcomeMessage]
+
+        // Clear active session state
+        stateManager.clearActiveState()
     }
 
     private func resetState() {
