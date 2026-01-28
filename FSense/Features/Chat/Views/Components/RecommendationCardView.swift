@@ -2,58 +2,48 @@ import SwiftUI
 
 /// Flower recommendation card with embedded reasoning panel
 struct RecommendationCardView: View {
-    
+
     let recommendation: FlowerRecommendation
-    var thinkingContent: ThinkingContent? = nil
+    let steps: [ProgressStep]
     var isThinkingExpanded: Bool = false
     var onThinkingToggle: (() -> Void)? = nil
     var onExplore: (() -> Void)? = nil
-    
+
     // Custom smooth animation
     private var expandAnimation: Animation {
         .interpolatingSpring(stiffness: 300, damping: 30)
     }
-    
+
+    // Static shadow color to avoid recreation
+    private static let shadowColor = Color.black.opacity(0.08)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Image
             imageSection
-            
+
             // Content
             contentSection
-            
-            // Embedded reasoning panel (if thinking content exists)
-            if let thinking = thinkingContent, thinking.isComplete {
-                reasoningSection(thinking)
-            }
+
+            // Embedded reasoning panel
+            reasoningSection
         }
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
+        .shadow(color: Self.shadowColor, radius: 8, x: 0, y: 4)
+        // Note: drawingGroup() removed - it breaks expand/collapse animations in reasoningSection
     }
-    
+
     // MARK: - Image Section
-    
+
     private var imageSection: some View {
-        Group {
-            if let imageAsset = recommendation.imageAsset {
-                Image(imageAsset)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: 140)
-                    .clipped()
-            } else {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.pink.opacity(0.2), Color.purple.opacity(0.15)],
-                            startPoint: .topTrailing,
-                            endPoint: .bottomLeading
-                        )
-                    )
-                    .frame(height: 140)
-            }
-        }
+        AsyncFlowerImageView(
+            imageUrl: recommendation.imageUrl,
+            imageAsset: recommendation.imageAsset,
+            cacheKey: recommendation.imageCacheKey
+        )
+        .frame(height: 140)
+        .clipped()
         .clipShape(
             UnevenRoundedRectangle(
                 topLeadingRadius: 24,
@@ -63,25 +53,25 @@ struct RecommendationCardView: View {
             )
         )
     }
-    
+
     // MARK: - Content Section
-    
+
     private var contentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(recommendation.flowerName)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.black)
-            
+
             Text(recommendation.meaning)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.black.opacity(0.8))
-            
+
             Text(recommendation.explanation)
                 .font(.subheadline)
                 .foregroundColor(.black.opacity(0.6))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
-            
+
             // Explore button
             Button {
                 onExplore?()
@@ -105,24 +95,24 @@ struct RecommendationCardView: View {
         }
         .padding(18)
     }
-    
+
     // MARK: - Reasoning Section (Embedded)
-    
-    private func reasoningSection(_ thinking: ThinkingContent) -> some View {
+
+    private var reasoningSection: some View {
         VStack(spacing: 0) {
             // Divider
             Rectangle()
                 .fill(Color.gray.opacity(0.15))
                 .frame(height: 1)
-            
+
             // Collapsible reasoning panel
             VStack(spacing: 0) {
                 // Header - always visible
                 reasoningHeader
                     .animation(nil, value: isThinkingExpanded)
-                
+
                 // Expandable steps with smooth reveal animation
-                reasoningStepsContainer(thinking)
+                reasoningStepsContainer
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
@@ -134,20 +124,20 @@ struct RecommendationCardView: View {
             }
         }
     }
-    
+
     private var reasoningHeader: some View {
         HStack(spacing: 10) {
             Image(systemName: "brain")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.purple.opacity(0.7))
-            
+
             Text("Here's how I thought about this")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.black.opacity(0.8))
                 .lineLimit(1)
-            
+
             Spacer()
-            
+
             Image(systemName: "chevron.down")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.gray)
@@ -155,21 +145,21 @@ struct RecommendationCardView: View {
                 .animation(expandAnimation, value: isThinkingExpanded)
         }
     }
-    
+
     // MARK: - Smooth Height Animation Container
-    
+
     @ViewBuilder
-    private func reasoningStepsContainer(_ thinking: ThinkingContent) -> some View {
+    private var reasoningStepsContainer: some View {
         VStack(alignment: .leading, spacing: 0) {
-            reasoningStepsContent(thinking)
+            reasoningStepsContent
                 .opacity(isThinkingExpanded ? 1 : 0)
         }
         .frame(height: isThinkingExpanded ? nil : 0, alignment: .top)
         .clipped()
         .animation(expandAnimation, value: isThinkingExpanded)
     }
-    
-    private func reasoningStepsContent(_ thinking: ThinkingContent) -> some View {
+
+    private var reasoningStepsContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Subtle divider
             Rectangle()
@@ -177,14 +167,14 @@ struct RecommendationCardView: View {
                 .frame(height: 1)
                 .padding(.top, 12)
                 .padding(.bottom, 4)
-            
-            ForEach(Array(thinking.steps.enumerated()), id: \.element.id) { index, step in
+
+            ForEach(steps) { step in
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 13))
                         .foregroundColor(.green.opacity(0.7))
-                    
-                    Text(step.text)
+
+                    Text("\(step.emoji) \(step.text)")
                         .font(.system(size: 13))
                         .foregroundColor(.black.opacity(0.65))
                         .fixedSize(horizontal: false, vertical: true)

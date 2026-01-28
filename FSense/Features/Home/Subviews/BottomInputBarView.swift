@@ -2,418 +2,612 @@ import SwiftUI
 
 // MARK: - Chat Sheet Controller
 
-/// Observable controller for managing the chat bottom sheet state
-/// Allows external views to open the sheet with a specific session
 @MainActor
 final class ChatSheetController: ObservableObject {
     @Published var isExpanded = false
     @Published var sessionToLoad: ChatSession?
-    
-    /// Open the chat sheet with a new empty chat
+
+    private let stateManager = ActiveChatStateManager.shared
+    private let historyManager = ChatHistoryManager.shared
+
+    /// Open chat - determines whether to restore session, draft, or start fresh
     func openNewChat() {
-        sessionToLoad = nil
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            isExpanded = true
+        let state = stateManager.prepareForSheetOpen()
+
+        switch state {
+        case .fresh:
+            sessionToLoad = nil
+        case .draftOnly:
+            // Draft will be restored by ExpandedChatSheet
+            sessionToLoad = nil
+        case .existingSession(let sessionId, _):
+            // Restore existing session
+            if let session = historyManager.getSession(by: sessionId) {
+                sessionToLoad = session
+            } else {
+                sessionToLoad = nil
+            }
         }
+
+        isExpanded = true
     }
-    
-    /// Open the chat sheet with an existing session
+
     func openChat(session: ChatSession) {
         sessionToLoad = session
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            isExpanded = true
-        }
+        isExpanded = true
     }
-    
-    /// Close the chat sheet
+
     func close() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            isExpanded = false
-        }
+        isExpanded = false
     }
 }
 
-struct BottomInputBarView: View {
+// MARK: - Bottom Input Bar View (Collapsed State Only)
 
+struct BottomInputBarView: View {
     @ObservedObject var controller: ChatSheetController
-    @State private var dragOffset: CGFloat = 0
-    @StateObject private var chatViewModel = ChatViewModel()
+    @ObservedObject var viewModel: ChatViewModel
     @FocusState private var isInputFocused: Bool
 
-    // MARK: - Layout Constants
-
-    private let collapsedHeight: CGFloat = 130
-    private let bottomPadding: CGFloat = 34
-    private var expandedHeight: CGFloat {
-        UIScreen.main.bounds.height - 60
-    }
-
-    private var currentHeight: CGFloat {
-        let base = controller.isExpanded ? expandedHeight : collapsedHeight
-        // Allow dragging in both directions
-        let adjusted = base - dragOffset
-        return max(collapsedHeight, min(expandedHeight, adjusted))
-    }
-
-    // MARK: - Body
+    // Static constants for performance
+    private static let collapsedHeight: CGFloat = 130
+    private static let safeAreaBottom: CGFloat = 34
+    private static let shadowColor = Color.black.opacity(0.15)
+    private static let lightShadowColor = Color.black.opacity(0.08)
+    private static let inactiveGradient = LinearGradient(
+        colors: [Color(red: 0.55, green: 0, blue: 0.92), Color(red: 0.91, green: 0.04, blue: 0.79)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 
     var body: some View {
-        VStack(spacing: 0) {
-
-            // MARK: - Drag Handle
-            Capsule()
-                .fill(Color.gray.opacity(0.5))
-                .frame(width: 36, height: 5)
-                .padding(.top, 10)
-                .padding(.bottom, controller.isExpanded ? 8 : 20)
-
-            // MARK: - Chat Content (visible when expanded)
-            if controller.isExpanded {
-                ExpandedChatView(
-                    viewModel: chatViewModel,
-                    isInputFocused: $isInputFocused
-                )
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+        collapsedContent
+            .frame(height: Self.collapsedHeight)
+            .frame(maxWidth: .infinity)
+            .background(glassBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .overlay(borderOverlay)
+            .compositingGroup()
+            .shadow(color: Self.shadowColor, radius: 16, x: 0, y: -12)
+            .sheet(isPresented: $controller.isExpanded) {
+                ExpandedChatSheet(controller: controller, viewModel: viewModel)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackgroundInteraction(.enabled)
+                    .interactiveDismissDisabled(false)
             }
+            .onChange(of: controller.sessionToLoad) { _, newSession in
+                if let session = newSession {
+                    viewModel.loadSession(session)
+                }
+                // Don't call reset here - it's handled by onChange(isExpanded)
+            }
+            .onChange(of: controller.isExpanded) { wasExpanded, isExpanded in
+                if isExpanded {
+                    // Opening the sheet
+                    let state = ActiveChatStateManager.shared.prepareForSheetOpen()
+
+                    switch state {
+                    case .fresh:
+                        if controller.sessionToLoad == nil && viewModel.needsReset {
+                            viewModel.send(.reset)
+                        }
+                    case .draftOnly(let draftText):
+                        // Restore draft text only
+                        if viewModel.needsReset {
+                            viewModel.send(.reset)
+                        }
+                        viewModel.inputText = draftText
+                    case .existingSession(_, let draftText):
+                        // Session is loaded via sessionToLoad, restore draft
+                        if !draftText.isEmpty {
+                            viewModel.inputText = draftText
+                        }
+                    }
+                } else {
+                    // Closing the sheet - save current state
+                    ActiveChatStateManager.shared.onSheetClose(
+                        currentDraft: viewModel.inputText,
+                        currentSessionId: viewModel.currentSessionId
+                    )
+                }
+            }
+    }
+
+    // MARK: - Collapsed Content
+
+    @ViewBuilder
+    private var collapsedContent: some View {
+        VStack(spacing: 0) {
+            dragIndicator
+            Spacer(minLength: 0)
+            collapsedInputRow
+        }
+    }
+
+    private var dragIndicator: some View {
+        Capsule()
+            .fill(Color.gray.opacity(0.5))
+            .frame(width: 36, height: 5)
+            .padding(.top, 10)
+            .padding(.bottom, 20)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 10)
+                    .onEnded { value in
+                        if value.translation.height < -30 {
+                            controller.openNewChat()
+                        }
+                    }
+            )
+    }
+
+    private var collapsedInputRow: some View {
+        HStack(spacing: 8) {
+            Text("Ask me about...")
+                .font(.system(size: 16))
+                .foregroundStyle(.gray.opacity(0.8))
 
             Spacer(minLength: 0)
 
-            // MARK: - Input Row (pinned to bottom of sheet content)
-            ChatInputRowView(
-                controller: controller,
-                viewModel: chatViewModel,
-                isInputFocused: $isInputFocused
-            )
-            .padding(.bottom, 36)
-        }
-        .frame(height: currentHeight)
-        .frame(maxWidth: .infinity)
-        .background(
-            // MARK: - Glass Background
-            ZStack {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                Color.white.opacity(0.8)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .inset(by: 0.5)
-                .stroke(Color.white, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: -12)
-        .gesture(dragGesture)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: controller.isExpanded)
-        .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.8), value: dragOffset)
-        .onChange(of: controller.sessionToLoad) { _, newSession in
-            // Load the session when it changes
-            if let session = newSession {
-                chatViewModel.loadSession(session)
-            }
-        }
-    }
-
-    // MARK: - Drag Gesture
-
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                dragOffset = value.translation.height
-            }
-            .onEnded { value in
-                let threshold: CGFloat = 80
-                let velocity = value.predictedEndTranslation.height - value.translation.height
-
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    // Swipe UP = expand
-                    if value.translation.height < -threshold || velocity < -200 {
-                        controller.isExpanded = true
-                    }
-                    // Swipe DOWN = collapse
-                    else if value.translation.height > threshold || velocity > 200 {
-                        controller.isExpanded = false
-                        isInputFocused = false
-                    }
-                    dragOffset = 0
-                }
-            }
-    }
-}
-
-// MARK: - Chat Input Row
-
-struct ChatInputRowView: View {
-    @ObservedObject var controller: ChatSheetController
-    @ObservedObject var viewModel: ChatViewModel
-    var isInputFocused: FocusState<Bool>.Binding
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            ChatPlusButton(onTap: {
-                // Start a new chat
-                viewModel.send(.reset)
-                controller.sessionToLoad = nil
-                controller.openNewChat()
-            })
-            
-            ChatPromptInputField(
-                controller: controller,
-                viewModel: viewModel,
-                isInputFocused: isInputFocused
-            )
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
-    }
-}
-
-// MARK: - Chat Prompt Input Field
-
-struct ChatPromptInputField: View {
-    @ObservedObject var controller: ChatSheetController
-    @ObservedObject var viewModel: ChatViewModel
-    var isInputFocused: FocusState<Bool>.Binding
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            if controller.isExpanded {
-                TextField("Ask me about flowers...", text: Binding(
-                    get: { viewModel.inputText },
-                    set: { viewModel.send(.inputTextChanged($0)) }
-                ))
-                .font(.system(size: 16))
-                .focused(isInputFocused)
-                .disabled(!viewModel.isInputEnabled)
-                .submitLabel(.send)
-                .onSubmit {
-                    if viewModel.canSendMessage {
-                        viewModel.send(.sendMessage)
-                    }
-                }
-            } else {
-                Text("Ask me about...")
-                    .font(.system(size: 16))
-                    .foregroundColor(Color.gray.opacity(0.8))
-            }
-            
-            Spacer()
-            
-            // Send button
-            ChatSendButton(
-                isEnabled: viewModel.canSendMessage,
-                action: {
-                    if controller.isExpanded && viewModel.canSendMessage {
-                        viewModel.send(.sendMessage)
-                        isInputFocused.wrappedValue = false
-                    }
-                }
-            )
+            Image(systemName: "arrow.up")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Self.inactiveGradient).opacity(0.4))
         }
         .padding(.leading, 18)
         .padding(.trailing, 10)
         .frame(height: 50)
-        .glassEffect(
-            .clear.tint(.white.opacity(0.1)).interactive(),
-            in: Capsule()
-        )
-        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
-        .onTapGesture {
-            controller.openNewChat()
-            isInputFocused.wrappedValue = true
+        .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: Capsule())
+        .compositingGroup()
+        .shadow(color: Self.lightShadowColor, radius: 12, x: 0, y: 4)
+        .contentShape(Capsule())
+        .onTapGesture { controller.openNewChat() }
+        .padding(.horizontal, 20)
+        .padding(.bottom, Self.safeAreaBottom)
+    }
+
+    // MARK: - Background
+
+    private var glassBackground: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            Color.white.opacity(0.8)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+    }
+
+    private var borderOverlay: some View {
+        RoundedRectangle(cornerRadius: 24)
+            .inset(by: 0.5)
+            .stroke(Color.white, lineWidth: 1)
     }
 }
 
-// MARK: - Chat Plus Button
+// MARK: - Expanded Chat Sheet (Native Sheet)
 
-struct ChatPlusButton: View {
-    var onTap: () -> Void = {}
-    
+struct ExpandedChatSheet: View {
+    @ObservedObject var controller: ChatSheetController
+    @ObservedObject var viewModel: ChatViewModel
+    @FocusState private var isInputFocused: Bool
+    @State private var selectedFlower: Flower?
+    @State private var navigateToFlowerDetail = false
+    @State private var scrollProxy: ScrollViewProxy?
+    @State private var showScrollToBottom = false
+    @State private var showPlusButton = false
+    @State private var showImagePicker = false
+    @State private var imageSource: ImageSource = .photoLibrary
+    @Namespace private var bottomID
+    @Namespace private var toolbarNamespace
+
+    // Cancellable task for scroll cleanup on disappear
+    @State private var scrollTask: Task<Void, Never>?
+
+    // Search state
+    @State private var isSearching = false
+    @State private var searchText = ""
+    @State private var highlightedMessageId: UUID?
+    @FocusState private var isSearchFocused: Bool
+
+    // MARK: - Static Constants (performance optimization)
+    private static let inputBgColor = Color(red: 0.98, green: 0.98, blue: 0.98)
+    private static let shadowColor = Color.black.opacity(0.15)
+    private static let lightShadowColor = Color.black.opacity(0.08)
+    private static let toolbarSymbols = ["magnifyingglass", "ellipsis"]
+    private static let sendButtonGradient = LinearGradient(
+        colors: [Color(red: 0.55, green: 0, blue: 0.92), Color(red: 0.91, green: 0.04, blue: 0.79)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
     var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search bar (when active) - padding matches input area style
+                if isSearching {
+                    ChatSearchBar(
+                        searchText: $searchText,
+                        isSearching: $isSearching,
+                        isFocused: $isSearchFocused
+                    )
+                    .padding(.top, 24)
+                    .padding(.bottom, 12)
+                    .background(Color(white: 0.97))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                // Messages scroll area
+                messagesScrollView
+
+                // Input area - automatically moves with keyboard in native sheet
+                if !isSearching {
+                    inputArea
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.9), value: isSearching)
+            .background(Color(white: 0.97))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    if !isSearching {
+                        Text("Chat")
+                            .font(.headline)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if !isSearching {
+                        toolbarButtons
+                    }
+                }
+            }
+            .navigationDestination(isPresented: $navigateToFlowerDetail) {
+                if let flower = selectedFlower {
+                    FlowerCardView(flower: flower)
+                        .id(flower.id)
+                }
+            }
+        }
+        .onAppear {
+            // Show plus button immediately without animation
+            withTransaction(Transaction(animation: nil)) {
+                showPlusButton = true
+            }
+            // Focus immediately - keyboard is pre-warmed via KeyboardWarmer
+            isInputFocused = true
+        }
+        .onDisappear {
+            showPlusButton = false
+            isSearching = false
+            searchText = ""
+            // Cancel pending scroll task to prevent updates after view disappears
+            scrollTask?.cancel()
+        }
+        .onChange(of: isSearching) { _, newValue in
+            if newValue {
+                // Dismiss input keyboard and focus search field
+                isInputFocused = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    isSearchFocused = true
+                }
+            } else {
+                // Dismiss search keyboard
+                isSearchFocused = false
+                // Clear highlight when exiting search
+                highlightedMessageId = nil
+            }
+        }
+        .onChange(of: searchText) { _, newText in
+            // Scroll to first matching message when search text changes
+            guard isSearching, !newText.isEmpty else {
+                highlightedMessageId = nil
+                return
+            }
+
+            // Find first matching message and scroll to it
+            if let firstMatch = viewModel.orderedMessages.first(where: { $0.matchesSearch(newText) }) {
+                scrollToMessage(firstMatch.id)
+            } else {
+                highlightedMessageId = nil
+            }
+        }
+    }
+
+    // MARK: - Scroll to Message
+
+    private func scrollToMessage(_ messageId: UUID) {
+        guard let proxy = scrollProxy else { return }
+
+        // Highlight the message temporarily
+        highlightedMessageId = messageId
+
+        withAnimation(.easeInOut(duration: 0.3)) {
+            proxy.scrollTo(messageId, anchor: .center)
+        }
+
+        // Remove highlight after 1.5 seconds
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation(.easeOut(duration: 0.3)) {
+                highlightedMessageId = nil
+            }
+        }
+    }
+
+    // MARK: - Messages Scroll View
+
+    private var messagesScrollView: some View {
+        ZStack(alignment: .bottom) {
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(spacing: 16) {
+                        // Use cached precomputed data from ViewModel
+                        let messages = viewModel.orderedMessages
+                        let precomputed = viewModel.precomputedMessageData
+                        let steps = viewModel.pipelineSteps
+
+                        // Use indices to avoid Array() allocation - preserves LazyVStack laziness
+                        ForEach(messages.indices, id: \.self) { index in
+                            let message = messages[index]
+                            let data = index < precomputed.count
+                                ? precomputed[index]
+                                : ChatViewModel.MessageRowData(thinkingId: message.id, hideCompletedThinking: false)
+
+                            MessageBubbleView(
+                                message: message,
+                                steps: steps,
+                                isThinkingExpanded: viewModel.isThinkingCardExpanded(data.thinkingId),
+                                onThinkingToggle: { [weak viewModel] in
+                                    viewModel?.send(.toggleThinkingCard(data.thinkingId))
+                                },
+                                onExploreFlower: handleExploreFlower,
+                                hideCompletedThinking: data.hideCompletedThinking
+                            )
+                            .searchHighlight(
+                                isHighlighted: highlightedMessageId == message.id,
+                                isSearchActive: isSearching && !searchText.isEmpty,
+                                matchesSearch: message.matchesSearch(searchText)
+                            )
+                            .id(message.id)
+                        }
+
+                        Color.clear.frame(height: 1).id(bottomID)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    let contentHeight = geometry.contentSize.height
+                    let visibleHeight = geometry.visibleRect.height
+                    guard contentHeight > visibleHeight + 50 else { return false }
+                    let bottomOffset = contentHeight - visibleHeight - geometry.contentOffset.y
+                    return bottomOffset > 80
+                } action: { oldValue, newValue in
+                    guard oldValue != newValue else { return }
+                    showScrollToBottom = newValue
+                }
+                .defaultScrollAnchor(.bottom)
+                .onAppear { scrollProxy = proxy }
+                .onChange(of: viewModel.messages.count) { _, _ in
+                    // Cancel previous scroll task if pending
+                    scrollTask?.cancel()
+                    scrollTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        guard !Task.isCancelled else { return }
+                        proxy.scrollTo(bottomID, anchor: .bottom)
+                        showScrollToBottom = false
+                    }
+                }
+                .onTapGesture {
+                    isInputFocused = false
+                }
+            }
+
+            // Floating scroll-to-bottom button (only when scrolled up and not searching)
+            if showScrollToBottom && !isSearching {
+                scrollToBottomButton
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showScrollToBottom)
+    }
+
+    // MARK: - Scroll to Bottom Button
+
+    private var scrollToBottomButton: some View {
         Button {
-            onTap()
+            withAnimation(.easeOut(duration: 0.3)) {
+                scrollProxy?.scrollTo(bottomID, anchor: .bottom)
+            }
+            showScrollToBottom = false
+        } label: {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary.opacity(0.8))
+                .frame(width: 36, height: 36)
+                .glassEffect(.clear.tint(.black.opacity(0.12)).interactive(), in: .circle)
+        }
+        .padding(.bottom, 12)
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    // MARK: - Toolbar Buttons
+
+    @ViewBuilder
+    private var toolbarButtons: some View {
+        GlassEffectContainer(spacing: 0) {
+            HStack(spacing: 0) {
+                // Search button
+                Image(systemName: Self.toolbarSymbols[0])
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(width: 42, height: 36)
+                    .contentShape(Rectangle())
+                    .glassEffect()
+                    .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            isInputFocused = false
+                            isSearching = true
+                        }
+                    }
+
+                // Menu button
+                Menu {
+                    Button {
+                        viewModel.send(.reset)
+                        controller.sessionToLoad = nil
+                    } label: {
+                        Label("Новый чат", systemImage: "plus.message")
+                    }
+
+                    Button(role: .destructive) {
+                        viewModel.send(.reset)
+                        controller.sessionToLoad = nil
+                    } label: {
+                        Label("Очистить чат", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: Self.toolbarSymbols[1])
+                        .font(.system(size: 17, weight: .medium))
+                        .frame(width: 42, height: 36)
+                        .contentShape(Rectangle())
+                        .glassEffect()
+                        .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
+                }
+            }
+        }
+    }
+
+    // MARK: - Input Area
+
+    @ViewBuilder
+    private var inputArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Attachment preview (if exists)
+            if let image = viewModel.attachedImage {
+                AttachmentPreviewView(image: image) {
+                    viewModel.send(.removeAttachment)
+                }
+            }
+
+            HStack(spacing: 12) {
+                // Plus button - animated appearance
+                if showPlusButton {
+                    plusButton
+                        .transition(.scale.combined(with: .opacity))
+                }
+
+                // Text field container
+                textFieldContainer
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Color.white)
+        .sheet(isPresented: $showImagePicker) {
+            ImagePickerView(source: imageSource, selectedImage: attachmentBinding)
+        }
+    }
+
+    private var attachmentBinding: Binding<UIImage?> {
+        Binding(
+            get: { viewModel.attachedImage },
+            set: { image in
+                if let image = image {
+                    viewModel.send(.attachImage(image))
+                }
+            }
+        )
+    }
+
+    private var plusButton: some View {
+        Menu {
+            Button {
+                imageSource = .photoLibrary
+                showImagePicker = true
+            } label: {
+                Label("Photo Library", systemImage: "photo.on.rectangle")
+            }
+
+            Button {
+                imageSource = .camera
+                showImagePicker = true
+            } label: {
+                Label("Camera", systemImage: "camera")
+            }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 18, weight: .medium))
-                .foregroundColor(.black)
+                .foregroundStyle(.black)
                 .frame(width: 50, height: 50)
-                .glassEffect(
-                    .clear.tint(.white.opacity(0.1)).interactive(),
-                    in: Circle()
-                )
-                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+                .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: .circle)
+                .compositingGroup()
+                .shadow(color: Self.lightShadowColor, radius: 12, x: 0, y: 4)
         }
-        .buttonStyle(.plain)
     }
-}
 
-// MARK: - Chat Send Button (30x30)
+    private var textFieldContainer: some View {
+        HStack(spacing: 8) {
+            TextField("Ask me about flowers...", text: inputTextBinding)
+                .font(.system(size: 16))
+                .focused($isInputFocused)
+                .disabled(!viewModel.isInputEnabled)
+                .submitLabel(.send)
+                .onSubmit(sendMessageIfCan)
 
-struct ChatSendButton: View {
-    let isEnabled: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
+            sendButton
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 10)
+        .frame(height: 50)
+        .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: Capsule())
+        .compositingGroup()
+        .shadow(color: Self.lightShadowColor, radius: 12, x: 0, y: 4)
+    }
+
+    /// Direct binding to viewModel.inputText - no action dispatch per keystroke
+    private var inputTextBinding: Binding<String> {
+        Binding(
+            get: { viewModel.inputText },
+            set: { viewModel.inputText = $0 }
+        )
+    }
+
+    private var sendButton: some View {
+        Button(action: sendMessageIfCan) {
             Image(systemName: "arrow.up")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(sendButtonGradient)
-                        .opacity(isEnabled ? 1 : 0.4)
-                )
+                .background(Circle().fill(Self.sendButtonGradient).opacity(viewModel.canSendMessage ? 1 : 0.4))
         }
         .buttonStyle(.plain)
-        .disabled(!isEnabled)
+        .disabled(!viewModel.canSendMessage)
     }
-    
-    private var sendButtonGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 0.55, green: 0, blue: 0.92),
-                Color(red: 0.91, green: 0.04, blue: 0.79)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+
+    private func sendMessageIfCan() {
+        guard viewModel.canSendMessage else { return }
+        viewModel.send(.sendMessage)
+        isInputFocused = false
+    }
+
+    private func handleExploreFlower(_ recommendation: FlowerRecommendation) {
+        if let payload = viewModel.lastPayload {
+            selectedFlower = payload.toFlower()
+        } else {
+            selectedFlower = Flower(
+                name: recommendation.flowerName,
+                imageAsset: recommendation.imageAsset,
+                meanings: ["Love", "Appreciation"],
+                symbolismText: recommendation.explanation,
+                whyThisFlowerText: recommendation.meaning,
+                moodIntensityValue: 0.7
+            )
+        }
+        navigateToFlowerDetail = true
     }
 }
 
-// MARK: - Expanded Chat View
-
-struct ExpandedChatView: View {
-    @ObservedObject var viewModel: ChatViewModel
-    var isInputFocused: FocusState<Bool>.Binding
-    @Namespace private var bottomID
-    
-    // Navigation state for flower detail
-    @State private var selectedFlower: Flower?
-    @State private var navigateToFlowerDetail = false
-    
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 16) {
-                    ForEach(Array(viewModel.orderedMessages.enumerated()), id: \.element.id) { index, message in
-                        MessageRow(
-                            message: message,
-                            viewModel: viewModel,
-                            messages: viewModel.orderedMessages,
-                            messageIndex: index,
-                            onExploreFlower: { recommendation in
-                                selectedFlower = Flower(
-                                    name: recommendation.flowerName,
-                                    imageAsset: recommendation.imageAsset,
-                                    meanings: ["Love", "Passion", "Romance"],
-                                    symbolismText: recommendation.explanation,
-                                    whyThisFlowerText: recommendation.meaning,
-                                    moodIntensityValue: 0.85
-                                )
-                                navigateToFlowerDetail = true
-                            }
-                        )
-                        .id(message.id)
-                    }
-                    
-                    Color.clear
-                        .frame(height: 1)
-                        .id(bottomID)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 20)
-            }
-            .onChange(of: viewModel.messages.count) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        proxy.scrollTo(bottomID, anchor: .bottom)
-                    }
-                }
-            }
-        }
-        .navigationDestination(isPresented: $navigateToFlowerDetail) {
-            if let flower = selectedFlower {
-                FlowerCardView(flower: flower)
-            }
-        }
-    }
-}
-
-// MARK: - Optimized Message Row
-
-struct MessageRow: View {
-    let message: ChatMessage
-    @ObservedObject var viewModel: ChatViewModel
-    var messages: [ChatMessage] = []
-    var messageIndex: Int = 0
-    var onExploreFlower: ((FlowerRecommendation) -> Void)?
-    
-    /// Find associated thinking content for recommendation messages
-    private var associatedThinkingContent: ThinkingContent? {
-        guard case .recommendation = message.content else { return nil }
-        
-        // Look backwards to find the thinking message
-        for i in stride(from: messageIndex - 1, through: 0, by: -1) {
-            if case .thinking(let content) = messages[i].content {
-                return content
-            }
-            // Stop if we hit a user message (new conversation turn)
-            if messages[i].sender == .user {
-                break
-            }
-        }
-        return nil
-    }
-    
-    /// Associated thinking message ID (for expand/collapse state)
-    private var associatedThinkingMessageId: UUID? {
-        guard case .recommendation = message.content else { return nil }
-        
-        for i in stride(from: messageIndex - 1, through: 0, by: -1) {
-            if case .thinking = messages[i].content {
-                return messages[i].id
-            }
-            if messages[i].sender == .user {
-                break
-            }
-        }
-        return nil
-    }
-    
-    /// Check if this thinking message is followed by a recommendation
-    private var isThinkingFollowedByRecommendation: Bool {
-        guard case .thinking(let content) = message.content, content.isComplete else { return false }
-        
-        // Look forward to find if recommendation follows
-        for i in (messageIndex + 1)..<messages.count {
-            if case .recommendation = messages[i].content {
-                return true
-            }
-            // Stop if we hit a user message
-            if messages[i].sender == .user {
-                break
-            }
-        }
-        return false
-    }
-    
-    var body: some View {
-        let thinkingId = associatedThinkingMessageId ?? message.id
-        
-        MessageBubbleView(
-            message: message,
-            isThinkingExpanded: viewModel.isThinkingCardExpanded(thinkingId),
-            onThinkingToggle: {
-                viewModel.send(.toggleThinkingCard(thinkingId))
-            },
-            onExploreFlower: onExploreFlower,
-            associatedThinkingContent: associatedThinkingContent,
-            hideCompletedThinking: isThinkingFollowedByRecommendation
-        )
-    }
-}
