@@ -200,7 +200,6 @@ struct ExpandedChatSheet: View {
     @State private var showImagePicker = false
     @State private var imageSource: ImageSource = .photoLibrary
     @Namespace private var bottomID
-    @Namespace private var toolbarNamespace
 
     // Cancellable task for scroll cleanup on disappear
     @State private var scrollTask: Task<Void, Never>?
@@ -210,6 +209,9 @@ struct ExpandedChatSheet: View {
     @State private var searchText = ""
     @State private var highlightedMessageId: UUID?
     @FocusState private var isSearchFocused: Bool
+
+    // Archive alert state
+    @State private var showArchivedAlert = false
 
     // MARK: - Static Constants (performance optimization)
     private static let inputBgColor = Color(red: 0.98, green: 0.98, blue: 0.98)
@@ -251,6 +253,11 @@ struct ExpandedChatSheet: View {
             .background(Color(white: 0.97))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if !isSearching {
+                        newChatButton
+                    }
+                }
                 ToolbarItem(placement: .principal) {
                     if !isSearching {
                         Text("Chat")
@@ -311,6 +318,21 @@ struct ExpandedChatSheet: View {
                 scrollToMessage(firstMatch.id)
             } else {
                 highlightedMessageId = nil
+            }
+        }
+        .overlay(alignment: .top) {
+            if showArchivedAlert {
+                HStack(alignment: .center, spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Chat archived")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .glassEffect(.clear.tint(.white.opacity(0.3)).interactive(), in: Capsule())
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .padding(.top, 60)
             }
         }
     }
@@ -388,7 +410,21 @@ struct ExpandedChatSheet: View {
                     return bottomOffset > 80
                 } action: { oldValue, newValue in
                     guard oldValue != newValue else { return }
-                    showScrollToBottom = newValue
+                    if newValue {
+                        // Show button when scrolling up
+                        showScrollToBottom = true
+                    }
+                }
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    let contentHeight = geometry.contentSize.height
+                    let visibleHeight = geometry.visibleRect.height
+                    guard contentHeight > visibleHeight + 50 else { return true }
+                    let bottomOffset = contentHeight - visibleHeight - geometry.contentOffset.y
+                    return bottomOffset < 20
+                } action: { oldValue, newValue in
+                    guard oldValue != newValue, newValue else { return }
+                    // Hide button when reached the bottom
+                    showScrollToBottom = false
                 }
                 .defaultScrollAnchor(.bottom)
                 .onAppear { scrollProxy = proxy }
@@ -426,57 +462,125 @@ struct ExpandedChatSheet: View {
         } label: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.primary.opacity(0.8))
+                .foregroundStyle(.black)
                 .frame(width: 36, height: 36)
-                .glassEffect(.clear.tint(.black.opacity(0.12)).interactive(), in: .circle)
+        }
+        .buttonStyle(.plain)
+        .background {
+            Circle()
+                .fill(.ultraThinMaterial)
+        }
+        .overlay {
+            Circle()
+                .stroke(.white.opacity(0.25), lineWidth: 1)
         }
         .padding(.bottom, 12)
         .transition(.scale.combined(with: .opacity))
     }
 
-    // MARK: - Toolbar Buttons
+    // MARK: - New Chat Button (Left)
+
+    @ViewBuilder
+    private var newChatButton: some View {
+        Button {
+            viewModel.send(.reset)
+            controller.sessionToLoad = nil
+        } label: {
+            Image(systemName: "plus.message")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.black)
+                .frame(width: 42, height: 36)
+        }
+        .buttonStyle(.plain)
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(.white.opacity(0.25), lineWidth: 1)
+        }
+    }
+
+    // MARK: - Toolbar Buttons (Right)
 
     @ViewBuilder
     private var toolbarButtons: some View {
-        GlassEffectContainer(spacing: 0) {
-            HStack(spacing: 0) {
-                // Search button
+        HStack(spacing: 0) {
+            // Search button
+            Button {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    isInputFocused = false
+                    isSearching = true
+                }
+            } label: {
                 Image(systemName: Self.toolbarSymbols[0])
                     .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.black)
                     .frame(width: 42, height: 36)
-                    .contentShape(Rectangle())
-                    .glassEffect()
-                    .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                            isInputFocused = false
-                            isSearching = true
-                        }
-                    }
+            }
+            .buttonStyle(.plain)
 
-                // Menu button
-                Menu {
-                    Button {
-                        viewModel.send(.reset)
-                        controller.sessionToLoad = nil
-                    } label: {
-                        Label("Новый чат", systemImage: "plus.message")
-                    }
-
-                    Button(role: .destructive) {
-                        viewModel.send(.reset)
-                        controller.sessionToLoad = nil
-                    } label: {
-                        Label("Очистить чат", systemImage: "trash")
-                    }
+            // Menu button
+            Menu {
+                Button {
+                    archiveCurrentChat()
                 } label: {
-                    Image(systemName: Self.toolbarSymbols[1])
-                        .font(.system(size: 17, weight: .medium))
-                        .frame(width: 42, height: 36)
-                        .contentShape(Rectangle())
-                        .glassEffect()
-                        .glassEffectUnion(id: "toolbar", namespace: toolbarNamespace)
+                    Label("Архив", systemImage: "archivebox")
                 }
+
+                Button(role: .destructive) {
+                    viewModel.send(.reset)
+                    controller.sessionToLoad = nil
+                } label: {
+                    Label("Очистить чат", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: Self.toolbarSymbols[1])
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.black)
+                    .frame(width: 42, height: 36)
+            }
+            .buttonStyle(.plain)
+        }
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+        }
+        .overlay {
+            Capsule()
+                .stroke(.white.opacity(0.25), lineWidth: 1)
+        }
+    }
+
+    // MARK: - Archive Current Chat
+
+    private func archiveCurrentChat() {
+        guard let sessionId = viewModel.currentSessionId,
+              let session = ChatHistoryManager.shared.getSession(by: sessionId) else {
+            return
+        }
+
+        // Archive the session
+        ChatArchiveService.shared.archiveSession(session)
+
+        // Remove from active history
+        ChatHistoryManager.shared.deleteSession(session)
+
+        // Reset to new chat
+        viewModel.send(.reset)
+        controller.sessionToLoad = nil
+
+        // Show success alert
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            showArchivedAlert = true
+        }
+
+        // Auto-hide after 2 seconds
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation {
+                showArchivedAlert = false
             }
         }
     }
@@ -506,7 +610,7 @@ struct ExpandedChatSheet: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(Color.white)
+        .background(Color(white: 0.97))
         .sheet(isPresented: $showImagePicker) {
             ImagePickerView(source: imageSource, selectedImage: attachmentBinding)
         }
