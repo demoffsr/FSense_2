@@ -1,8 +1,21 @@
 import SwiftUI
 
 struct ScanCTAView: View {
+    @State private var showingScanView = false
 
     var body: some View {
+        Button {
+            showingScanView = true
+        } label: {
+            content
+        }
+        .buttonStyle(.plain)
+        .fullScreenCover(isPresented: $showingScanView) {
+            ScanView()
+        }
+    }
+
+    private var content: some View {
         HStack(spacing: 12) {
 
             // MARK: - Scanner Icon Container
@@ -41,5 +54,13 @@ struct ScanCTAView: View {
             .clear.tint(.black.opacity(0.08)).interactive(),
             in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
+    }
+}
+
+#Preview {
+    ZStack {
+        Color.green.opacity(0.3)
+        ScanCTAView()
+            .padding()
     }
 }

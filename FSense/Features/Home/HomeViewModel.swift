@@ -10,24 +10,82 @@ final class HomeViewModel: ObservableObject {
     
     /// Access to chat history
     let chatHistory = ChatHistoryManager.shared
-    
-    /// Recent chat sessions from history
+
+    /// Access to scan history
+    let scanHistory = ScanHistoryManager.shared
+
+    /// Per-session view models (granular dependencies for performance)
+    @Published private(set) var sessionViewModels: [UUID: ChatSessionViewModel] = [:]
+
+    /// Sorted recent chat view models (computed from dictionary)
+    var recentChatViewModels: [ChatSessionViewModel] {
+        Array(sessionViewModels.values)
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// Legacy accessor for compatibility (TODO: remove after migration)
     @Published var recentChats: [ChatSession] = []
-    
-    /// Recent scan items (mock for now)
-    @Published var recentScans: [RecentScanItem] = []
+
+    /// Recent scan items from ScanHistoryManager
+    var recentScans: [RecentScanItem] {
+        scanHistory.sessions.prefix(10).map { session in
+            RecentScanItem(
+                id: session.id,
+                flowerName: session.flowerName,
+                subtitle: session.scientificName ?? session.relativeDate,
+                imageAsset: nil,
+                imagePath: session.imagePath,
+                scannedAt: session.scannedAt,
+                confidence: session.confidence,
+                requestId: session.requestId
+            )
+        }
+    }
     
     private var cancellables = Set<AnyCancellable>()
-    
+    private var isSetup = false
+
     init() {
-        // Observe chat history changes
+        // Defer setup to avoid blocking app launch
+        // Will be triggered on first onAppear
+    }
+
+    /// Setup Combine bindings - called lazily on first onAppear
+    private func setupBindingsIfNeeded() {
+        guard !isSetup else { return }
+        isSetup = true
+
+        // Observe chat history changes and update view models granularly
         chatHistory.$sessions
+            .removeDuplicates() // Skip redundant updates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] sessions in
-                self?.recentChats = sessions.filter { session in
-                    // Only show sessions that have user messages
+                guard let self = self else { return }
+
+                // Filter sessions with user messages
+                let validSessions = sessions.filter { session in
                     session.messages.contains { $0.sender == .user }
                 }
+
+                // Update view models dictionary (granular updates)
+                // Only affected sessions will trigger SwiftUI updates
+                var newViewModels: [UUID: ChatSessionViewModel] = [:]
+
+                for session in validSessions {
+                    if let existing = self.sessionViewModels[session.id] {
+                        // Update existing view model (only this row updates)
+                        existing.update(from: session)
+                        newViewModels[session.id] = existing
+                    } else {
+                        // Create new view model
+                        newViewModels[session.id] = ChatSessionViewModel(from: session)
+                    }
+                }
+
+                self.sessionViewModels = newViewModels
+
+                // Keep legacy array for compatibility
+                self.recentChats = validSessions
             }
             .store(in: &cancellables)
     }
@@ -70,7 +128,10 @@ final class HomeViewModel: ObservableObject {
             
         case .deleteChat(let session):
             chatHistory.deleteSession(session)
-            
+
+        case .renameChat(let session, let newTitle):
+            chatHistory.renameSession(session, newTitle: newTitle)
+
         case .plusTapped:
             // Start new chat
             break
@@ -85,7 +146,26 @@ final class HomeViewModel: ObservableObject {
     }
     
     private func refreshData() {
-        // Force refresh recent chats
-        recentChats = chatHistory.chatSessions
+        // Setup bindings on first refresh (lazy initialization)
+        setupBindingsIfNeeded()
+
+        // Force refresh recent chats (triggers Combine pipeline)
+        let sessions = chatHistory.chatSessions.filter { session in
+            session.messages.contains { $0.sender == .user }
+        }
+
+        // Update view models
+        var newViewModels: [UUID: ChatSessionViewModel] = [:]
+        for session in sessions {
+            if let existing = sessionViewModels[session.id] {
+                existing.update(from: session)
+                newViewModels[session.id] = existing
+            } else {
+                newViewModels[session.id] = ChatSessionViewModel(from: session)
+            }
+        }
+
+        sessionViewModels = newViewModels
+        recentChats = sessions
     }
 }

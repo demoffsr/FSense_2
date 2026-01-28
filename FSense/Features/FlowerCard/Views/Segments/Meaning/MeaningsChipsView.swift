@@ -1,9 +1,12 @@
 import SwiftUI
 
 struct MeaningsChipsView: View {
-    
+
     let meanings: [String]
-    
+
+    // Static shadow color to avoid recreation on each render
+    private static let shadowColor = Color.black.opacity(0.1)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Meanings")
@@ -20,7 +23,8 @@ struct MeaningsChipsView: View {
                             .padding(.vertical, 6)
                             .background(Color.white)
                             .cornerRadius(16)
-                            .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
+                            .compositingGroup()
+                            .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
                     }
                 }
             }
@@ -34,53 +38,69 @@ struct MeaningsChipsView: View {
 
 struct FlowLayout: Layout {
     var spacing: CGFloat = 10
-    
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = computeLayout(proposal: proposal, subviews: subviews)
-        return result.size
+
+    // Cache structure to avoid recomputing layout
+    struct LayoutCache {
+        var size: CGSize = .zero
+        var positions: [CGPoint] = []
+        var sizes: [CGSize] = []
+        var proposalWidth: CGFloat?
     }
-    
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = computeLayout(proposal: proposal, subviews: subviews)
-        
+
+    func makeCache(subviews: Subviews) -> LayoutCache {
+        LayoutCache()
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout LayoutCache) -> CGSize {
+        updateCacheIfNeeded(proposal: proposal, subviews: subviews, cache: &cache)
+        return cache.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout LayoutCache) {
+        updateCacheIfNeeded(proposal: proposal, subviews: subviews, cache: &cache)
+
         for (index, subview) in subviews.enumerated() {
             subview.place(
                 at: CGPoint(
-                    x: bounds.minX + result.positions[index].x,
-                    y: bounds.minY + result.positions[index].y
+                    x: bounds.minX + cache.positions[index].x,
+                    y: bounds.minY + cache.positions[index].y
                 ),
-                proposal: ProposedViewSize(result.sizes[index])
+                proposal: ProposedViewSize(cache.sizes[index])
             )
         }
     }
-    
-    private func computeLayout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint], sizes: [CGSize]) {
+
+    private func updateCacheIfNeeded(proposal: ProposedViewSize, subviews: Subviews, cache: inout LayoutCache) {
+        // Only recompute if proposal changed
+        guard cache.proposalWidth != proposal.width else { return }
+
         let maxWidth = proposal.width ?? .infinity
-        
-        var positions: [CGPoint] = []
-        var sizes: [CGSize] = []
+        cache.proposalWidth = proposal.width
+        cache.positions = []
+        cache.sizes = []
+
         var currentX: CGFloat = 0
         var currentY: CGFloat = 0
         var lineHeight: CGFloat = 0
         var totalHeight: CGFloat = 0
-        
+
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
-            sizes.append(size)
-            
+            cache.sizes.append(size)
+
             if currentX + size.width > maxWidth && currentX > 0 {
                 currentX = 0
                 currentY += lineHeight + spacing
                 lineHeight = 0
             }
-            
-            positions.append(CGPoint(x: currentX, y: currentY))
+
+            cache.positions.append(CGPoint(x: currentX, y: currentY))
             lineHeight = max(lineHeight, size.height)
             currentX += size.width + spacing
             totalHeight = currentY + lineHeight
         }
-        
-        return (CGSize(width: maxWidth, height: totalHeight), positions, sizes)
+
+        cache.size = CGSize(width: maxWidth, height: totalHeight)
     }
 }
 

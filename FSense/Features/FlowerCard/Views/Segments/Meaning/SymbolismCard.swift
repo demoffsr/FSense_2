@@ -1,9 +1,12 @@
 import SwiftUI
 
 struct SymbolismCard: View {
-    
+
     let text: String
-    
+
+    // Static shadow color to avoid recreation on each render
+    private static let shadowColor = Color.black.opacity(0.1)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Symbolism")
@@ -20,7 +23,8 @@ struct SymbolismCard: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Color.white)
         .cornerRadius(24)
-        .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
+        .compositingGroup()
+        .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
     }
 }
 
