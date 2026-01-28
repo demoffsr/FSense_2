@@ -36,7 +36,9 @@ struct RecentSectionHeaderView: View {
 struct RecentCardsListView: View {
     @ObservedObject var viewModel: HomeViewModel
     var onChatTapped: ((ChatSession) -> Void)? = nil
-    
+    var onRenameChat: ((ChatSession) -> Void)? = nil
+    var onDeleteChat: ((ChatSession) -> Void)? = nil
+
     var body: some View {
         VStack(spacing: 12) {
             if viewModel.state.selectedTab == .chats {
@@ -62,7 +64,15 @@ struct RecentCardsListView: View {
                 Button {
                     onChatTapped?(session)
                 } label: {
-                    RecentChatRowView(session: session)
+                    RecentChatRowView(
+                        session: session,
+                        onRename: {
+                            onRenameChat?(session)
+                        },
+                        onDelete: {
+                            onDeleteChat?(session)
+                        }
+                    )
                 }
                 .buttonStyle(.plain)
             }
@@ -96,19 +106,21 @@ struct RecentCardsListView: View {
 
 struct RecentChatRowView: View {
     let session: ChatSession
-    
+    var onRename: (() -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
+
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             // Thumbnail
             thumbnail
-            
+
             // Text content
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayTitle)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.black)
                     .lineLimit(1)
-                
+
                 if !session.subtitle.isEmpty {
                     Text(session.subtitle)
                         .font(.system(size: 13))
@@ -120,13 +132,30 @@ struct RecentChatRowView: View {
                         .foregroundColor(.black.opacity(0.5))
                 }
             }
-            
+
             Spacer()
-            
-            // Chevron
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.gray.opacity(0.5))
+
+            // More button (three dots)
+            Menu {
+                Button {
+                    onRename?()
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    onDelete?()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.gray.opacity(0.6))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -156,17 +185,47 @@ struct RecentChatRowView: View {
     
     private var thumbnail: some View {
         Group {
-            if let imageName = session.flowerImageAsset {
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(Color.gray.opacity(0.1))
-                    .frame(width: 46, height: 46)
-                    .overlay(
-                        Image(imageName)
+            // Priority: imageUrl > imageAsset > placeholder
+            if let imageUrlString = session.flowerImageUrl,
+               let imageUrl = URL(string: imageUrlString) {
+                // Remote AI-generated image
+                AsyncImage(url: imageUrl) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                    )
+                            .frame(width: 46, height: 46)
+                            .clipShape(RoundedRectangle(cornerRadius: 9))
+                    case .failure, .empty:
+                        // Fallback to local asset or placeholder
+                        localImageOrPlaceholder
+                    @unknown default:
+                        localImageOrPlaceholder
+                    }
+                }
+            } else {
+                localImageOrPlaceholder
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 9)
+                .inset(by: 0.5)
+                .stroke(Color(red: 0.95, green: 0.95, blue: 0.95), lineWidth: 1)
+        )
+    }
+
+    private var localImageOrPlaceholder: some View {
+        Group {
+            if let imageName = session.flowerImageAsset {
+                // Local asset image
+                Image(imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 46, height: 46)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
             } else {
+                // Placeholder gradient
                 RoundedRectangle(cornerRadius: 9)
                     .fill(
                         LinearGradient(
@@ -186,11 +245,6 @@ struct RecentChatRowView: View {
                     )
             }
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: 9)
-                .inset(by: 0.5)
-                .stroke(Color(red: 0.95, green: 0.95, blue: 0.95), lineWidth: 1)
-        )
     }
 }
 

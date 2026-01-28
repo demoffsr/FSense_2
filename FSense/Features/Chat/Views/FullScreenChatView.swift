@@ -23,6 +23,7 @@ struct FullScreenChatView: View {
             .navigationDestination(isPresented: $navigateToFlowerDetail) {
                 if let flower = selectedFlower {
                     FlowerCardView(flower: flower)
+                        .id(flower.id) // Force view recreation on flower change
                 }
             }
         }
@@ -79,14 +80,24 @@ struct FullScreenChatView: View {
                                 viewModel.send(.toggleThinkingCard(message.id))
                             },
                             onExploreFlower: { recommendation in
-                                selectedFlower = Flower(
-                                    name: recommendation.flowerName,
-                                    imageAsset: recommendation.imageAsset,
-                                    meanings: ["Love", "Passion", "Romance"],
-                                    symbolismText: recommendation.explanation,
-                                    whyThisFlowerText: recommendation.meaning,
-                                    moodIntensityValue: 0.85
-                                )
+                                print("[FullScreenChatView] onExploreFlower called for: \(recommendation.flowerName)")
+                                // Use real payload data from API
+                                if let payload = viewModel.lastPayload {
+                                    print("[FullScreenChatView] Using real payload for: \(payload.header.name)")
+                                    selectedFlower = payload.toFlower()
+                                    print("[FullScreenChatView] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
+                                } else {
+                                    print("[FullScreenChatView] WARNING: No payload! Using fallback")
+                                    // Fallback if payload not available
+                                    selectedFlower = Flower(
+                                        name: recommendation.flowerName,
+                                        imageAsset: recommendation.imageAsset,
+                                        meanings: ["Love", "Appreciation"],
+                                        symbolismText: recommendation.explanation,
+                                        whyThisFlowerText: recommendation.meaning,
+                                        moodIntensityValue: 0.7
+                                    )
+                                }
                                 navigateToFlowerDetail = true
                             }
                         )

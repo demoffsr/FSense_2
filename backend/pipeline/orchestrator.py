@@ -1,0 +1,184 @@
+"""
+Pipeline Orchestrator - v0.4.0 (Optimized)
+
+Manages execution of all agents with PARALLEL optimization.
+Independent agents run concurrently to reduce total time.
+
+Execution Strategy:
+- Phase 1: FIA + EIA (parallel) - Input analysis
+- Phase 2: RIL (sequential) - Needs intent + emotions
+- Phase 3: FMRA (sequential) - Flower matching
+- Phase 4: CIA + AITB + RFFA + CRI (parallel) - Post-matching analysis
+- Phase 5: SRFL (sequential) - Self-reflection
+- Phase 6: SFA (sequential) - Final assembly
+
+Expected speedup: ~2x compared to sequential execution.
+"""
+
+from typing import Optional, List
+import logging
+import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from backend.pipeline.context import PipelineContext
+from backend.agents.base import BaseAgent
+from backend.core.console_logger import get_console_logger
+
+# Agent adapter imports
+from backend.agents.adapters.fia_adapter import FIAAdapter
+from backend.agents.adapters.eia_adapter import EIAAdapter
+from backend.agents.adapters.ril_adapter import RILAdapter
+from backend.agents.adapters.fmra_adapter import FMRAAdapter
+from backend.agents.adapters.cia_adapter import CIAAdapter
+from backend.agents.adapters.aitb_adapter import AITBAdapter
+from backend.agents.adapters.rffa_adapter import RFFAAdapter
+from backend.agents.adapters.cri_adapter import CRIAdapter
+from backend.agents.adapters.srfl_adapter import SRFLAdapter
+from backend.agents.adapters.sfa_adapter import SFAAdapter
+
+logger = logging.getLogger(__name__)
+
+
+class PipelineOrchestrator:
+    """
+    Orchestrates agent execution with parallel optimization.
+
+    v0.4.0:
+    - Parallel execution for independent agents
+    - ~2x speedup compared to sequential
+    - Thread-safe context access
+    """
+
+    def __init__(self) -> None:
+        """Initialize orchestrator with all agent adapters."""
+        # Create agent instances
+        self._fia = FIAAdapter()
+        self._eia = EIAAdapter()
+        self._ril = RILAdapter()
+        self._fmra = FMRAAdapter()
+        self._cia = CIAAdapter()
+        self._aitb = AITBAdapter()
+        self._rffa = RFFAAdapter()
+        self._cri = CRIAdapter()
+        self._srfl = SRFLAdapter()
+        self._sfa = SFAAdapter()
+
+        self._step_counter = 0
+        self._step_lock = threading.Lock()
+        self._total_steps = 10
+
+    @property
+    def agent_names(self) -> list[str]:
+        """Get ordered list of agent names."""
+        return ["FIA", "EIA", "RIL", "FMRA", "CIA", "AITB", "RFFA", "CRI", "SRFL", "SFA"]
+
+    def run(self, ctx: PipelineContext) -> PipelineContext:
+        """
+        Execute agents with parallel optimization.
+
+        Execution phases:
+        1. FIA + EIA (parallel)
+        2. RIL (sequential)
+        3. FMRA (sequential)
+        4. CIA + AITB + RFFA + CRI (parallel)
+        5. SRFL (sequential)
+        6. SFA (sequential)
+        """
+        console = get_console_logger()
+        start_time = time.time()
+        self._step_counter = 0
+
+        console.pipeline_start(ctx.request_id, ctx.user_input, ctx.region)
+        logger.info(f"Pipeline started (optimized): request_id={ctx.request_id}")
+
+        # Phase 1: Input analysis (parallel)
+        self._run_parallel(ctx, [self._fia, self._eia])
+
+        # Phase 2: Relationship analysis (needs intent + emotions)
+        self._execute_agent(self._ril, ctx)
+
+        # Phase 3: Flower matching
+        self._execute_agent(self._fmra, ctx)
+
+        # Phase 4: Post-matching analysis (parallel)
+        self._run_parallel(ctx, [self._cia, self._aitb, self._rffa, self._cri])
+
+        # Phase 5: Self-reflection
+        self._execute_agent(self._srfl, ctx)
+
+        # Phase 6: Final assembly
+        self._execute_agent(self._sfa, ctx)
+
+        total_time = time.time() - start_time
+        success = len(ctx.errors) == 0
+
+        console.pipeline_end(ctx.request_id, success, total_time)
+        logger.info(f"Pipeline completed: request_id={ctx.request_id}, time={total_time:.2f}s")
+
+        return ctx
+
+    def _run_parallel(self, ctx: PipelineContext, agents: List[BaseAgent]) -> None:
+        """Run multiple agents in parallel using ThreadPoolExecutor."""
+        with ThreadPoolExecutor(max_workers=len(agents)) as executor:
+            futures = {
+                executor.submit(self._execute_agent, agent, ctx): agent
+                for agent in agents
+            }
+            for future in as_completed(futures):
+                # Results are already applied to ctx
+                try:
+                    future.result()  # Raise any exceptions
+                except Exception as e:
+                    logger.error(f"Parallel agent error: {e}")
+
+    def _execute_agent(self, agent: BaseAgent, ctx: PipelineContext) -> None:
+        """Execute a single agent with timing and error handling."""
+        agent_name = agent.name
+        console = get_console_logger()
+
+        with self._step_lock:
+            self._step_counter += 1
+            step = self._step_counter
+
+        try:
+            console.agent_start(agent_name, step, self._total_steps)
+            logger.debug(f"Starting agent: {agent_name}")
+            ctx.start_timing(agent_name)
+
+            agent.run(ctx)
+
+            ctx.end_timing(agent_name, status="completed")
+            console.agent_end(agent_name, status="completed")
+            logger.debug(f"Completed agent: {agent_name}")
+
+        except Exception as e:
+            ctx.end_timing(agent_name, status="failed")
+            error_msg = f"{str(e)}"
+            ctx.add_error(error_msg)
+            console.agent_error(agent_name, error_msg)
+            logger.error(f"Agent {agent_name} failed: {error_msg}", exc_info=True)
+
+
+class PipelineOrchestratorBuilder:
+    """
+    Builder for customizing orchestrator configuration.
+    
+    TODO v0.1.0:
+    - Add agent exclusion
+    - Add agent replacement
+    - Add custom ordering (if needed)
+    """
+    
+    def __init__(self) -> None:
+        self._skip_agents: set[str] = set()
+    
+    def skip(self, agent_name: str) -> "PipelineOrchestratorBuilder":
+        """Mark an agent to be skipped (for testing)."""
+        self._skip_agents.add(agent_name)
+        return self
+    
+    def build(self) -> PipelineOrchestrator:
+        """Build the orchestrator with current configuration."""
+        # TODO: Apply skip configuration
+        return PipelineOrchestrator()

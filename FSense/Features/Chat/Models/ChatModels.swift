@@ -12,7 +12,8 @@ struct ChatSession: Identifiable, Codable, Equatable {
     var messages: [ChatMessage]
     var flowerName: String?
     var flowerImageAsset: String?
-    
+    var flowerImageUrl: String?
+
     init(
         id: UUID = UUID(),
         title: String = "New Chat",
@@ -21,7 +22,8 @@ struct ChatSession: Identifiable, Codable, Equatable {
         updatedAt: Date = Date(),
         messages: [ChatMessage] = [],
         flowerName: String? = nil,
-        flowerImageAsset: String? = nil
+        flowerImageAsset: String? = nil,
+        flowerImageUrl: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -31,6 +33,7 @@ struct ChatSession: Identifiable, Codable, Equatable {
         self.messages = messages
         self.flowerName = flowerName
         self.flowerImageAsset = flowerImageAsset
+        self.flowerImageUrl = flowerImageUrl
     }
     
     /// Generate title from first user message
@@ -50,8 +53,13 @@ struct ChatSession: Identifiable, Codable, Equatable {
             return false
         }), case .recommendation(let rec) = recMessage.content {
             subtitle = "For: \(rec.meaning)"
-            flowerName = rec.flowerName
-            flowerImageAsset = rec.imageAsset
+
+            // Set flower image ONLY for the first recommendation (don't overwrite)
+            if flowerImageAsset == nil && flowerImageUrl == nil {
+                flowerName = rec.flowerName
+                flowerImageAsset = rec.imageAsset
+                flowerImageUrl = rec.imageUrl
+            }
         }
     }
 }
@@ -147,13 +155,17 @@ struct ThinkingContent: Equatable, Codable {
 struct FlowerRecommendation: Equatable, Codable {
     let flowerName: String
     let imageAsset: String?
+    let imageUrl: String?
+    let imageCacheKey: String?
     let meaning: String
     let explanation: String
     let confidence: String
-    
+
     static let mock = FlowerRecommendation(
         flowerName: "Red Rose",
         imageAsset: "RedRose",
+        imageUrl: nil,
+        imageCacheKey: nil,
         meaning: "Deep love and passion",
         explanation: "Given the romantic context you described, a red rose perfectly expresses deep emotional connection. Its timeless symbolism of love makes it ideal for your anniversary.",
         confidence: "Perfect match"
