@@ -44,6 +44,9 @@ final class ChatViewModel: ObservableObject {
     /// Expanded thinking cards - separate @Published for efficient UI updates
     @Published private(set) var expandedThinkingCards: Set<UUID> = []
 
+    /// Message IDs that should show typewriter animation (new AI messages only)
+    @Published private(set) var animatingMessageIds: Set<UUID> = []
+
     // MARK: - Cached Precomputed Data
 
     /// Cached message row data - automatically invalidated via didSet on messages
@@ -213,6 +216,16 @@ final class ChatViewModel: ObservableObject {
         expandedThinkingCards.contains(messageId)
     }
 
+    /// Check if a message should show typewriter animation
+    func shouldAnimateMessage(_ messageId: UUID) -> Bool {
+        animatingMessageIds.contains(messageId)
+    }
+
+    /// Mark animation as complete for a message
+    func markAnimationComplete(_ messageId: UUID) {
+        animatingMessageIds.remove(messageId)
+    }
+
     // MARK: - Action Handler
 
     func send(_ action: ChatAction) {
@@ -316,6 +329,7 @@ final class ChatViewModel: ObservableObject {
 
                 let acknowledgement = generateAcknowledgement(for: userQuery, hasImage: image != nil)
                 let ackMessage = ChatMessage(content: .acknowledgement(acknowledgement), sender: .ai)
+                animatingMessageIds.insert(ackMessage.id)
                 messages.append(ackMessage)
                 phase = .acknowledgement
 
@@ -491,6 +505,7 @@ final class ChatViewModel: ObservableObject {
     /// Show a text response from the AI (for clarification questions)
     private func showTextResponse(_ text: String) async {
         let textMessage = ChatMessage(content: .text(text), sender: .ai)
+        animatingMessageIds.insert(textMessage.id)
         messages.append(textMessage)
         phase = .idle
         saveToHistory()
@@ -511,6 +526,7 @@ final class ChatViewModel: ObservableObject {
             content: .text("I'm sorry, I couldn't process your request right now. Please try again."),
             sender: .ai
         )
+        animatingMessageIds.insert(errorMessage.id)
         messages.append(errorMessage)
         phase = .idle
         saveToHistory()
@@ -547,6 +563,7 @@ final class ChatViewModel: ObservableObject {
         sessionId = nil
         lastPayload = nil
         expandedThinkingCards.removeAll()
+        animatingMessageIds.removeAll()
         inputText = ""
         isInputEnabled = true
         phase = .idle

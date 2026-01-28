@@ -54,6 +54,7 @@ struct ChatView: View {
                         isThinkingExpanded: viewModel.isThinkingCardExpanded(data.thinkingId),
                         thinkingId: data.thinkingId,
                         hideCompletedThinking: data.hideCompletedThinking,
+                        shouldAnimate: viewModel.shouldAnimateMessage(message.id),
                         onThinkingToggle: viewModel.send,
                         onExploreFlower: handleExploreFlower
                     )
@@ -94,6 +95,7 @@ struct ChatView: View {
         let isThinkingExpanded: Bool
         let thinkingId: UUID
         let hideCompletedThinking: Bool
+        let shouldAnimate: Bool
         let onThinkingToggle: (ChatAction) -> Void
         var onExploreFlower: ((FlowerRecommendation) -> Void)?
 
@@ -104,7 +106,8 @@ struct ChatView: View {
                 isThinkingExpanded: isThinkingExpanded,
                 onThinkingToggle: { onThinkingToggle(.toggleThinkingCard(thinkingId)) },
                 onExploreFlower: onExploreFlower,
-                hideCompletedThinking: hideCompletedThinking
+                hideCompletedThinking: hideCompletedThinking,
+                shouldAnimate: shouldAnimate
             )
         }
     }

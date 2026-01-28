@@ -3,7 +3,9 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var archiveService = FlowerArchiveService.shared
+    @StateObject private var chatArchiveService = ChatArchiveService.shared
     @State private var navigateToArchive = false
+    @State private var navigateToChatArchive = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +27,17 @@ struct ProfileView: View {
 
                 Divider()
                     .padding(.leading, 60)
+
+                ProfileMenuButton(
+                    icon: "bubble.left.and.bubble.right.fill",
+                    title: "Chat Archive",
+                    subtitle: chatArchiveSubtitle
+                ) {
+                    navigateToChatArchive = true
+                }
+
+                Divider()
+                    .padding(.leading, 60)
             }
             .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -37,6 +50,9 @@ struct ProfileView: View {
         .navigationBarBackButtonHidden(true)
         .navigationDestination(isPresented: $navigateToArchive) {
             FlowerArchiveView()
+        }
+        .navigationDestination(isPresented: $navigateToChatArchive) {
+            ChatArchiveView()
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -62,6 +78,17 @@ struct ProfileView: View {
             return "1 flower saved"
         } else {
             return "\(count) flowers saved"
+        }
+    }
+
+    private var chatArchiveSubtitle: String {
+        let count = chatArchiveService.sessionCount
+        if count == 0 {
+            return "No chats yet"
+        } else if count == 1 {
+            return "1 chat saved"
+        } else {
+            return "\(count) chats saved"
         }
     }
 }

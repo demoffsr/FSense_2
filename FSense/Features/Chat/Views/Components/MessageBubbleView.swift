@@ -12,6 +12,9 @@ struct MessageBubbleView: View {
     /// Whether the thinking is complete (used to hide standalone thinking card)
     var hideCompletedThinking: Bool = false
 
+    /// Whether to show typewriter animation for AI text messages
+    var shouldAnimate: Bool = false
+
     // Static colors to avoid recreation on each render
     private static let shadowColor = Color.black.opacity(0.1)
     private static let imageShadowColor = Color.black.opacity(0.15)
@@ -109,15 +112,20 @@ struct MessageBubbleView: View {
 
     private func aiMessage(text: String) -> some View {
         HStack {
-            Text(text)
-                .font(.subheadline)
-                .foregroundColor(.black)
-                .lineSpacing(3)
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white)
-                .cornerRadius(16)
-                .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
+            TypewriterText(
+                fullText: text,
+                messageId: message.id,
+                isAnimationEnabled: shouldAnimate,
+                onComplete: nil
+            )
+            .font(.subheadline)
+            .foregroundColor(.black)
+            .lineSpacing(3)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white)
+            .cornerRadius(16)
+            .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
 
             Spacer(minLength: 40)
         }

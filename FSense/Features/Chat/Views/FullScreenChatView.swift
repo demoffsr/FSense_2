@@ -98,7 +98,8 @@ struct FullScreenChatView: View {
                                 )
                             }
                             navigateToFlowerDetail = true
-                        }
+                        },
+                        shouldAnimate: viewModel.shouldAnimateMessage(message.id)
                     )
                     .id(message.id)
                 }
