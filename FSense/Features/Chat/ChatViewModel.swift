@@ -324,16 +324,25 @@ final class ChatViewModel: ObservableObject {
 
         thinkingTask = Task {
             await withTaskCancellationHandler {
-                try? await Task.sleep(nanoseconds: acknowledgementDelay)
+                // Step 1: Classify intent FIRST (before any UI response)
+                let context = buildChatContextV2()
+                let classification = try? await APIService.shared.classifyIntent(
+                    prompt: userQuery,
+                    context: context
+                )
+
                 guard !Task.isCancelled else { return }
 
-                let acknowledgement = generateAcknowledgement(for: userQuery, hasImage: image != nil)
-                let ackMessage = ChatMessage(content: .acknowledgement(acknowledgement), sender: .ai)
-                animatingMessageIds.insert(ackMessage.id)
-                messages.append(ackMessage)
-                phase = .acknowledgement
+                let intent = classification?.intent ?? "flower_request"
 
-                await startThinkingProcessWithAPI(for: userQuery, image: image)
+                // Step 2: Route based on intent
+                if intent == "off_topic" || intent == "clarification" {
+                    // Non-flower query: get text response directly (no acknowledgement)
+                    await handleNonFlowerQuery(userQuery, image: image, context: context)
+                } else {
+                    // Flower request: show acknowledgement + pipeline
+                    await handleFlowerRequest(userQuery, image: image, context: context)
+                }
             } onCancel: {
                 Task { @MainActor [weak self] in
                     self?.cleanupPartialState()
@@ -342,12 +351,65 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    /// Handle greetings, off-topic, clarification queries (no acknowledgement)
+    private func handleNonFlowerQuery(_ query: String, image: UIImage?, context: ChatContextV2) async {
+        // Show typing indicator while waiting for response
+        let typingMessage = ChatMessage(content: .typing, sender: .ai)
+        messages.append(typingMessage)
+        let typingMessageId = typingMessage.id
+
+        do {
+            let response = try await APIService.shared.sendMessage(
+                prompt: query,
+                context: context,
+                image: image
+            )
+
+            guard !Task.isCancelled else {
+                messages.removeAll { $0.id == typingMessageId }
+                return
+            }
+
+            // Remove typing indicator
+            messages.removeAll { $0.id == typingMessageId }
+
+            if let textMessage = response.textMessage {
+                await showTextResponse(textMessage)
+            } else {
+                await showError()
+            }
+        } catch {
+            // Remove typing indicator on error
+            messages.removeAll { $0.id == typingMessageId }
+            await showError()
+        }
+    }
+
+    /// Handle flower recommendation requests (show acknowledgement + thinking + pipeline)
+    private func handleFlowerRequest(_ query: String, image: UIImage?, context: ChatContextV2) async {
+        // Show acknowledgement
+        try? await Task.sleep(nanoseconds: acknowledgementDelay)
+        guard !Task.isCancelled else { return }
+
+        let acknowledgement = generateAcknowledgement(for: query, hasImage: image != nil)
+        let ackMessage = ChatMessage(content: .acknowledgement(acknowledgement), sender: .ai)
+        animatingMessageIds.insert(ackMessage.id)
+        messages.append(ackMessage)
+        phase = .acknowledgement
+        saveToHistory()
+
+        // Continue with thinking + API call
+        await startThinkingProcessWithAPI(for: query, image: image, context: context)
+    }
+
     private func cleanupPartialState() {
         messages.removeAll { message in
             switch message.content {
             case .thinking(let content) where !content.isComplete:
                 return true
             case .acknowledgement:
+                return true
+            case .typing:
                 return true
             default:
                 return false
@@ -359,45 +421,29 @@ final class ChatViewModel: ObservableObject {
         eventService.stop()
     }
 
-    private func startThinkingProcessWithAPI(for userQuery: String, image: UIImage? = nil) async {
-        // Build extended context with conversation history
-        let context = buildChatContextV2()
-
-        // Step 1: Quick classification to determine if progress bar should be shown
-        var shouldShowProgress = true
-        do {
-            let classification = try await APIService.shared.classifyIntent(
-                prompt: userQuery,
-                context: context
-            )
-            shouldShowProgress = classification.shouldShowProgress
-        } catch {
-            // On error, default to showing progress (conservative approach)
-            print("[ChatViewModel] Classification error: \(error.localizedDescription)")
-        }
+    private func startThinkingProcessWithAPI(for userQuery: String, image: UIImage? = nil, context: ChatContextV2? = nil) async {
+        // Use provided context or build new one
+        let chatContext = context ?? buildChatContextV2()
 
         guard !Task.isCancelled else { return }
 
-        // Step 2: Show thinking only for recommendations
-        var thinkingMessageId: UUID?
-        if shouldShowProgress {
-            let thinkingMessage = ChatMessage(
-                content: .thinking(ThinkingContent(steps: [], isExpanded: true, isComplete: false)),
-                sender: .ai
-            )
-            messages.append(thinkingMessage)
-            expandedThinkingCards.insert(thinkingMessage.id)
-            thinkingMessageId = thinkingMessage.id
-            phase = .thinking
-            eventService.start()
-        }
+        // Show thinking progress for flower recommendations
+        let thinkingMessage = ChatMessage(
+            content: .thinking(ThinkingContent(steps: [], isExpanded: true, isComplete: false)),
+            sender: .ai
+        )
+        messages.append(thinkingMessage)
+        expandedThinkingCards.insert(thinkingMessage.id)
+        let thinkingMessageId = thinkingMessage.id
+        phase = .thinking
+        eventService.start()
 
-        // Step 3: Main API call
+        // Main API call
         var response: ChatResponse?
         do {
             response = try await APIService.shared.sendMessage(
                 prompt: userQuery,
-                context: context,
+                context: chatContext,
                 image: image
             )
         } catch {
@@ -406,14 +452,12 @@ final class ChatViewModel: ObservableObject {
 
         guard !Task.isCancelled else { return }
 
-        // Step 4: Cleanup thinking state if shown
-        if let thinkingId = thinkingMessageId {
-            eventService.stop()
-            messages.removeAll { $0.id == thinkingId }
-            expandedThinkingCards.remove(thinkingId)
-        }
+        // Cleanup thinking state
+        eventService.stop()
+        messages.removeAll { $0.id == thinkingMessageId }
+        expandedThinkingCards.remove(thinkingMessageId)
 
-        // Step 5: Handle response
+        // Handle response
         if let response = response {
             switch response.type {
             case .recommendation:
@@ -580,37 +624,75 @@ final class ChatViewModel: ObservableObject {
         isInputEnabled = true
         phase = .idle
         attachedImage = nil
+        animatingMessageIds.removeAll()
+        expandedThinkingCards.removeAll()
     }
 
     // MARK: - Acknowledgement Generator
 
     private func generateAcknowledgement(for query: String, hasImage: Bool = false) -> String {
+        let isRussian = containsCyrillic(query)
+
         if hasImage {
-            if query.isEmpty {
-                return "I see you've shared a beautiful bouquet! Let me identify the flowers for you."
+            if isRussian {
+                return query.isEmpty
+                    ? "Вижу, вы поделились красивым букетом! Дайте мне определить цветы для вас."
+                    : "Красивый букет! Дайте мне рассмотреть его внимательнее."
             } else {
-                return "Thanks for sharing that image! Let me analyze the flowers and find more information."
+                return query.isEmpty
+                    ? "I see you've shared a beautiful bouquet! Let me identify the flowers for you."
+                    : "Thanks for sharing that image! Let me analyze the flowers and find more information."
             }
         }
 
-        let acknowledgements = [
-            "That's a beautiful thought. Let me find something special.",
-            "I understand. Let me think about the perfect choice for you.",
-            "What a meaningful gesture. Give me a moment to consider this carefully.",
-            "That's lovely. Let me explore some options that would fit perfectly.",
-            "I can feel the care in your words. Let me find something meaningful."
-        ]
+        let queryLower = query.lowercased()
 
-        if query.lowercased().contains("birthday") {
+        // Russian context-specific acknowledgements
+        if isRussian {
+            if queryLower.contains("день рождения") || queryLower.contains("днюху") {
+                return "День рождения! Дайте подумать о чём-то, что передаст радость этого праздника."
+            } else if queryLower.contains("годовщин") {
+                return "Годовщина — это особенный момент. Дайте найти что-то, что почтит ваш совместный путь."
+            } else if queryLower.contains("извин") || queryLower.contains("прости") {
+                return "Понимаю, это важно. Дайте подумать о цветах, которые говорят от сердца."
+            } else if queryLower.contains("люб") || queryLower.contains("романтич") {
+                return "Романтика заслуживает чего-то особенного. Дайте найти идеальное выражение чувств."
+            }
+
+            let russianAcknowledgements = [
+                "Красивая мысль. Позвольте подобрать что-то особенное.",
+                "Понимаю. Дайте мне подумать об идеальном выборе для вас.",
+                "Какой значимый жест. Дайте мне момент обдумать это.",
+                "Прекрасно. Позвольте найти что-то, что подойдёт идеально."
+            ]
+            return russianAcknowledgements.randomElement() ?? russianAcknowledgements[0]
+        }
+
+        // English context-specific acknowledgements
+        if queryLower.contains("birthday") {
             return "A birthday gift! Let me think about something that captures the joy of this celebration."
-        } else if query.lowercased().contains("anniversary") {
+        } else if queryLower.contains("anniversary") {
             return "An anniversary is so special. Let me find something that honors your journey together."
-        } else if query.lowercased().contains("sorry") || query.lowercased().contains("apolog") {
+        } else if queryLower.contains("sorry") || queryLower.contains("apolog") {
             return "I understand this is important. Let me think about flowers that speak from the heart."
-        } else if query.lowercased().contains("love") || query.lowercased().contains("romantic") {
+        } else if queryLower.contains("love") || queryLower.contains("romantic") {
             return "Romance deserves something truly special. Let me consider the perfect expression."
         }
 
-        return acknowledgements.randomElement() ?? acknowledgements[0]
+        let englishAcknowledgements = [
+            "That's a beautiful thought. Let me find something special.",
+            "I understand. Let me think about the perfect choice for you.",
+            "What a meaningful gesture. Give me a moment to consider this carefully.",
+            "That's lovely. Let me explore some options that would fit perfectly."
+        ]
+        return englishAcknowledgements.randomElement() ?? englishAcknowledgements[0]
+    }
+
+    /// Check if string contains Cyrillic characters (Russian/Ukrainian/etc)
+    private func containsCyrillic(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            // Cyrillic range: U+0400 to U+04FF
+            scalar.value >= 0x0400 && scalar.value <= 0x04FF
+        }
     }
 }
