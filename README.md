@@ -2,57 +2,59 @@
 
 > AI-powered flower recommendation system that understands context, emotion, and meaning
 
-**Version 0.13** • Built with SwiftUI + Python
+**Version 0.14** • Built with SwiftUI + Python
 An intelligent assistant that helps you find the perfect flower for any occasion.
 
 ---
 
-## ✨ What's New in v0.13
+## ✨ What's New in v0.14
 
-### 💾 Persistent Chat Sessions
-- **Auto-save conversations** with timestamp and preview
-- **Seamless session loading** when reopening chat
-- Smart session management with ChatHistoryManager
-- Never lose your conversation context
+### 📸 Liquid Glass Scanner UI
+The Scan feature gets a complete visual overhaul with iOS 26+ Liquid Glass design:
 
-### 🔍 In-Chat Search
-- **Full-text search** across all messages in current session
-- **Live highlighting** with smooth scroll to matches
-- Keyboard-first UX with instant focus
-- Clean search bar that slides from top
+- **Glass Circular Buttons** — Large 56×56 frosted buttons for close, help, gallery, and info
+- **GlassModeToggle** — Animated segmented control switching between Single Flower and Bouquet modes
+- **Glowing Scan Frame** — Corner brackets with subtle pulsing glow effect
+- **Glass Analyzing Overlay** — Frosted spinner with status pill while identifying flowers
+- **Glass Result Card** — Bottom sheet with glass background, confidence badges, and action buttons
+- **Glass Error States** — Beautiful error modals with glass containers
 
-### 🗄️ Chat Archive
-- **Archive completed conversations** from menu
-- Dedicated archive view in Profile tab
-- **Success toast notification** with auto-dismiss
-- Keep your active chats organized
+All components gracefully fallback to `.ultraThinMaterial` on iOS 15-25.
 
-### 💎 Unified Glass Effect UI
-- **Single frosted background** for all toolbar buttons
-- Replaced double glass backgrounds with `.ultraThinMaterial`
-- Consistent design language: New Chat, Search, Menu buttons
-- Clean white stroke overlays for depth
+### 🎯 New Scanner Layout
+```
+┌─────────────────────────────────────┐
+│  (✕)                          (?)   │  ← Glass circles, 56×56
+│                                     │
+│      ┌─────────────────────┐        │
+│      │    ✨ Glow Frame ✨   │        │
+│      │                     │        │
+│      └─────────────────────┘        │
+│                                     │
+│       [Single] [Bouquet]            │  ← Glass segmented control
+│              ⚡                      │  ← Flash toggle
+│                                     │
+│   (📷)        (○)        (ℹ)       │  ← Gallery, Capture, Info
+└─────────────────────────────────────┘
+```
 
-### ⬇️ Smart Scroll-to-Bottom Button
-- **Shows when scrolling up** from bottom
-- **Hides when reaching bottom** manually or via tap
-- Stays visible until user action (no flickering)
-- Matches toolbar button style with frosted glass
-
-### ⌨️ Typewriter Text Animation
-- Smooth character-by-character reveal for AI responses
-- Natural reading pace with configurable speed
-- SwiftUI-native implementation with `TimelineView`
-
-### 🎨 Visual Refinements
-- **Unified background color** (Color(white: 0.97)) for chat and input areas
-- Removed unused namespace properties for cleaner code
-- Enhanced button foreground styles (`.foregroundStyle(.black)`)
-- Better visual hierarchy throughout chat interface
+### 🔧 Technical Improvements
+- **GlassCircleButton** — Reusable component for all glass circular buttons
+- **GlassButtonStyle** — Custom button style with glass effect and press animation
+- **CaptureButtonStyle** — Scale animation for capture button feedback
+- **iOS 26 availability checks** — `#available(iOS 26, *)` with fallbacks throughout
 
 ---
 
 ## 🎯 Features
+
+### 📸 Flower Scanner (NEW!)
+- **Single Flower Mode** — Point and identify any flower
+- **Bouquet Mode** — Analyze multiple flowers in one shot
+- **Gallery Import** — Scan photos from your library
+- **Glass UI** — Premium iOS 26 Liquid Glass design
+- **Confidence Scoring** — See identification accuracy
+- **Quick Results** — Fast preview before full details
 
 ### 🤖 AI Chat Assistant
 - Natural conversation flow with context awareness
@@ -67,7 +69,7 @@ An intelligent assistant that helps you find the perfect flower for any occasion
 - Quick access to recent and archived chats
 - Session metadata (timestamp, message count)
 
-### 📸 Visual Recognition
+### 📷 Visual Recognition
 - Attach photos from library or camera
 - Analyze existing bouquets with **GPT-4 Vision**
 - Visual context for better recommendations
@@ -86,7 +88,7 @@ An intelligent assistant that helps you find the perfect flower for any occasion
 
 ### 🎨 Native iOS Experience
 - SwiftUI with iOS 26+ optimizations
-- **Unified glass design language**
+- **Liquid Glass design language**
 - Haptic feedback
 - Dark mode ready
 - Native sheet presentations
@@ -103,7 +105,15 @@ FSense/
 │   ├── Home/                 # Collapsed chat bar with glass UI
 │   ├── Chat/                 # Full-screen chat with search
 │   ├── FlowerCard/           # Recommendation details
-│   ├── Scan/                 # Camera & image recognition
+│   ├── Scan/                 # 📸 Camera & Liquid Glass UI
+│   │   ├── Views/
+│   │   │   ├── GlassModeToggle.swift
+│   │   │   ├── CameraControlsView.swift
+│   │   │   ├── ScanFrameOverlay.swift
+│   │   │   ├── AnalyzingOverlay.swift
+│   │   │   └── QuickInfoCardView.swift
+│   │   ├── ScanView.swift
+│   │   └── ScanViewModel.swift
 │   └── Profile/              # History, archive, settings
 ├── Services/
 │   ├── ChatHistoryManager    # Session persistence
@@ -152,13 +162,14 @@ User Input → PipelineContext → FIA → EIA → RIL → FMRA → CIA →
 
 ### iOS Development
 1. Open `FSense_2.xcodeproj` in Xcode
-2. Select your device/simulator (iOS 26+)
+2. Select your device/simulator (iOS 26+ for full Liquid Glass)
 3. Build & Run (`Cmd+R`)
 
 **Instant Features:**
 - Keyboard pre-warmed on launch
 - Chat opens in <50ms
 - Session auto-loads if returning to conversation
+- Scanner with beautiful glass UI
 
 ### Backend Development
 ```bash
@@ -180,37 +191,38 @@ python -m backend.pipeline.runner "I want to apologize to my wife" --pretty
 
 ## 📊 Performance Metrics
 
-| Metric | v0.1.2 | v0.13 | Improvement |
-|--------|--------|-------|-------------|
+| Metric | v0.13 | v0.14 | Status |
+|--------|-------|-------|--------|
 | Chat Open Delay | <50ms | <50ms | ✅ Maintained |
-| Session Persistence | ❌ None | ✅ Full | 🎉 New |
-| In-Chat Search | ❌ None | ✅ Live | 🎉 New |
-| UI Consistency | ⚠️ Mixed | ✅ Unified | 📈 Better |
-| Scroll Button UX | ⚠️ Glitchy | ✅ Smooth | 📈 Fixed |
-| Chat Archive | ❌ None | ✅ Full | 🎉 New |
+| Scanner UI | ⚠️ Basic | ✅ Liquid Glass | 🎉 Redesigned |
+| iOS 26 Features | ❌ None | ✅ Full | 🎉 New |
+| Glass Components | 3 | 10+ | 📈 Expanded |
+| Fallback Support | — | iOS 15-25 | ✅ Complete |
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **SwiftUI** - Declarative UI framework (iOS 26+)
-- **Combine** - Reactive state management
-- **Swift Concurrency** - Async/await, actors
-- **UIKit** - Keyboard pre-warming, camera integration
+- **SwiftUI** — Declarative UI framework (iOS 26+)
+- **Combine** — Reactive state management
+- **Swift Concurrency** — Async/await, actors
+- **AVFoundation** — Camera capture
+- **UIKit** — Keyboard pre-warming, camera integration
 
 ### Backend
-- **Python 3.11+** - Core runtime
-- **OpenAI GPT-4** - LLM for agent pipeline
-- **GPT-4 Vision** - Bouquet image analysis
-- **Pydantic** - Schema validation & type safety
-- **pytest** - Testing framework
+- **Python 3.11+** — Core runtime
+- **OpenAI GPT-4** — LLM for agent pipeline
+- **GPT-4 Vision** — Image analysis
+- **Pydantic** — Schema validation & type safety
+- **pytest** — Testing framework
 
 ### Design System
-- **Glass Morphism** - `.ultraThinMaterial` with white stroke overlays
-- **SF Symbols** - Native iOS icons
-- **Dynamic Type** - Accessibility-ready typography
-- **Haptics** - Tactile feedback for interactions
+- **Liquid Glass** — iOS 26 `.glassEffect()` API
+- **Glass Morphism** — `.ultraThinMaterial` fallback
+- **SF Symbols** — Native iOS icons
+- **Dynamic Type** — Accessibility-ready typography
+- **Haptics** — Tactile feedback for interactions
 
 ---
 
@@ -244,15 +256,35 @@ PYTHONPATH=. pytest backend/tests/ --cov=backend --cov-report=html
 
 ## 🎨 Design Philosophy
 
-1. **Instant Feedback** - No loading spinners, progressive enhancement
-2. **Unified Glass Language** - Consistent frosted UI across all controls
-3. **Context Preservation** - Sessions persist, search highlights, archive organizes
-4. **Native Feel** - Respect iOS patterns (sheets, toolbars, haptics)
-5. **Accessibility First** - Dynamic Type, VoiceOver, reduce motion
+1. **Liquid Glass First** — Premium iOS 26 effects with graceful degradation
+2. **Instant Feedback** — No loading spinners, progressive enhancement
+3. **Unified Design Language** — Consistent frosted UI across all controls
+4. **Context Preservation** — Sessions persist, search highlights, archive organizes
+5. **Native Feel** — Respect iOS patterns (sheets, toolbars, haptics)
+6. **Accessibility First** — Dynamic Type, VoiceOver, reduce motion
 
 ---
 
 ## 🔍 Feature Deep Dive
+
+### Liquid Glass Scanner
+
+```swift
+// Glass button pattern used throughout
+if #available(iOS 26, *) {
+    content
+        .glassEffect(.regular.interactive(), in: .circle)
+} else {
+    content
+        .background(.ultraThinMaterial, in: Circle())
+}
+```
+
+**Components:**
+- `GlassModeToggle` — Segmented control with `matchedGeometryEffect`
+- `GlassCircleButton` — Reusable 44/56px glass buttons
+- `GlassButtonStyle` — Custom button style for action buttons
+- `CaptureButtonStyle` — Scale animation on press
 
 ### Chat Session Persistence
 ```swift
@@ -265,12 +297,6 @@ if let session = controller.sessionToLoad {
 }
 ```
 
-Sessions include:
-- Message history (user + AI)
-- Attached images
-- Timestamp metadata
-- Preview text (first user message)
-
 ### In-Chat Search
 - **Trigger:** Tap search icon in toolbar
 - **Focus:** Auto-focus search field with keyboard
@@ -278,27 +304,15 @@ Sessions include:
 - **Scroll:** Smooth animation to first match
 - **Exit:** Clear highlights and return to input
 
-### Archive System
-```swift
-// Archive current session
-ChatArchiveService.shared.archiveSession(session)
-
-// Remove from active history
-ChatHistoryManager.shared.deleteSession(session)
-
-// View archives in Profile tab
-ChatArchiveView() // Standalone list view
-```
-
 ---
 
 ## 🔮 Roadmap
 
-### v0.14 (Next Sprint)
-- [ ] Search across **all sessions** (not just current)
-- [ ] Export chat as PDF/text
-- [ ] Session tags and categories
-- [ ] Pin important conversations
+### v0.15 (Next Sprint)
+- [ ] Scan history with thumbnails
+- [ ] Flower detail cards from scan results
+- [ ] Share scan results
+- [ ] Scan-to-chat integration
 
 ### v0.2.0
 - [ ] Multi-language support (localization)
@@ -316,7 +330,7 @@ ChatArchiveView() // Standalone list view
 
 ## 📄 License
 
-Proprietary - All rights reserved
+Proprietary — All rights reserved
 
 ---
 
@@ -328,9 +342,9 @@ This is a private project. For questions or collaboration inquiries, please cont
 
 ## 🙏 Acknowledgments
 
-- **OpenAI GPT-4** - Powering the agent pipeline
-- **SwiftUI** - Making native iOS development delightful
-- **Glass Morphism** - Modern UI design trend
+- **OpenAI GPT-4** — Powering the agent pipeline
+- **SwiftUI** — Making native iOS development delightful
+- **iOS 26 Liquid Glass** — Apple's beautiful new design system
 
 ---
 
