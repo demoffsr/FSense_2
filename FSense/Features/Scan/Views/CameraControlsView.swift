@@ -1,8 +1,8 @@
 import SwiftUI
 import PhotosUI
 
-/// Camera controls overlay with Liquid Glass design
-/// Features glass circular buttons, mode toggle, and capture controls
+/// Camera controls overlay with Liquid Glass effects
+/// Layout matches Figma specs: top bar (62px), bottom sheet (238px)
 struct CameraControlsView: View {
     let isFlashOn: Bool
     @Binding var scanMode: ScanMode
@@ -10,188 +10,300 @@ struct CameraControlsView: View {
     let onToggleFlash: () -> Void
     let onGalleryImage: (UIImage) -> Void
     let onClose: () -> Void
-    let onHelp: () -> Void
 
     @State private var selectedItem: PhotosPickerItem?
+    @State private var isCapturing = false
+
+    // Figma specs
+    private let topButtonSize: CGFloat = 44
+    private let galleryButtonSize: CGFloat = 50
+    private let captureOuterSize: CGFloat = 66
+    private let captureInnerSize: CGFloat = 56
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Top controls
-            topControls
-                .padding(.top, 16)
+        GeometryReader { geometry in
+            ZStack(alignment: .bottom) {
+                // Top bar
+                VStack {
+                    topBar
+                        .padding(.top, geometry.safeAreaInsets.top + 16)
+                        .padding(.horizontal, 16)
+                    Spacer()
+                }
 
-            Spacer()
-
-            // Mode toggle
-            GlassModeToggle(mode: $scanMode)
-                .padding(.bottom, 24)
-
-            // Flash toggle (centered, small)
-            flashButton
-                .padding(.bottom, 20)
-
-            // Bottom controls
-            bottomControls
-                .padding(.bottom, 32)
-        }
-        .padding(.horizontal, 24)
-    }
-
-    // MARK: - Top Controls
-
-    private var topControls: some View {
-        HStack {
-            // Close button (large glass circle)
-            GlassCircleButton(
-                icon: "xmark",
-                size: 56,
-                action: onClose
-            )
-
-            Spacer()
-
-            // Help button (large glass circle)
-            GlassCircleButton(
-                icon: "questionmark",
-                size: 56,
-                action: onHelp
-            )
+                // Bottom sheet with glass effect
+                bottomSheet(safeArea: geometry.safeAreaInsets.bottom)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    // MARK: - Flash Button
+    // MARK: - Top Bar
 
-    private var flashButton: some View {
-        GlassCircleButton(
-            icon: isFlashOn ? "bolt.fill" : "bolt.slash",
-            size: 44,
-            iconColor: isFlashOn ? .yellow : .primary,
-            action: onToggleFlash
-        )
+    @ViewBuilder
+    private var topBar: some View {
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 16) {
+                HStack {
+                    Button(action: onClose) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: topButtonSize, height: topButtonSize)
+                            .glassEffect(
+                                .clear.tint(.black.opacity(0.12)).interactive(),
+                                in: .circle
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button(action: onToggleFlash) {
+                        Image(systemName: isFlashOn ? "bolt.fill" : "bolt")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(isFlashOn ? .yellow : .white)
+                            .frame(width: topButtonSize, height: topButtonSize)
+                            .glassEffect(
+                                .clear.tint(.black.opacity(0.12)).interactive(),
+                                in: .circle
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } else {
+            HStack {
+                Button(action: onClose) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: topButtonSize, height: topButtonSize)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button(action: onToggleFlash) {
+                    Image(systemName: isFlashOn ? "bolt.fill" : "bolt")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(isFlashOn ? .yellow : .white)
+                        .frame(width: topButtonSize, height: topButtonSize)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: - Bottom Sheet
+
+    @ViewBuilder
+    private func bottomSheet(safeArea: CGFloat) -> some View {
+        if #available(iOS 26, *) {
+            VStack(spacing: 24) {
+                // Mode toggle
+                GlassModeToggle(mode: $scanMode)
+                    .padding(.top, 24)
+
+                // Bottom controls
+                bottomControls
+                    .padding(.bottom, safeArea + 24)
+            }
+            .frame(maxWidth: .infinity)
+            .background {
+                // Glass background that extends beyond screen edges to hide borders
+                // Screen itself clips the sides, preserving corner radius
+                Rectangle()
+                    .fill(.clear)
+                    .glassEffect(
+                        .clear.tint(.black.opacity(0.06)).interactive(),
+                        in: UnevenRoundedRectangle(
+                            topLeadingRadius: 34,
+                            bottomLeadingRadius: 0,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 34
+                        )
+                    )
+                    .padding(.horizontal, -20) // Extend beyond sides - screen clips
+                    .padding(.bottom, -100) // Extend below visible area
+            }
+            // No .clipped() - screen naturally clips sides while preserving corner radius
+        } else {
+            VStack(spacing: 24) {
+                GlassModeToggle(mode: $scanMode)
+                    .padding(.top, 24)
+
+                bottomControls
+                    .padding(.bottom, safeArea + 24)
+            }
+            .frame(maxWidth: .infinity)
+            .background(
+                .ultraThinMaterial,
+                in: UnevenRoundedRectangle(
+                    topLeadingRadius: 34,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 34
+                )
+            )
+        }
     }
 
     // MARK: - Bottom Controls
 
     private var bottomControls: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Gallery picker (glass circle)
+            // Gallery button - left aligned
             galleryPicker
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .center)
 
-            // Capture button (large white with glass ring)
+            // Capture button - center
             captureButton
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .center)
 
-            // Info button (glass circle)
-            GlassCircleButton(
-                icon: "info",
-                size: 56,
-                action: onHelp
-            )
-            .frame(maxWidth: .infinity)
+            // Placeholder for symmetry (hidden)
+            Color.clear
+                .frame(width: galleryButtonSize, height: galleryButtonSize)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
+        .padding(.horizontal, 32)
     }
 
     // MARK: - Gallery Picker
 
     @ViewBuilder
     private var galleryPicker: some View {
-        PhotosPicker(selection: $selectedItem, matching: .images) {
-            if #available(iOS 26, *) {
-                Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 56 * 0.38, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .frame(width: 56, height: 56)
-                    .contentShape(Circle())
-                    .glassEffect(.regular.interactive(), in: .circle)
-            } else {
-                Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 56 * 0.38, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .frame(width: 56, height: 56)
+        if #available(iOS 26, *) {
+            PhotosPicker(selection: $selectedItem, matching: .images) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: galleryButtonSize, height: galleryButtonSize)
+                    .glassEffect(
+                        .regular.tint(.white.opacity(0.1)).interactive(),
+                        in: .circle
+                    )
+            }
+            .buttonStyle(.plain)
+            .onChange(of: selectedItem) { _, newItem in
+                loadImage(from: newItem)
+            }
+        } else {
+            PhotosPicker(selection: $selectedItem, matching: .images) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: galleryButtonSize, height: galleryButtonSize)
                     .background(.ultraThinMaterial, in: Circle())
             }
+            .buttonStyle(.plain)
+            .onChange(of: selectedItem) { _, newItem in
+                loadImage(from: newItem)
+            }
         }
-        .onChange(of: selectedItem) { _, newItem in
-            Task {
-                if let data = try? await newItem?.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    onGalleryImage(image)
-                }
+    }
+
+    private func loadImage(from item: PhotosPickerItem?) {
+        Task {
+            if let data = try? await item?.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                onGalleryImage(image)
             }
         }
     }
 
     // MARK: - Capture Button
 
+    @ViewBuilder
     private var captureButton: some View {
-        Button(action: onCapture) {
-            ZStack {
-                // Outer glass ring
-                if #available(iOS 26, *) {
+        if #available(iOS 26, *) {
+            Button {
+                triggerCapture()
+            } label: {
+                ZStack {
+                    // Outer glass ring
                     Circle()
                         .fill(.clear)
-                        .frame(width: 80, height: 80)
-                        .glassEffect(.regular, in: .circle)
-                } else {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 80, height: 80)
-                }
+                        .frame(width: captureOuterSize, height: captureOuterSize)
+                        .glassEffect(
+                            .regular.tint(.white.opacity(0.15)).interactive(),
+                            in: .circle
+                        )
 
-                // Inner white capture circle
-                Circle()
-                    .fill(.white)
-                    .frame(width: 64, height: 64)
+                    // Inner white circle
+                    Circle()
+                        .fill(.white)
+                        .frame(width: captureInnerSize, height: captureInnerSize)
+                        .scaleEffect(isCapturing ? 0.88 : 1.0)
+                }
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button {
+                triggerCapture()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(.clear)
+                        .frame(width: captureOuterSize, height: captureOuterSize)
+                        .background(.ultraThinMaterial, in: Circle())
+
+                    Circle()
+                        .fill(.white)
+                        .frame(width: captureInnerSize, height: captureInnerSize)
+                        .scaleEffect(isCapturing ? 0.88 : 1.0)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func triggerCapture() {
+        withAnimation(.easeInOut(duration: 0.1)) {
+            isCapturing = true
+        }
+        onCapture()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isCapturing = false
             }
         }
-        .buttonStyle(CaptureButtonStyle())
     }
 }
 
-// MARK: - Glass Circle Button
+// MARK: - Glass Circle Button (for other views)
 
-/// Reusable glass circular button for camera controls
 struct GlassCircleButton: View {
     let icon: String
     let size: CGFloat
-    var iconColor: Color = .primary
+    var iconColor: Color = .white
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            buttonContent
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var buttonContent: some View {
         if #available(iOS 26, *) {
-            Image(systemName: icon)
-                .font(.system(size: size * 0.36, weight: .medium))
-                .foregroundStyle(iconColor)
-                .frame(width: size, height: size)
-                .contentShape(Circle())
-                .glassEffect(.regular.interactive(), in: .circle)
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: size * 0.4, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .frame(width: size, height: size)
+                    .glassEffect(
+                        .clear.tint(.black.opacity(0.12)).interactive(),
+                        in: .circle
+                    )
+            }
+            .buttonStyle(.plain)
         } else {
-            Image(systemName: icon)
-                .font(.system(size: size * 0.36, weight: .medium))
-                .foregroundStyle(iconColor)
-                .frame(width: size, height: size)
-                .background(.ultraThinMaterial, in: Circle())
+            Button(action: action) {
+                Image(systemName: icon)
+                    .font(.system(size: size * 0.4, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .frame(width: size, height: size)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
         }
-    }
-}
-
-// MARK: - Capture Button Style
-
-/// Custom button style for capture button with scale animation
-struct CaptureButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
@@ -199,16 +311,24 @@ struct CaptureButtonStyle: ButtonStyle {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        LinearGradient(
+            colors: [
+                Color(red: 0, green: 0.11, blue: 0.92),
+                Color(red: 0.55, green: 0, blue: 0.92),
+                Color(red: 0.91, green: 0, blue: 0.89)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
 
         CameraControlsView(
             isFlashOn: false,
-            scanMode: .constant(.single),
+            scanMode: .constant(.flower),
             onCapture: {},
             onToggleFlash: {},
             onGalleryImage: { _ in },
-            onClose: {},
-            onHelp: {}
+            onClose: {}
         )
     }
 }

@@ -44,9 +44,14 @@ struct ScanView: View {
         }
         .ignoresSafeArea()
         .statusBarHidden(viewModel.phase.showsCamera)
-        .task {
-            await cameraManager.setupSession()
-            cameraManager.startSession()
+        .onAppear {
+            // Start camera setup immediately on appear (non-blocking)
+            Task.detached(priority: .userInitiated) {
+                await cameraManager.setupSession()
+                await MainActor.run {
+                    cameraManager.startSession()
+                }
+            }
         }
         .onDisappear {
             cameraManager.stopSession()
@@ -85,8 +90,7 @@ struct ScanView: View {
                 onCapture: capturePhoto,
                 onToggleFlash: { viewModel.send(.toggleFlash) },
                 onGalleryImage: { viewModel.send(.imageFromGallery($0)) },
-                onClose: { dismiss() },
-                onHelp: { showingHelp = true }
+                onClose: { dismiss() }
             )
         }
     }
@@ -241,7 +245,7 @@ struct ScanView: View {
             VStack(alignment: .leading, spacing: 24) {
                 helpItem(
                     icon: "camera",
-                    title: "Single Flower",
+                    title: "Flower Mode",
                     description: "Point at a single flower to identify it. Works best with clear, well-lit subjects."
                 )
 

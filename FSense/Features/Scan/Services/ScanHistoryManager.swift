@@ -37,7 +37,7 @@ final class ScanHistoryManager: ObservableObject {
             color: result.primaryFlower.color,
             imagePath: saveImage(image),
             scannedAt: Date(),
-            scanMode: ScanMode(rawValue: result.scanMode) ?? .single,
+            scanMode: ScanMode(rawValue: result.scanMode) ?? .flower,
             requestId: result.requestId,
             additionalFlowerCount: result.additionalFlowers.count
         )

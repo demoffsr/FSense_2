@@ -9,7 +9,7 @@ struct ScanCTAView: View {
         } label: {
             content
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ScanCTAButtonStyle())
         .fullScreenCover(isPresented: $showingScanView) {
             ScanView()
         }
@@ -54,6 +54,16 @@ struct ScanCTAView: View {
             .clear.tint(.black.opacity(0.08)).interactive(),
             in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
+    }
+}
+
+// Custom button style for reliable tap detection
+struct ScanCTAButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 

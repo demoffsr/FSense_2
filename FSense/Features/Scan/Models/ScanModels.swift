@@ -4,20 +4,15 @@ import UIKit
 // MARK: - Scan Mode
 
 enum ScanMode: String, Codable, CaseIterable {
-    case single
+    case flower
     case bouquet
+    case plant
 
     var displayName: String {
         switch self {
-        case .single: return "Single Flower"
+        case .flower: return "Flower"
         case .bouquet: return "Bouquet"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .single: return "camera"
-        case .bouquet: return "square.stack.3d.up"
+        case .plant: return "Plant"
         }
     }
 }

@@ -1,110 +1,118 @@
 import SwiftUI
 
-/// Animated scan frame overlay with corner brackets and Liquid Glass aesthetic
+/// Modern scan frame overlay matching Figma specs
+/// 290×358px frame with corner brackets inside
 struct ScanFrameOverlay: View {
     @State private var isAnimating = false
-    @State private var glowOpacity: Double = 0.3
+    @State private var pulseOpacity: Double = 0.5
 
-    let frameSize: CGFloat
-    let cornerLength: CGFloat
-    let lineWidth: CGFloat
-    let color: Color
+    // Figma specs
+    let frameWidth: CGFloat
+    let frameHeight: CGFloat
+    let cornerRadius: CGFloat = 24
+    let borderWidth: CGFloat = 2
 
     init(
-        frameSize: CGFloat = 280,
-        cornerLength: CGFloat = 40,
-        lineWidth: CGFloat = 4,
-        color: Color = .white
+        frameWidth: CGFloat = 290,
+        frameHeight: CGFloat = 358
     ) {
-        self.frameSize = frameSize
-        self.cornerLength = cornerLength
-        self.lineWidth = lineWidth
-        self.color = color
+        self.frameWidth = frameWidth
+        self.frameHeight = frameHeight
     }
 
     var body: some View {
         ZStack {
-            // Subtle glow effect behind brackets
-            glowLayer
+            // Main frame with background and border
+            frameBackground
 
-            // Four corners
-            ForEach(0..<4, id: \.self) { index in
-                CornerBracket(
-                    cornerLength: cornerLength,
-                    lineWidth: lineWidth,
-                    color: color
-                )
-                .rotationEffect(.degrees(Double(index) * 90))
-            }
+            // Corner brackets inside the frame
+            cornerBrackets
         }
-        .frame(width: frameSize, height: frameSize)
-        .scaleEffect(isAnimating ? 1.02 : 1.0)
-        .animation(
-            Animation.easeInOut(duration: 1.5).repeatForever(autoreverses: true),
-            value: isAnimating
-        )
+        .frame(width: frameWidth, height: frameHeight)
         .onAppear {
-            isAnimating = true
             withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                glowOpacity = 0.6
+                pulseOpacity = 0.8
+                isAnimating = true
             }
         }
     }
 
-    // MARK: - Glow Layer
+    // MARK: - Frame Background
 
-    private var glowLayer: some View {
-        RoundedRectangle(cornerRadius: 24)
-            .stroke(
-                LinearGradient(
-                    colors: [
-                        color.opacity(glowOpacity * 0.5),
-                        color.opacity(glowOpacity * 0.2),
-                        color.opacity(glowOpacity * 0.5)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 2
+    private var frameBackground: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(.white.opacity(0.1)) // rgba(255,255,255,0.1)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        .white.opacity(pulseOpacity * 0.625), // Animates between 0.31-0.5 (targeting ~0.5)
+                        lineWidth: borderWidth
+                    )
             )
-            .blur(radius: 8)
-            .frame(width: frameSize - 20, height: frameSize - 20)
+            .scaleEffect(isAnimating ? 1.003 : 1.0)
+    }
+
+    // MARK: - Corner Brackets
+
+    private var cornerBrackets: some View {
+        GeometryReader { geo in
+            let bracketSize: CGFloat = 40 // Bracket arm length
+            let offset: CGFloat = 16 // Distance from frame edge
+
+            // Top-left
+            CornerBracket()
+                .frame(width: bracketSize, height: bracketSize)
+                .position(x: offset + bracketSize/2, y: offset + bracketSize/2)
+
+            // Top-right
+            CornerBracket()
+                .rotationEffect(.degrees(90))
+                .frame(width: bracketSize, height: bracketSize)
+                .position(x: geo.size.width - offset - bracketSize/2, y: offset + bracketSize/2)
+
+            // Bottom-right
+            CornerBracket()
+                .rotationEffect(.degrees(180))
+                .frame(width: bracketSize, height: bracketSize)
+                .position(x: geo.size.width - offset - bracketSize/2, y: geo.size.height - offset - bracketSize/2)
+
+            // Bottom-left
+            CornerBracket()
+                .rotationEffect(.degrees(270))
+                .frame(width: bracketSize, height: bracketSize)
+                .position(x: offset + bracketSize/2, y: geo.size.height - offset - bracketSize/2)
+        }
     }
 }
 
-/// Single corner bracket shape with enhanced glass styling
+// MARK: - Corner Bracket
+
 struct CornerBracket: View {
-    let cornerLength: CGFloat
-    let lineWidth: CGFloat
-    let color: Color
-
     var body: some View {
-        ZStack {
-            // Main bracket
-            bracketPath
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+        Canvas { context, size in
+            let lineWidth: CGFloat = 2
+            let cornerRadius: CGFloat = 6
 
-            // Subtle inner glow
-            bracketPath
-                .stroke(
-                    color.opacity(0.3),
-                    style: StrokeStyle(lineWidth: lineWidth + 4, lineCap: .round)
-                )
-                .blur(radius: 4)
-        }
-        .frame(width: cornerLength, height: cornerLength)
-        .offset(x: -cornerLength, y: -cornerLength)
-    }
+            var path = Path()
 
-    private var bracketPath: Path {
-        Path { path in
-            // Horizontal line
-            path.move(to: CGPoint(x: 0, y: lineWidth / 2))
-            path.addLine(to: CGPoint(x: cornerLength, y: lineWidth / 2))
+            // Vertical line (going down from top-left corner)
+            path.move(to: CGPoint(x: lineWidth/2, y: size.height))
+            path.addLine(to: CGPoint(x: lineWidth/2, y: cornerRadius))
 
-            // Vertical line
-            path.move(to: CGPoint(x: lineWidth / 2, y: 0))
-            path.addLine(to: CGPoint(x: lineWidth / 2, y: cornerLength))
+            // Curved corner
+            path.addQuadCurve(
+                to: CGPoint(x: cornerRadius, y: lineWidth/2),
+                control: CGPoint(x: lineWidth/2, y: lineWidth/2)
+            )
+
+            // Horizontal line (going right)
+            path.addLine(to: CGPoint(x: size.width, y: lineWidth/2))
+
+            context.stroke(
+                path,
+                with: .color(.white),
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+            )
         }
     }
 }
@@ -113,7 +121,13 @@ struct CornerBracket: View {
 
 #Preview {
     ZStack {
-        Color.black.ignoresSafeArea()
+        LinearGradient(
+            colors: [.black, .gray.opacity(0.3)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+
         ScanFrameOverlay()
     }
 }

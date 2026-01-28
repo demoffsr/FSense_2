@@ -24,7 +24,7 @@ final class ScanViewModel: ObservableObject {
             handleImageFromGallery(image)
 
         case .toggleScanMode:
-            state.scanMode = state.scanMode == .single ? .bouquet : .single
+            state.scanMode = state.scanMode == .flower ? .bouquet : .flower
 
         case .toggleFlash:
             state.isFlashOn.toggle()

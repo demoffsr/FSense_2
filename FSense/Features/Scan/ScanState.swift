@@ -34,7 +34,7 @@ enum ScanPhase: Equatable {
 
 struct ScanState: Equatable {
     var phase: ScanPhase = .camera
-    var scanMode: ScanMode = .single
+    var scanMode: ScanMode = .flower
     var capturedImage: UIImage?
     var quickResult: QuickScanResult?
     var detailResult: ScanDetailResult?
