@@ -76,18 +76,14 @@ struct FlowerCardView: View {
     
     private var heroSection: some View {
         ZStack(alignment: .bottom) {
-            if let imageAsset = viewModel.flower?.imageAsset {
-                Image(imageAsset)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: heroHeight)
-                    .clipped()
-            } else {
-                Rectangle()
-                    .fill(Color(.systemGray4))
-                    .frame(height: heroHeight)
-            }
-            
+            AsyncFlowerImageView(
+                imageUrl: viewModel.flower?.imageURL?.absoluteString,
+                imageAsset: viewModel.flower?.imageAsset,
+                cacheKey: nil  // TODO: Extract from FlowerCardPayload if needed
+            )
+            .frame(height: heroHeight)
+            .clipped()
+
             LinearGradient(
                 colors: [.black.opacity(0.3), .clear, .black.opacity(0.7)],
                 startPoint: .top,

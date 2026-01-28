@@ -87,7 +87,16 @@ final class ChatHistoryManager: ObservableObject {
         sessions.removeAll { $0.id == id }
         saveSessions()
     }
-    
+
+    /// Renames a session
+    func renameSession(_ session: ChatSession, newTitle: String) {
+        if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+            sessions[index].title = newTitle
+            sessions[index].updatedAt = Date()
+            saveSessions()
+        }
+    }
+
     /// Returns only chat sessions (not scans)
     var chatSessions: [ChatSession] {
         sessions.filter { session in

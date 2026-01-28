@@ -21,6 +21,7 @@ struct ChatView: View {
             .navigationDestination(isPresented: $navigateToFlowerDetail) {
                 if let flower = selectedFlower {
                     FlowerCardView(flower: flower)
+                        .id(flower.id) // Force view recreation on flower change
                 }
             }
         }
@@ -42,14 +43,23 @@ struct ChatView: View {
                             messages: viewModel.orderedMessages,
                             messageIndex: index,
                             onExploreFlower: { recommendation in
-                                selectedFlower = Flower(
-                                    name: recommendation.flowerName,
-                                    imageAsset: recommendation.imageAsset,
-                                    meanings: ["Love", "Passion", "Romance"],
-                                    symbolismText: recommendation.explanation,
-                                    whyThisFlowerText: recommendation.meaning,
-                                    moodIntensityValue: 0.85
-                                )
+                                // Use real payload data from API
+                                if let payload = viewModel.lastPayload {
+                                    print("[ChatView] Using real payload for: \(payload.header.name)")
+                                    selectedFlower = payload.toFlower()
+                                    print("[ChatView] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
+                                } else {
+                                    print("[ChatView] WARNING: No payload! Using fallback for: \(recommendation.flowerName)")
+                                    // Fallback if payload not available
+                                    selectedFlower = Flower(
+                                        name: recommendation.flowerName,
+                                        imageAsset: recommendation.imageAsset,
+                                        meanings: ["Love", "Appreciation"],
+                                        symbolismText: recommendation.explanation,
+                                        whyThisFlowerText: recommendation.meaning,
+                                        moodIntensityValue: 0.7
+                                    )
+                                }
                                 navigateToFlowerDetail = true
                             }
                         )
@@ -80,18 +90,7 @@ struct ChatView: View {
         let messages: [ChatMessage]
         let messageIndex: Int
         var onExploreFlower: ((FlowerRecommendation) -> Void)?
-        
-        private var associatedThinkingContent: ThinkingContent? {
-            guard case .recommendation = message.content else { return nil }
-            for i in stride(from: messageIndex - 1, through: 0, by: -1) {
-                if case .thinking(let content) = messages[i].content {
-                    return content
-                }
-                if messages[i].sender == .user { break }
-            }
-            return nil
-        }
-        
+
         private var associatedThinkingMessageId: UUID? {
             guard case .recommendation = message.content else { return nil }
             for i in stride(from: messageIndex - 1, through: 0, by: -1) {
@@ -119,7 +118,6 @@ struct ChatView: View {
                 isThinkingExpanded: viewModel.isThinkingCardExpanded(thinkingId),
                 onThinkingToggle: { viewModel.send(.toggleThinkingCard(thinkingId)) },
                 onExploreFlower: onExploreFlower,
-                associatedThinkingContent: associatedThinkingContent,
                 hideCompletedThinking: isThinkingFollowedByRecommendation
             )
         }

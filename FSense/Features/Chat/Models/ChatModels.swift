@@ -147,13 +147,17 @@ struct ThinkingContent: Equatable, Codable {
 struct FlowerRecommendation: Equatable, Codable {
     let flowerName: String
     let imageAsset: String?
+    let imageUrl: String?
+    let imageCacheKey: String?
     let meaning: String
     let explanation: String
     let confidence: String
-    
+
     static let mock = FlowerRecommendation(
         flowerName: "Red Rose",
         imageAsset: "RedRose",
+        imageUrl: nil,
+        imageCacheKey: nil,
         meaning: "Deep love and passion",
         explanation: "Given the romantic context you described, a red rose perfectly expresses deep emotional connection. Its timeless symbolism of love makes it ideal for your anniversary.",
         confidence: "Perfect match"

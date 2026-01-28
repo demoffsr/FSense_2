@@ -70,7 +70,10 @@ final class HomeViewModel: ObservableObject {
             
         case .deleteChat(let session):
             chatHistory.deleteSession(session)
-            
+
+        case .renameChat(let session, let newTitle):
+            chatHistory.renameSession(session, newTitle: newTitle)
+
         case .plusTapped:
             // Start new chat
             break

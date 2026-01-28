@@ -111,6 +111,15 @@ struct BottomInputBarView: View {
             // Load the session when it changes
             if let session = newSession {
                 chatViewModel.loadSession(session)
+            } else {
+                // New chat - reset the view model
+                chatViewModel.send(.reset)
+            }
+        }
+        .onChange(of: controller.isExpanded) { _, isExpanded in
+            // When opening the sheet without a specific session, ensure clean state
+            if isExpanded && controller.sessionToLoad == nil {
+                chatViewModel.send(.reset)
             }
         }
     }
@@ -306,14 +315,24 @@ struct ExpandedChatView: View {
                             messages: viewModel.orderedMessages,
                             messageIndex: index,
                             onExploreFlower: { recommendation in
-                                selectedFlower = Flower(
-                                    name: recommendation.flowerName,
-                                    imageAsset: recommendation.imageAsset,
-                                    meanings: ["Love", "Passion", "Romance"],
-                                    symbolismText: recommendation.explanation,
-                                    whyThisFlowerText: recommendation.meaning,
-                                    moodIntensityValue: 0.85
-                                )
+                                print("[BottomInputBar] onExploreFlower called for: \(recommendation.flowerName)")
+                                // Use real payload data from API
+                                if let payload = viewModel.lastPayload {
+                                    print("[BottomInputBar] Using real payload for: \(payload.header.name)")
+                                    selectedFlower = payload.toFlower()
+                                    print("[BottomInputBar] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
+                                } else {
+                                    print("[BottomInputBar] WARNING: No payload! Using fallback")
+                                    // Fallback if payload not available
+                                    selectedFlower = Flower(
+                                        name: recommendation.flowerName,
+                                        imageAsset: recommendation.imageAsset,
+                                        meanings: ["Love", "Appreciation"],
+                                        symbolismText: recommendation.explanation,
+                                        whyThisFlowerText: recommendation.meaning,
+                                        moodIntensityValue: 0.7
+                                    )
+                                }
                                 navigateToFlowerDetail = true
                             }
                         )
@@ -339,6 +358,7 @@ struct ExpandedChatView: View {
         .navigationDestination(isPresented: $navigateToFlowerDetail) {
             if let flower = selectedFlower {
                 FlowerCardView(flower: flower)
+                    .id(flower.id) // Force view recreation on flower change
             }
         }
     }
@@ -352,24 +372,7 @@ struct MessageRow: View {
     var messages: [ChatMessage] = []
     var messageIndex: Int = 0
     var onExploreFlower: ((FlowerRecommendation) -> Void)?
-    
-    /// Find associated thinking content for recommendation messages
-    private var associatedThinkingContent: ThinkingContent? {
-        guard case .recommendation = message.content else { return nil }
-        
-        // Look backwards to find the thinking message
-        for i in stride(from: messageIndex - 1, through: 0, by: -1) {
-            if case .thinking(let content) = messages[i].content {
-                return content
-            }
-            // Stop if we hit a user message (new conversation turn)
-            if messages[i].sender == .user {
-                break
-            }
-        }
-        return nil
-    }
-    
+
     /// Associated thinking message ID (for expand/collapse state)
     private var associatedThinkingMessageId: UUID? {
         guard case .recommendation = message.content else { return nil }
@@ -412,7 +415,6 @@ struct MessageRow: View {
                 viewModel.send(.toggleThinkingCard(thinkingId))
             },
             onExploreFlower: onExploreFlower,
-            associatedThinkingContent: associatedThinkingContent,
             hideCompletedThinking: isThinkingFollowedByRecommendation
         )
     }
