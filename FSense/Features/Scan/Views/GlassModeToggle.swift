@@ -6,6 +6,9 @@ struct GlassModeToggle: View {
     @Binding var mode: ScanMode
     @Namespace private var animation
 
+    // Selected mode accent color #E90ACA
+    private let accentColor = Color(red: 0.914, green: 0.039, blue: 0.792)
+
     var body: some View {
         if #available(iOS 26, *) {
             glassContainer
@@ -25,7 +28,7 @@ struct GlassModeToggle: View {
         }
         .padding(4)
         .glassEffect(
-            .regular.tint(.white.opacity(0.1)).interactive(),
+            .clear.tint(.black.opacity(0.12)).interactive(),
             in: .capsule
         )
     }
@@ -47,7 +50,7 @@ struct GlassModeToggle: View {
                 .background {
                     if isSelected {
                         Capsule()
-                            .fill(.white.opacity(0.25))
+                            .fill(accentColor.opacity(0.6))
                             .matchedGeometryEffect(id: "pill_selection", in: animation)
                     }
                 }
@@ -83,7 +86,7 @@ struct GlassModeToggle: View {
                 .background {
                     if isSelected {
                         Capsule()
-                            .fill(.white.opacity(0.2))
+                            .fill(accentColor.opacity(0.6))
                             .matchedGeometryEffect(id: "pill_selection", in: animation)
                     }
                 }

@@ -26,8 +26,8 @@ struct CameraControlsView: View {
                 // Top bar
                 VStack {
                     topBar
-                        .padding(.top, geometry.safeAreaInsets.top + 16)
-                        .padding(.horizontal, 16)
+                        .padding(.top, geometry.safeAreaInsets.top + 40)
+                        .padding(.horizontal, 20)
                     Spacer()
                 }
 
@@ -102,52 +102,39 @@ struct CameraControlsView: View {
     @ViewBuilder
     private func bottomSheet(safeArea: CGFloat) -> some View {
         if #available(iOS 26, *) {
-            VStack(spacing: 24) {
-                // Mode toggle
-                GlassModeToggle(mode: $scanMode)
-                    .padding(.top, 24)
+            GlassEffectContainer(spacing: 16) {
+                VStack(spacing: 24) {
+                    // Mode toggle with glass
+                    GlassModeToggle(mode: $scanMode)
+                        .padding(.top, 20)
 
-                // Bottom controls
-                bottomControls
-                    .padding(.bottom, safeArea + 24)
+                    // Bottom controls with glass
+                    bottomControls
+                        .padding(.bottom, 20)
+                }
             }
             .frame(maxWidth: .infinity)
-            .background {
-                // Glass background that extends beyond screen edges to hide borders
-                // Screen itself clips the sides, preserving corner radius
-                Rectangle()
-                    .fill(.clear)
-                    .glassEffect(
-                        .clear.tint(.black.opacity(0.06)).interactive(),
-                        in: UnevenRoundedRectangle(
-                            topLeadingRadius: 34,
-                            bottomLeadingRadius: 0,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 34
-                        )
-                    )
-                    .padding(.horizontal, -20) // Extend beyond sides - screen clips
-                    .padding(.bottom, -100) // Extend below visible area
-            }
-            // No .clipped() - screen naturally clips sides while preserving corner radius
+            .glassEffect(
+                .clear.tint(.black.opacity(0.15)).interactive(),
+                in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+            )
+            .padding(.horizontal, 8)
+            .padding(.bottom, safeArea + 30)
         } else {
             VStack(spacing: 24) {
                 GlassModeToggle(mode: $scanMode)
-                    .padding(.top, 24)
+                    .padding(.top, 20)
 
                 bottomControls
-                    .padding(.bottom, safeArea + 24)
+                    .padding(.bottom, 20)
             }
             .frame(maxWidth: .infinity)
             .background(
                 .ultraThinMaterial,
-                in: UnevenRoundedRectangle(
-                    topLeadingRadius: 34,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 34
-                )
+                in: RoundedRectangle(cornerRadius: 28, style: .continuous)
             )
+            .padding(.horizontal, 8)
+            .padding(.bottom, safeArea + 8)
         }
     }
 
@@ -182,7 +169,7 @@ struct CameraControlsView: View {
                     .foregroundStyle(.white)
                     .frame(width: galleryButtonSize, height: galleryButtonSize)
                     .glassEffect(
-                        .regular.tint(.white.opacity(0.1)).interactive(),
+                        .clear.tint(.black.opacity(0.12)).interactive(),
                         in: .circle
                     )
             }
@@ -216,48 +203,25 @@ struct CameraControlsView: View {
 
     // MARK: - Capture Button
 
-    @ViewBuilder
     private var captureButton: some View {
-        if #available(iOS 26, *) {
-            Button {
-                triggerCapture()
-            } label: {
-                ZStack {
-                    // Outer glass ring
-                    Circle()
-                        .fill(.clear)
-                        .frame(width: captureOuterSize, height: captureOuterSize)
-                        .glassEffect(
-                            .regular.tint(.white.opacity(0.15)).interactive(),
-                            in: .circle
-                        )
+        Button {
+            triggerCapture()
+        } label: {
+            ZStack {
+                // Outer ring (white stroke)
+                Circle()
+                    .stroke(.white.opacity(0.8), lineWidth: 4)
+                    .frame(width: captureOuterSize, height: captureOuterSize)
 
-                    // Inner white circle
-                    Circle()
-                        .fill(.white)
-                        .frame(width: captureInnerSize, height: captureInnerSize)
-                        .scaleEffect(isCapturing ? 0.88 : 1.0)
-                }
+                // Inner white circle
+                Circle()
+                    .fill(.white)
+                    .frame(width: captureInnerSize, height: captureInnerSize)
+                    .scaleEffect(isCapturing ? 0.85 : 1.0)
             }
-            .buttonStyle(.plain)
-        } else {
-            Button {
-                triggerCapture()
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(.clear)
-                        .frame(width: captureOuterSize, height: captureOuterSize)
-                        .background(.ultraThinMaterial, in: Circle())
-
-                    Circle()
-                        .fill(.white)
-                        .frame(width: captureInnerSize, height: captureInnerSize)
-                        .scaleEffect(isCapturing ? 0.88 : 1.0)
-                }
-            }
-            .buttonStyle(.plain)
         }
+        .buttonStyle(.plain)
+        .contentShape(Circle())
     }
 
     private func triggerCapture() {

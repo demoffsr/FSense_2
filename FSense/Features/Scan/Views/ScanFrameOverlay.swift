@@ -1,119 +1,86 @@
 import SwiftUI
 
-/// Modern scan frame overlay matching Figma specs
-/// 290×358px frame with corner brackets inside
+/// Modern scan frame overlay with dimmed surroundings
+/// Clean frame without corner brackets, lifted up for better ergonomics
 struct ScanFrameOverlay: View {
-    @State private var isAnimating = false
-    @State private var pulseOpacity: Double = 0.5
+    @State private var pulseOpacity: Double = 0.4
 
-    // Figma specs
+    // Frame dimensions
     let frameWidth: CGFloat
     let frameHeight: CGFloat
     let cornerRadius: CGFloat = 24
     let borderWidth: CGFloat = 2
+    let verticalOffset: CGFloat // Negative = move up
 
     init(
         frameWidth: CGFloat = 290,
-        frameHeight: CGFloat = 358
+        frameHeight: CGFloat = 358,
+        verticalOffset: CGFloat = -60 // Raised up by default
     ) {
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
+        self.verticalOffset = verticalOffset
     }
 
     var body: some View {
-        ZStack {
-            // Main frame with background and border
-            frameBackground
+        GeometryReader { geometry in
+            ZStack {
+                // Dimmed overlay with cutout
+                dimmedOverlay(in: geometry.size)
 
-            // Corner brackets inside the frame
-            cornerBrackets
+                // Frame border
+                frameBorder
+                    .offset(y: verticalOffset)
+            }
         }
-        .frame(width: frameWidth, height: frameHeight)
         .onAppear {
             withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                pulseOpacity = 0.8
-                isAnimating = true
+                pulseOpacity = 0.7
             }
         }
     }
 
-    // MARK: - Frame Background
+    // MARK: - Dimmed Overlay with Cutout
 
-    private var frameBackground: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.white.opacity(0.1)) // rgba(255,255,255,0.1)
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(
-                        .white.opacity(pulseOpacity * 0.625), // Animates between 0.31-0.5 (targeting ~0.5)
-                        lineWidth: borderWidth
+    private func dimmedOverlay(in size: CGSize) -> some View {
+        let centerX = size.width / 2
+        let centerY = size.height / 2 + verticalOffset
+
+        return Rectangle()
+            .fill(Color.black.opacity(0.5))
+            .mask(
+                Canvas { context, canvasSize in
+                    // Fill entire canvas
+                    context.fill(
+                        Path(CGRect(origin: .zero, size: canvasSize)),
+                        with: .color(.white)
                     )
+
+                    // Cut out the scan area
+                    let cutoutRect = CGRect(
+                        x: centerX - frameWidth / 2,
+                        y: centerY - frameHeight / 2,
+                        width: frameWidth,
+                        height: frameHeight
+                    )
+                    let cutoutPath = Path(roundedRect: cutoutRect, cornerRadius: cornerRadius)
+
+                    context.blendMode = .destinationOut
+                    context.fill(cutoutPath, with: .color(.white))
+                }
             )
-            .scaleEffect(isAnimating ? 1.003 : 1.0)
+            .ignoresSafeArea()
     }
 
-    // MARK: - Corner Brackets
+    // MARK: - Frame Border
 
-    private var cornerBrackets: some View {
-        GeometryReader { geo in
-            let bracketSize: CGFloat = 40 // Bracket arm length
-            let offset: CGFloat = 16 // Distance from frame edge
-
-            // Top-left
-            CornerBracket()
-                .frame(width: bracketSize, height: bracketSize)
-                .position(x: offset + bracketSize/2, y: offset + bracketSize/2)
-
-            // Top-right
-            CornerBracket()
-                .rotationEffect(.degrees(90))
-                .frame(width: bracketSize, height: bracketSize)
-                .position(x: geo.size.width - offset - bracketSize/2, y: offset + bracketSize/2)
-
-            // Bottom-right
-            CornerBracket()
-                .rotationEffect(.degrees(180))
-                .frame(width: bracketSize, height: bracketSize)
-                .position(x: geo.size.width - offset - bracketSize/2, y: geo.size.height - offset - bracketSize/2)
-
-            // Bottom-left
-            CornerBracket()
-                .rotationEffect(.degrees(270))
-                .frame(width: bracketSize, height: bracketSize)
-                .position(x: offset + bracketSize/2, y: geo.size.height - offset - bracketSize/2)
-        }
-    }
-}
-
-// MARK: - Corner Bracket
-
-struct CornerBracket: View {
-    var body: some View {
-        Canvas { context, size in
-            let lineWidth: CGFloat = 2
-            let cornerRadius: CGFloat = 6
-
-            var path = Path()
-
-            // Vertical line (going down from top-left corner)
-            path.move(to: CGPoint(x: lineWidth/2, y: size.height))
-            path.addLine(to: CGPoint(x: lineWidth/2, y: cornerRadius))
-
-            // Curved corner
-            path.addQuadCurve(
-                to: CGPoint(x: cornerRadius, y: lineWidth/2),
-                control: CGPoint(x: lineWidth/2, y: lineWidth/2)
+    private var frameBorder: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(
+                .white.opacity(pulseOpacity),
+                lineWidth: borderWidth
             )
-
-            // Horizontal line (going right)
-            path.addLine(to: CGPoint(x: size.width, y: lineWidth/2))
-
-            context.stroke(
-                path,
-                with: .color(.white),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
-            )
-        }
+            .frame(width: frameWidth, height: frameHeight)
     }
 }
 
@@ -121,10 +88,11 @@ struct CornerBracket: View {
 
 #Preview {
     ZStack {
+        // Simulate camera feed
         LinearGradient(
-            colors: [.black, .gray.opacity(0.3)],
-            startPoint: .top,
-            endPoint: .bottom
+            colors: [.green.opacity(0.6), .blue.opacity(0.4)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
 

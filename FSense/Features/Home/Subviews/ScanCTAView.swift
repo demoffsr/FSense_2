@@ -50,8 +50,9 @@ struct ScanCTAView: View {
         .padding(.trailing, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .glassEffect(
-            .clear.tint(.black.opacity(0.08)).interactive(),
+            .clear.tint(.black.opacity(0.08)),
             in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
     }
