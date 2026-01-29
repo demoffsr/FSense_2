@@ -21,8 +21,7 @@ final class ImageStorageManager: @unchecked Sendable {
 
     /// Save image to disk and return the relative path
     func saveImage(_ image: UIImage, messageId: UUID) -> String? {
-        let compressed = compressImageForAttachment(image)
-        guard let data = compressed.jpegData(compressionQuality: 0.7) else { return nil }
+        guard let data = compressImageToData(image, compressionQuality: 0.7) else { return nil }
 
         let filename = "\(messageId.uuidString).jpg"
         let url = cacheDirectory.appendingPathComponent(filename)
@@ -64,6 +63,28 @@ final class ImageStorageManager: @unchecked Sendable {
 
 // MARK: - Image Utilities
 
+/// Compress and resize image, returning JPEG Data directly (single encoding)
+/// This is the core function that avoids multiple jpegData() calls
+func compressImageToData(_ image: UIImage, maxSize: CGSize = CGSize(width: 1024, height: 1024), compressionQuality: CGFloat = 0.7) -> Data? {
+    let size = image.size
+    let widthRatio = maxSize.width / size.width
+    let heightRatio = maxSize.height / size.height
+    let scale = min(widthRatio, heightRatio, 1.0) // Don't upscale
+
+    let imageToCompress: UIImage
+    if scale < 1.0 {
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        imageToCompress = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    } else {
+        imageToCompress = image
+    }
+
+    return imageToCompress.jpegData(compressionQuality: compressionQuality)
+}
+
 /// Convert UIImage to base64 string for API transmission
 /// - Parameters:
 ///   - image: The UIImage to convert
@@ -71,51 +92,19 @@ final class ImageStorageManager: @unchecked Sendable {
 ///   - compressionQuality: JPEG quality 0.0-1.0 (default 0.6 for balance)
 /// - Returns: Base64 encoded string or nil if conversion fails
 func imageToBase64(_ image: UIImage, maxSize: CGSize = CGSize(width: 1024, height: 1024), compressionQuality: CGFloat = 0.6) -> String? {
-    // First compress/resize the image
-    let compressed = compressImageForAttachment(image, maxSize: maxSize, compressionQuality: compressionQuality)
-
-    // Convert to JPEG data and then base64
-    guard let data = compressed.jpegData(compressionQuality: compressionQuality) else {
+    guard let data = compressImageToData(image, maxSize: maxSize, compressionQuality: compressionQuality) else {
         return nil
     }
-
     return data.base64EncodedString()
 }
 
 /// Compress image for chat attachment to reduce memory usage
 func compressImageForAttachment(_ image: UIImage, maxSize: CGSize = CGSize(width: 1024, height: 1024), compressionQuality: CGFloat = 0.7) -> UIImage {
-    let size = image.size
-
-    // Calculate scale to fit within maxSize while maintaining aspect ratio
-    let widthRatio = maxSize.width / size.width
-    let heightRatio = maxSize.height / size.height
-    let scale = min(widthRatio, heightRatio, 1.0) // Don't upscale
-
-    // If image is already small enough, just compress quality
-    guard scale < 1.0 else {
-        // Still compress to JPEG to reduce memory
-        if let data = image.jpegData(compressionQuality: compressionQuality),
-           let compressed = UIImage(data: data) {
-            return compressed
-        }
+    guard let data = compressImageToData(image, maxSize: maxSize, compressionQuality: compressionQuality),
+          let compressed = UIImage(data: data) else {
         return image
     }
-
-    let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-
-    // Resize image
-    let renderer = UIGraphicsImageRenderer(size: newSize)
-    let resized = renderer.image { _ in
-        image.draw(in: CGRect(origin: .zero, size: newSize))
-    }
-
-    // Compress to JPEG
-    if let data = resized.jpegData(compressionQuality: compressionQuality),
-       let compressed = UIImage(data: data) {
-        return compressed
-    }
-
-    return resized
+    return compressed
 }
 
 // MARK: - Chat Session (Persistable)
@@ -399,14 +388,26 @@ extension ChatMessage {
         content: .text("Hi! I'm here to help you find the perfect flower. Tell me about the occasion or the person you're thinking of."),
         sender: .ai
     )
-    
+
     static let mockUserMessage = ChatMessage(
         content: .text("I need flowers for my wife's birthday. We've been married for 5 years."),
         sender: .user
     )
-    
+
     static let mockAcknowledgement = ChatMessage(
         content: .acknowledgement("That's a special milestone. Let me think about something meaningful for you."),
         sender: .ai
     )
+}
+
+// MARK: - Array Extension for Efficient Removal
+
+extension Array where Element == ChatMessage {
+    /// Remove first message with matching ID. O(n) but stops at first match.
+    /// More efficient than removeAll for single-item removal.
+    @discardableResult
+    mutating func removeFirst(withId id: UUID) -> ChatMessage? {
+        guard let index = firstIndex(where: { $0.id == id }) else { return nil }
+        return remove(at: index)
+    }
 }

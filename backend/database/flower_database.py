@@ -1859,6 +1859,9 @@ FLOWERS_DATA = [
     },
 ]
 
+# Pre-built index for O(1) lookups by flower ID
+FLOWERS_BY_ID: dict[str, dict] = {f["id"]: f for f in FLOWERS_DATA}
+
 
 # =============================================================================
 # SEED DATA - FLOWER MEANINGS BY EMOTION
@@ -2362,18 +2365,14 @@ def get_flowers_by_emotion(emotion: str, top_n: int = 5) -> tuple:
     return tuple(matches[:top_n])
 
 
-@lru_cache(maxsize=256)
 def get_flower_by_id(flower_id: str) -> Optional[dict]:
-    """Quick lookup: get flower data by ID. Cached for performance."""
-    for f in FLOWERS_DATA:
-        if f["id"] == flower_id:
-            return f
-    return None
+    """O(1) lookup by ID using pre-built index."""
+    return FLOWERS_BY_ID.get(flower_id)
 
 
 def get_flowers_by_ids(flower_ids: tuple) -> dict:
-    """Batch lookup: get multiple flowers by IDs. Returns dict of id -> flower data."""
-    return {fid: get_flower_by_id(fid) for fid in flower_ids}
+    """Batch lookup: O(n) where n = len(flower_ids)."""
+    return {fid: FLOWERS_BY_ID.get(fid) for fid in flower_ids}
 
 
 def get_cultural_warnings(flower_id: str, region: str) -> Optional[dict]:

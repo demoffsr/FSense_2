@@ -450,17 +450,17 @@ final class ChatViewModel: ObservableObject {
             )
 
             guard !Task.isCancelled else {
-                messages.removeAll { $0.id == typingMessageId }
+                messages.removeFirst(withId: typingMessageId)
                 return
             }
 
             // Remove typing indicator
-            messages.removeAll { $0.id == typingMessageId }
+            messages.removeFirst(withId: typingMessageId)
 
             await showTextResponse(response)
         } catch {
             // Remove typing indicator on error
-            messages.removeAll { $0.id == typingMessageId }
+            messages.removeFirst(withId: typingMessageId)
             await showError()
         }
     }
@@ -480,12 +480,12 @@ final class ChatViewModel: ObservableObject {
             )
 
             guard !Task.isCancelled else {
-                messages.removeAll { $0.id == typingMessageId }
+                messages.removeFirst(withId: typingMessageId)
                 return
             }
 
             // Remove typing indicator
-            messages.removeAll { $0.id == typingMessageId }
+            messages.removeFirst(withId: typingMessageId)
 
             if let textMessage = response.textMessage {
                 await showTextResponse(textMessage)
@@ -494,7 +494,7 @@ final class ChatViewModel: ObservableObject {
             }
         } catch {
             // Remove typing indicator on error
-            messages.removeAll { $0.id == typingMessageId }
+            messages.removeFirst(withId: typingMessageId)
             await showError()
         }
     }
