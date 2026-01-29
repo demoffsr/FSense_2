@@ -168,10 +168,14 @@ struct CameraControlsView: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: galleryButtonSize, height: galleryButtonSize)
-                    .glassEffect(
-                        .clear.tint(.black.opacity(0.12)).interactive(),
-                        in: .circle
-                    )
+                    .background {
+                        Circle()
+                            .fill(.white.opacity(0.1))
+                            .overlay(
+                                Circle()
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
+                            )
+                    }
             }
             .buttonStyle(.plain)
             .onChange(of: selectedItem) { _, newItem in

@@ -15,6 +15,14 @@ enum ScanMode: String, Codable, CaseIterable {
         case .plant: return "Plant"
         }
     }
+
+    var icon: String {
+        switch self {
+        case .flower: return "camera.macro"
+        case .bouquet: return "sparkles"
+        case .plant: return "leaf.fill"
+        }
+    }
 }
 
 // MARK: - Detected Flower

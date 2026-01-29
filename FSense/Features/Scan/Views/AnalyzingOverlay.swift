@@ -22,6 +22,9 @@ struct AnalyzingOverlay: View {
         .onAppear {
             startAnimations()
         }
+        .onDisappear {
+            stopAnimations()
+        }
     }
 
     // MARK: - Glass Spinner
@@ -113,6 +116,14 @@ struct AnalyzingOverlay: View {
         // Pulsing outer ring
         withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
             pulseScale = 1.15
+        }
+    }
+
+    private func stopAnimations() {
+        // Cancel infinite animations to prevent memory leaks
+        withAnimation(nil) {
+            rotation = 0
+            pulseScale = 1.0
         }
     }
 }

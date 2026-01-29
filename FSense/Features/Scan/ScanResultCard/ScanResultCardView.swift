@@ -7,7 +7,12 @@ struct ScanResultCardView: View {
     let onDismiss: () -> Void
     let onAskAI: (String) -> Void
 
+    // Track only whether title should show (threshold-based)
+    @State private var showsFloatingTitle: Bool = false
+    // Store offset for parallax effect, but update less frequently
     @State private var scrollOffset: CGFloat = 0
+
+    private let titleThreshold: CGFloat = -200
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -72,7 +77,17 @@ struct ScanResultCardView: View {
             }
             .coordinateSpace(name: "scroll")
             .onPreferenceChange(ScrollOffsetKey.self) { value in
-                scrollOffset = value
+                // Only update scrollOffset for parallax periodically (every 10 pts)
+                let roundedValue = round(value / 10) * 10
+                if abs(roundedValue - scrollOffset) >= 10 {
+                    scrollOffset = roundedValue
+                }
+
+                // Only update title visibility when crossing threshold
+                let shouldShow = value < titleThreshold
+                if shouldShow != showsFloatingTitle {
+                    showsFloatingTitle = shouldShow
+                }
             }
 
             // Floating header
@@ -95,8 +110,8 @@ struct ScanResultCardView: View {
 
             Spacer()
 
-            // Show title when scrolled
-            if scrollOffset < -200 {
+            // Show title when scrolled past threshold
+            if showsFloatingTitle {
                 Text(result.header.name)
                     .font(.headline)
                     .transition(.opacity)
@@ -117,7 +132,7 @@ struct ScanResultCardView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 60)
-        .animation(.easeInOut(duration: 0.2), value: scrollOffset < -200)
+        .animation(.easeInOut(duration: 0.2), value: showsFloatingTitle)
     }
 }
 

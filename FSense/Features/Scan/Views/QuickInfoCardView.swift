@@ -155,8 +155,11 @@ struct QuickInfoCardView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(Array(result.additionalFlowers.enumerated()), id: \.element.id) { index, flower in
-                        additionalFlowerButton(flower: flower, index: index)
+                    ForEach(result.additionalFlowers.indices, id: \.self) { index in
+                        additionalFlowerButton(
+                            flower: result.additionalFlowers[index],
+                            index: index
+                        )
                     }
                 }
             }

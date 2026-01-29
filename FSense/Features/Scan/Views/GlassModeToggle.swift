@@ -27,10 +27,14 @@ struct GlassModeToggle: View {
             }
         }
         .padding(4)
-        .glassEffect(
-            .clear.tint(.black.opacity(0.12)).interactive(),
-            in: .capsule
-        )
+        .background {
+            Capsule()
+                .fill(.white.opacity(0.1))
+                .overlay(
+                    Capsule()
+                        .stroke(.white.opacity(0.3), lineWidth: 1)
+                )
+        }
     }
 
     @available(iOS 26, *)
@@ -42,18 +46,22 @@ struct GlassModeToggle: View {
                 mode = scanMode
             }
         } label: {
-            Text(scanMode.displayName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(isSelected ? 1.0 : 0.7))
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(accentColor.opacity(0.6))
-                            .matchedGeometryEffect(id: "pill_selection", in: animation)
-                    }
+            HStack(spacing: 6) {
+                Image(systemName: scanMode.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(scanMode.displayName)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(.white.opacity(isSelected ? 1.0 : 0.7))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background {
+                if isSelected {
+                    Capsule()
+                        .fill(accentColor.opacity(0.6))
+                        .matchedGeometryEffect(id: "pill_selection", in: animation)
                 }
+            }
         }
         .buttonStyle(.plain)
     }
@@ -78,18 +86,22 @@ struct GlassModeToggle: View {
                 mode = scanMode
             }
         } label: {
-            Text(scanMode.displayName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(isSelected ? 1.0 : 0.7))
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(accentColor.opacity(0.6))
-                            .matchedGeometryEffect(id: "pill_selection", in: animation)
-                    }
+            HStack(spacing: 6) {
+                Image(systemName: scanMode.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(scanMode.displayName)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(.white.opacity(isSelected ? 1.0 : 0.7))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background {
+                if isSelected {
+                    Capsule()
+                        .fill(accentColor.opacity(0.6))
+                        .matchedGeometryEffect(id: "pill_selection", in: animation)
                 }
+            }
         }
         .buttonStyle(.plain)
     }

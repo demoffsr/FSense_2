@@ -25,10 +25,16 @@ struct ScanFrameOverlay: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Dimmed overlay with cutout
-                dimmedOverlay(in: geometry.size)
+                // Dimmed overlay with cutout - extracted to avoid redraw on animation
+                DimmedMaskOverlay(
+                    frameWidth: frameWidth,
+                    frameHeight: frameHeight,
+                    cornerRadius: cornerRadius,
+                    verticalOffset: verticalOffset,
+                    containerSize: geometry.size
+                )
 
-                // Frame border
+                // Frame border (animates independently)
                 frameBorder
                     .offset(y: verticalOffset)
             }
@@ -40,13 +46,34 @@ struct ScanFrameOverlay: View {
         }
     }
 
-    // MARK: - Dimmed Overlay with Cutout
+    // MARK: - Frame Border
 
-    private func dimmedOverlay(in size: CGSize) -> some View {
-        let centerX = size.width / 2
-        let centerY = size.height / 2 + verticalOffset
+    private var frameBorder: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(
+                .white.opacity(pulseOpacity),
+                lineWidth: borderWidth
+            )
+            .frame(width: frameWidth, height: frameHeight)
+    }
+}
 
-        return Rectangle()
+// MARK: - Dimmed Mask Overlay (Performance-isolated)
+
+/// Separate view that doesn't depend on animated state.
+/// This prevents Canvas redraw on every animation frame.
+private struct DimmedMaskOverlay: View {
+    let frameWidth: CGFloat
+    let frameHeight: CGFloat
+    let cornerRadius: CGFloat
+    let verticalOffset: CGFloat
+    let containerSize: CGSize
+
+    var body: some View {
+        let centerX = containerSize.width / 2
+        let centerY = containerSize.height / 2 + verticalOffset
+
+        Rectangle()
             .fill(Color.black.opacity(0.5))
             .mask(
                 Canvas { context, canvasSize in
@@ -70,17 +97,6 @@ struct ScanFrameOverlay: View {
                 }
             )
             .ignoresSafeArea()
-    }
-
-    // MARK: - Frame Border
-
-    private var frameBorder: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(
-                .white.opacity(pulseOpacity),
-                lineWidth: borderWidth
-            )
-            .frame(width: frameWidth, height: frameHeight)
     }
 }
 

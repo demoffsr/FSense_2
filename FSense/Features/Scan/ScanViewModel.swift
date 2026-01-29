@@ -1,4 +1,6 @@
 import SwiftUI
+import CoreImage
+import CoreImage.CIFilterBuiltins
 
 /// ViewModel for Flower Scan screen
 /// Handles camera capture, image analysis, and result presentation
@@ -8,6 +10,9 @@ final class ScanViewModel: ObservableObject {
     // MARK: - Published State
 
     @Published private(set) var state = ScanState()
+
+    /// Pre-computed blurred background image for performance
+    @Published private(set) var blurredBackground: UIImage?
 
     // MARK: - Dependencies
 
@@ -93,6 +98,9 @@ final class ScanViewModel: ObservableObject {
         state.capturedImage = image
         state.phase = .capturing
 
+        // Pre-compute blurred background off main thread
+        computeBlurredBackground(from: image)
+
         // Immediately start analysis
         Task { await analyzeImage() }
     }
@@ -100,6 +108,9 @@ final class ScanViewModel: ObservableObject {
     private func handleImageFromGallery(_ image: UIImage) {
         state.capturedImage = image
         state.phase = .capturing
+
+        // Pre-compute blurred background off main thread
+        computeBlurredBackground(from: image)
 
         Task { await analyzeImage() }
     }
@@ -109,7 +120,40 @@ final class ScanViewModel: ObservableObject {
         state.quickResult = nil
         state.detailResult = nil
         state.selectedFlowerIndex = 0
+        blurredBackground = nil
         state.phase = .camera
+    }
+
+    /// Computes blurred background image on a background thread
+    private func computeBlurredBackground(from image: UIImage) {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let blurred = ScanViewModel.createBlurredImage(image, radius: 10) else { return }
+            await MainActor.run { [weak self] in
+                self?.blurredBackground = blurred
+            }
+        }
+    }
+
+    /// Creates a blurred version of the image using CIFilter (thread-safe)
+    /// Marked nonisolated to allow calling from detached tasks
+    nonisolated private static func createBlurredImage(_ image: UIImage, radius: CGFloat) -> UIImage? {
+        guard let ciImage = CIImage(image: image) else { return nil }
+
+        let filter = CIFilter.gaussianBlur()
+        filter.inputImage = ciImage
+        filter.radius = Float(radius)
+
+        guard let outputImage = filter.outputImage else { return nil }
+
+        // Crop to original bounds (blur extends beyond edges)
+        let croppedImage = outputImage.cropped(to: ciImage.extent)
+
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cgImage = context.createCGImage(croppedImage, from: croppedImage.extent) else {
+            return nil
+        }
+
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
     }
 
     private func handleQuickScanReceived(_ result: QuickScanResult) {

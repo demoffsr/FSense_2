@@ -126,14 +126,19 @@ struct ScanView: View {
             }
         }
         .background(
-            // Dimmed captured image
+            // Dimmed captured image (uses pre-computed blur for performance)
             Group {
-                if let image = viewModel.capturedImage {
+                if let blurred = viewModel.blurredBackground {
+                    Image(uiImage: blurred)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .overlay(Color.black.opacity(0.4))
+                } else if let image = viewModel.capturedImage {
+                    // Fallback while blur is being computed
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .blur(radius: 10)
-                        .overlay(Color.black.opacity(0.4))
+                        .overlay(Color.black.opacity(0.6))
                 }
             }
             .ignoresSafeArea()
