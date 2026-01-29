@@ -12,8 +12,13 @@ struct ChatView: View {
     @State private var navigateToFlowerDetail = false
     @State private var showImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var mentionQuery: String?
 
     @FocusState private var isInputFocused: Bool
+
+    private var showMentionAutocomplete: Bool {
+        mentionQuery != nil
+    }
 
     // MARK: - Body
 
@@ -23,6 +28,24 @@ struct ChatView: View {
                 messagesScrollView
                 chatInputView
             }
+            .overlay(alignment: .bottom) {
+                // Mention autocomplete overlay - positioned above input
+                if showMentionAutocomplete, let query = mentionQuery {
+                    MentionAutocompleteView(
+                        searchText: query,
+                        onSelect: { profile in
+                            viewModel.inputText = MentionParser.replaceMention(
+                                in: viewModel.inputText,
+                                with: profile
+                            )
+                            mentionQuery = nil
+                        }
+                    )
+                    .padding(.bottom, 70)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showMentionAutocomplete)
             .background(Color(white: 0.97))
             .navigationBarHidden(true)
             .navigationDestination(isPresented: $navigateToFlowerDetail) {
@@ -183,6 +206,13 @@ struct ChatView: View {
                         .onSubmit {
                             if viewModel.canSendMessage {
                                 viewModel.send(.sendMessage)
+                            }
+                        }
+                        .onChange(of: viewModel.inputText) { _, newValue in
+                            let query = MentionParser.extractMentionQuery(from: newValue)
+                            print("[ChatView] Input changed: '\(newValue)' → mentionQuery: \(query ?? "nil")")
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                mentionQuery = query
                             }
                         }
 

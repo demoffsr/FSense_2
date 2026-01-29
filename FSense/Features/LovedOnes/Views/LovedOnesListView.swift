@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct UsersView: View {
+struct LovedOnesListView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var service = LovedOnesService.shared
 
@@ -19,17 +19,20 @@ struct UsersView: View {
                     .padding(.bottom, 16)
 
                 if filteredProfiles.isEmpty && !searchText.isEmpty {
+                    // No search results
                     emptySearchState
                 } else if service.profiles.isEmpty {
+                    // No profiles at all
                     emptyState
                 } else {
+                    // Category sections
                     categorySections
                 }
             }
             .padding(.bottom, 100)
         }
         .background(Color(white: 0.96))
-        .navigationTitle("Users")
+        .navigationTitle("Loved Ones")
         .navigationBarTitleDisplayMode(.large)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -113,7 +116,7 @@ struct UsersView: View {
                 let categoryProfiles = profiles(in: category)
 
                 if !categoryProfiles.isEmpty || searchText.isEmpty {
-                    UsersCategorySection(
+                    CategorySection(
                         category: category,
                         profiles: categoryProfiles,
                         isExpanded: expandedCategories.contains(category),
@@ -143,11 +146,11 @@ struct UsersView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "person.2.circle")
+            Image(systemName: "heart.circle")
                 .font(.system(size: 56))
                 .foregroundColor(.purple.opacity(0.4))
 
-            Text("No users yet")
+            Text("No loved ones yet")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(.primary)
 
@@ -161,7 +164,7 @@ struct UsersView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "plus")
-                    Text("Add First User")
+                    Text("Add First Profile")
                 }
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
@@ -205,7 +208,7 @@ struct UsersView: View {
 
 // MARK: - Category Section
 
-private struct UsersCategorySection: View {
+private struct CategorySection: View {
     let category: RelationshipCategory
     let profiles: [LovedOneProfile]
     let isExpanded: Bool
@@ -215,6 +218,7 @@ private struct UsersCategorySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Section header
             Button(action: onToggle) {
                 HStack {
                     HStack(spacing: 10) {
@@ -242,6 +246,7 @@ private struct UsersCategorySection: View {
             }
             .buttonStyle(.plain)
 
+            // Profile rows
             if isExpanded {
                 if profiles.isEmpty {
                     Text("Tap + to add someone")
@@ -283,6 +288,6 @@ private struct UsersCategorySection: View {
 
 #Preview {
     NavigationStack {
-        UsersView()
+        LovedOnesListView()
     }
 }

@@ -217,6 +217,13 @@ struct ExpandedChatSheet: View {
     @State private var showRenameAlert = false
     @State private var renameText = ""
 
+    // Mention autocomplete state
+    @State private var mentionQuery: String?
+
+    private var showMentionAutocomplete: Bool {
+        mentionQuery != nil
+    }
+
     // MARK: - Static Constants (performance optimization)
     private static let inputBgColor = Color(red: 0.98, green: 0.98, blue: 0.98)
     private static let shadowColor = Color.black.opacity(0.15)
@@ -622,6 +629,13 @@ struct ExpandedChatSheet: View {
     @ViewBuilder
     private var inputArea: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Mention autocomplete - appears above input, aligned with text field
+            if showMentionAutocomplete, let query = mentionQuery {
+                mentionsListView(query: query)
+                    .padding(.leading, 62) // Align with textFieldContainer (plus button 50 + spacing 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Attachment preview (if exists)
             if let image = viewModel.attachedImage {
                 AttachmentPreviewView(image: image) {
@@ -642,12 +656,67 @@ struct ExpandedChatSheet: View {
                 }
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showMentionAutocomplete)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(Color(white: 0.97))
         .sheet(isPresented: $viewModel.showModeSheet) {
             ChatModeSheet(viewModel: viewModel, isPresented: $viewModel.showModeSheet)
         }
+    }
+
+    // MARK: - Mentions List
+
+    private func mentionsListView(query: String) -> some View {
+        let service = LovedOnesService.shared
+        let profiles = service.profilesMatching(mention: query)
+
+        return VStack(spacing: 12) {
+            if profiles.isEmpty {
+                // Empty state
+                HStack(spacing: 10) {
+                    Image(systemName: service.profiles.isEmpty ? "person.badge.plus" : "magnifyingglass")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+
+                    Text(service.profiles.isEmpty ? "No users yet" : "No matches")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+                }
+            } else {
+                ForEach(profiles.prefix(5)) { profile in
+                    Button {
+                        viewModel.inputText = MentionParser.replaceMention(
+                            in: viewModel.inputText,
+                            with: profile
+                        )
+                        mentionQuery = nil
+                    } label: {
+                        HStack(spacing: 10) {
+                            CompactProfileAvatarView(profile: profile, size: 32)
+
+                            Text(profile.displayName)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.black)
+                                .tracking(-0.08)
+
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .glassEffect(
+            .regular.tint(.white.opacity(0.2)),
+            in: .rect(cornerRadius: 20)
+        )
+        .shadow(color: Self.lightShadowColor, radius: 8, x: 0, y: 2)
     }
 
     private var plusButton: some View {
@@ -678,6 +747,11 @@ struct ExpandedChatSheet: View {
                     .disabled(!viewModel.isInputEnabled)
                     .submitLabel(.send)
                     .onSubmit(sendMessageIfCan)
+                    .onChange(of: viewModel.inputText) { _, newValue in
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            mentionQuery = MentionParser.extractMentionQuery(from: newValue)
+                        }
+                    }
 
                 sendButton
             }

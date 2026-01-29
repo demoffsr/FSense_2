@@ -35,9 +35,6 @@ struct ProfileView: View {
                 ) {
                     navigateToChatArchive = true
                 }
-
-                Divider()
-                    .padding(.leading, 60)
             }
             .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
