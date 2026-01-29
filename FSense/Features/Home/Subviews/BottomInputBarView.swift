@@ -197,6 +197,7 @@ struct ExpandedChatSheet: View {
     @State private var showScrollToBottom = false
     @State private var showPlusButton = false
     @Namespace private var bottomID
+    @Namespace private var inputGlassNS
 
     // Cancellable task for scroll cleanup on disappear
     @State private var scrollTask: Task<Void, Never>?
@@ -212,6 +213,10 @@ struct ExpandedChatSheet: View {
     // Archive alert state
     @State private var showArchivedAlert = false
 
+    // Rename state
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
+
     // MARK: - Static Constants (performance optimization)
     private static let inputBgColor = Color(red: 0.98, green: 0.98, blue: 0.98)
     private static let shadowColor = Color.black.opacity(0.15)
@@ -226,6 +231,11 @@ struct ExpandedChatSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Custom header (replaces toolbar to avoid double glass)
+                if !isSearching {
+                    customHeader
+                }
+
                 // Search bar (when active) - padding matches input area style
                 if isSearching {
                     ChatSearchBar(
@@ -233,7 +243,7 @@ struct ExpandedChatSheet: View {
                         isSearching: $isSearching,
                         isFocused: $isSearchFocused
                     )
-                    .padding(.top, 24)
+                    .padding(.top, 12)
                     .padding(.bottom, 12)
                     .background(Color(white: 0.97))
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -250,25 +260,7 @@ struct ExpandedChatSheet: View {
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.9), value: isSearching)
             .background(Color(white: 0.97))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if !isSearching {
-                        newChatButton
-                    }
-                }
-                ToolbarItem(placement: .principal) {
-                    if !isSearching {
-                        Text("Chat")
-                            .font(.headline)
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if !isSearching {
-                        toolbarButtons
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .navigationDestination(isPresented: $navigateToFlowerDetail) {
                 if let flower = selectedFlower {
                     FlowerCardView(flower: flower)
@@ -343,18 +335,29 @@ struct ExpandedChatSheet: View {
         }
         .overlay(alignment: .top) {
             if showArchivedAlert {
-                HStack(alignment: .center, spacing: 6) {
+                HStack(alignment: .center, spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.green)
                     Text("Chat archived")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.primary)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .glassEffect(.clear.tint(.white.opacity(0.3)).interactive(), in: Capsule())
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .padding(.top, 60)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .glassEffect(.regular, in: .capsule)
+                .transition(.move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.9)))
+                .padding(.top, 70)
             }
+        }
+        .alert("Rename Chat", isPresented: $showRenameAlert) {
+            TextField("Chat name", text: $renameText)
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                viewModel.renameChat(renameText)
+            }
+        } message: {
+            Text("Enter a new name for this chat")
         }
     }
 
@@ -492,25 +495,48 @@ struct ExpandedChatSheet: View {
         .transition(.scale.combined(with: .opacity))
     }
 
+    // MARK: - Custom Header (replaces toolbar to avoid iOS 26 double glass)
+
+    private var customHeader: some View {
+        HStack(spacing: 0) {
+            // Left: New chat button
+            newChatButton
+
+            Spacer(minLength: 16)
+
+            // Center: Title with truncation
+            Text(viewModel.chatTitle)
+                .font(.system(size: 17, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 16)
+
+            // Right: Search + Menu buttons
+            toolbarButtons
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+    }
+
     // MARK: - New Chat Button (Left)
 
-    @ViewBuilder
     private var newChatButton: some View {
         Button {
             viewModel.send(.reset)
             controller.sessionToLoad = nil
         } label: {
             Image(systemName: "plus.message")
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.black)
-                .frame(width: 42, height: 36)
-                .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: .rect(cornerRadius: 12))
+                .frame(width: 44, height: 44)
+                .glassEffect(.clear.tint(.white.opacity(0.1)).interactive(), in: .circle)
         }
     }
 
     // MARK: - Toolbar Buttons (Right)
 
-    @ViewBuilder
     private var toolbarButtons: some View {
         HStack(spacing: 0) {
             // Search button
@@ -521,31 +547,38 @@ struct ExpandedChatSheet: View {
                 }
             } label: {
                 Image(systemName: Self.toolbarSymbols[0])
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(.black)
-                    .frame(width: 42, height: 36)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
 
             // Menu button
             Menu {
                 Button {
+                    renameText = viewModel.chatTitle == "Chat" ? "" : viewModel.chatTitle
+                    showRenameAlert = true
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+
+                Button {
                     archiveCurrentChat()
                 } label: {
-                    Label("Архив", systemImage: "archivebox")
+                    Label("Archive", systemImage: "archivebox")
                 }
 
                 Button(role: .destructive) {
                     viewModel.send(.reset)
                     controller.sessionToLoad = nil
                 } label: {
-                    Label("Очистить чат", systemImage: "trash")
+                    Label("Clear Chat", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: Self.toolbarSymbols[1])
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(.black)
-                    .frame(width: 42, height: 36)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
         }
@@ -596,15 +629,17 @@ struct ExpandedChatSheet: View {
                 }
             }
 
-            HStack(alignment: .bottom, spacing: 12) {
-                // Plus button - animated appearance, aligned to bottom of input
-                if showPlusButton {
-                    plusButton
-                        .transition(.scale.combined(with: .opacity))
-                }
+            GlassEffectContainer(spacing: 12) {
+                HStack(alignment: .bottom, spacing: 12) {
+                    // Plus button - animated appearance, aligned to bottom of input
+                    if showPlusButton {
+                        plusButton
+                            .transition(.scale.combined(with: .opacity))
+                    }
 
-                // Text field container
-                textFieldContainer
+                    // Text field container
+                    textFieldContainer
+                }
             }
         }
         .padding(.horizontal, 20)
@@ -650,9 +685,13 @@ struct ExpandedChatSheet: View {
         .padding(.leading, 16)
         .padding(.trailing, 10)
         .padding(.vertical, 12)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .glassEffect(
+            .clear.tint(.white.opacity(0.1)).interactive(),
+            in: .rect(cornerRadius: viewModel.chatMode == nil ? 25 : 16)
+        )
+        .glassEffectID("inputField", in: inputGlassNS)
         .shadow(color: Self.lightShadowColor, radius: 4, x: 0, y: 2)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: viewModel.chatMode)
     }
 
     @ViewBuilder
@@ -661,21 +700,20 @@ struct ExpandedChatSheet: View {
             Button {
                 viewModel.send(.toggleMode(mode))  // Tap to toggle off
             } label: {
-                HStack(alignment: .center, spacing: 10) {
-                    Text(mode.displayName)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .background(Color(red: 0.91, green: 0.04, blue: 0.79))  // #E80AC9
-                .cornerRadius(10)
-                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 2)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .inset(by: 0.5)
-                        .stroke(.white, lineWidth: 1)
-                )
+                Text(mode.displayName)
+                    .font(.system(size: 15, weight: .regular))
+                    .tracking(-0.23)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color(red: 0.988, green: 0.988, blue: 0.988))  // #fcfcfc
+                    .cornerRadius(10)
+                    .shadow(color: .black.opacity(0.1), radius: 3, x: 0, y: 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .inset(by: 0.5)
+                            .stroke(.white, lineWidth: 1)
+                    )
             }
             .buttonStyle(.plain)
         }

@@ -53,6 +53,9 @@ final class ChatViewModel: ObservableObject {
     /// Controls the mode selection bottom sheet
     @Published var showModeSheet: Bool = false
 
+    /// Current chat title (defaults to "Chat" for new sessions)
+    @Published private(set) var chatTitle: String = "Chat"
+
     // MARK: - Cached Precomputed Data
 
     /// Cached message row data - automatically invalidated via didSet on messages
@@ -208,6 +211,9 @@ final class ChatViewModel: ObservableObject {
         // Reset state
         resetState()
 
+        // Set chat title from session (or default)
+        chatTitle = session.title.isEmpty ? "Chat" : session.title
+
         // Restore messages from session
         if session.messages.isEmpty {
             messages = [.welcomeMessage]
@@ -220,6 +226,21 @@ final class ChatViewModel: ObservableObject {
             if case .thinking(let content) = message.content, !content.isComplete {
                 expandedThinkingCards.insert(message.id)
             }
+        }
+    }
+
+    /// Rename the current chat
+    func renameChat(_ newTitle: String) {
+        let trimmedTitle = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+
+        // Update UI immediately
+        chatTitle = trimmedTitle
+
+        // Persist to storage if session exists
+        if let sessionId = sessionId,
+           let session = historyManager.getSession(by: sessionId) {
+            historyManager.renameSession(session, newTitle: trimmedTitle)
         }
     }
 
@@ -705,6 +726,7 @@ final class ChatViewModel: ObservableObject {
         isInputEnabled = true
         phase = .idle
         attachedImage = nil
+        chatTitle = "Chat"
         messages = [.welcomeMessage]
 
         // Clear active session state
