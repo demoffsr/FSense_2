@@ -2,53 +2,116 @@
 
 > AI-powered flower recommendation system that understands context, emotion, and meaning
 
-**Version 0.14** • Built with SwiftUI + Python
-An intelligent assistant that helps you find the perfect flower for any occasion.
+**Version 0.15** • Built with SwiftUI + Python
+An intelligent assistant that helps you find the perfect flower for any occasion—now with personalized profiles.
 
 ---
 
-## ✨ What's New in v0.14
+## ✨ What's New in v0.15
 
-### 📸 Liquid Glass Scanner UI
-The Scan feature gets a complete visual overhaul with iOS 26+ Liquid Glass design:
+### 👥 Loved Ones Profiles & @Mentions
+FSense now remembers the people you care about with personalized profiles:
 
-- **Glass Circular Buttons** — Large 56×56 frosted buttons for close, help, gallery, and info
-- **GlassModeToggle** — Animated segmented control switching between Single Flower and Bouquet modes
-- **Glowing Scan Frame** — Corner brackets with subtle pulsing glow effect
-- **Glass Analyzing Overlay** — Frosted spinner with status pill while identifying flowers
-- **Glass Result Card** — Bottom sheet with glass background, confidence badges, and action buttons
-- **Glass Error States** — Beautiful error modals with glass containers
+- **Loved Ones Management** — Create profiles with photos, relationships, and preferences
+- **@Mention Autocomplete** — Type `@` in chat to tag people with Liquid Glass picker
+- **Taste Profiles** — Track flower style, budget, mood preferences, and allergies
+- **Important Dates** — Birthdays, anniversaries, custom dates with countdown
+- **Hierarchical Relationships** — Family, Romance, Friends, Professional categories
+- **Users Screen** — Accessible from toolbar, organized by relationship type
 
-All components gracefully fallback to `.ultraThinMaterial` on iOS 15-25.
+### 🎨 Liquid Glass @Mention Picker
+Beautiful iOS 26+ autocomplete with glass morphism:
 
-### 🎯 New Scanner Layout
 ```
-┌─────────────────────────────────────┐
-│  (✕)                          (?)   │  ← Glass circles, 56×56
-│                                     │
-│      ┌─────────────────────┐        │
-│      │    ✨ Glow Frame ✨   │        │
-│      │                     │        │
-│      └─────────────────────┘        │
-│                                     │
-│       [Single] [Bouquet]            │  ← Glass segmented control
-│              ⚡                      │  ← Flash toggle
-│                                     │
-│   (📷)        (○)        (ℹ)       │  ← Gallery, Capture, Info
-└─────────────────────────────────────┘
+When you type @ in chat:
+┌───────────────────────────┐
+│  👤  Anna Demidov         │  ← Glass container
+│  👤  Anna Demidov         │     32pt avatars
+└───────────────────────────┘     13pt medium names
+      ▲ Slides up from input
 ```
 
-### 🔧 Technical Improvements
-- **GlassCircleButton** — Reusable component for all glass circular buttons
-- **GlassButtonStyle** — Custom button style with glass effect and press animation
-- **CaptureButtonStyle** — Scale animation for capture button feedback
-- **iOS 26 availability checks** — `#available(iOS 26, *)` with fallbacks throughout
+**Features:**
+- **VStack positioning** — Clean layout without overlay hacks
+- **Liquid Glass UI** — `.glassEffect(.regular.tint(.white))` on iOS 26+
+- **Smart filtering** — Matches name and nickname
+- **Instant insertion** — Tap to insert `@Name` in chat
+- **Spring animation** — Smooth slide-up transition
+- **Empty states** — Helpful hints when no users exist
+
+### 📝 Profile System
+Comprehensive user profile management:
+
+**Data Model:**
+- Name + nickname + photo (stored in Documents)
+- Relationship type (Mom, Girlfriend, Best Friend, Boss, etc.)
+- Birthday + anniversary + custom important dates
+- Flower taste profile:
+  - Style (minimal, classic, modern, lush, wildflower)
+  - Budget range (budget, moderate, premium, luxury)
+  - Mood preferences (romantic, celebratory, apologetic, etc.)
+  - Favorite flowers list
+  - Disliked flowers list
+  - ⚠️ **Allergies** (critical for safety!)
+  - Personal notes
+
+**Views:**
+- `LovedOnesListView` — Expandable categories with search
+- `LovedOneDetailView` — Hero avatar with upcoming events
+- `LovedOneEditView` — PhotosPicker, date pickers, chip selection
+
+### 🔧 Technical Implementation
+
+**Components:**
+```
+FSense/Features/LovedOnes/
+├── Models/
+│   ├── LovedOneProfile.swift        # Core profile model
+│   ├── RelationshipModels.swift     # Category + relationship enums
+│   └── TasteProfile.swift           # Flower preferences
+├── Views/
+│   ├── LovedOnesListView.swift      # Main list with categories
+│   ├── LovedOneDetailView.swift     # Profile detail screen
+│   ├── LovedOneEditView.swift       # Create/edit form
+│   └── Components/
+│       ├── LovedOneRowView.swift
+│       ├── ProfileAvatarView.swift  # 46pt (list), 120pt (detail)
+│       ├── UpcomingEventCard.swift
+│       ├── ChipSelectionView.swift
+│       └── TagInputView.swift
+└── Services/
+    └── LovedOnesService.swift       # Singleton with persistence
+```
+
+**Chat Integration:**
+```
+FSense/Features/Chat/Views/Components/
+├── MentionAutocompleteView.swift    # Glass picker UI
+├── MentionInputField.swift          # Standalone component
+└── BottomInputBarView.swift         # Integrated @mention
+```
+
+**Key Patterns:**
+- **Singleton service** — `LovedOnesService.shared` with async UserDefaults
+- **Photo storage** — Documents directory, not UserDefaults
+- **VStack layout** — Mentions list positioned BEFORE input in code
+- **Spring animations** — `.spring(response: 0.3, dampingFraction: 0.8)`
+- **Liquid Glass** — `#available(iOS 26, *)` with material fallbacks
 
 ---
 
 ## 🎯 Features
 
-### 📸 Flower Scanner (NEW!)
+### 👥 Loved Ones Profiles (NEW!)
+- **Profile Management** — CRUD operations with photo support
+- **Relationship Hierarchy** — Family, Romance, Friends, Professional
+- **Taste Profiles** — Remember preferences for personalized recommendations
+- **Important Dates** — Never miss birthdays or anniversaries
+- **@Mention System** — Quick access in chat with autocomplete
+- **Search & Filter** — Find profiles by name or nickname
+- **Glass Autocomplete** — Beautiful iOS 26 Liquid Glass UI
+
+### 📸 Flower Scanner
 - **Single Flower Mode** — Point and identify any flower
 - **Bouquet Mode** — Analyze multiple flowers in one shot
 - **Gallery Import** — Scan photos from your library
@@ -60,6 +123,7 @@ All components gracefully fallback to `.ultraThinMaterial` on iOS 15-25.
 - Natural conversation flow with context awareness
 - Real-time thinking visualization (10-agent pipeline)
 - Personalized flower recommendations
+- **@Mention integration** — Reference loved ones in context
 - Follow-up suggestions
 - **Persistent sessions** that survive app restarts
 
@@ -76,6 +140,7 @@ All components gracefully fallback to `.ultraThinMaterial` on iOS 15-25.
 
 ### 💬 Chat Experience
 - **Instant keyboard response** (pre-warmed on launch)
+- **@Mention autocomplete** with Liquid Glass
 - Typewriter animation for AI messages
 - Smart scroll behavior with floating bottom button
 - Smooth glass morphism effects throughout
@@ -103,19 +168,23 @@ FSense/
 ├── App/                      # Entry point, environment
 ├── Features/
 │   ├── Home/                 # Collapsed chat bar with glass UI
-│   ├── Chat/                 # Full-screen chat with search
+│   ├── Chat/                 # Full-screen chat with @mentions
+│   │   ├── Views/
+│   │   │   ├── ChatView.swift
+│   │   │   └── Components/
+│   │   │       ├── MentionAutocompleteView.swift  # 🆕 Glass picker
+│   │   │       └── MentionInputField.swift        # 🆕 Standalone
+│   │   ├── UsersView.swift                        # 🆕 Profiles list
+│   │   └── ChatViewModel.swift
+│   ├── LovedOnes/            # 🆕 Profile management
+│   │   ├── Models/
+│   │   ├── Views/
+│   │   └── Components/
 │   ├── FlowerCard/           # Recommendation details
 │   ├── Scan/                 # 📸 Camera & Liquid Glass UI
-│   │   ├── Views/
-│   │   │   ├── GlassModeToggle.swift
-│   │   │   ├── CameraControlsView.swift
-│   │   │   ├── ScanFrameOverlay.swift
-│   │   │   ├── AnalyzingOverlay.swift
-│   │   │   └── QuickInfoCardView.swift
-│   │   ├── ScanView.swift
-│   │   └── ScanViewModel.swift
 │   └── Profile/              # History, archive, settings
 ├── Services/
+│   ├── LovedOnesService      # 🆕 Profile persistence
 │   ├── ChatHistoryManager    # Session persistence
 │   ├── ChatArchiveService    # Archive management
 │   ├── APIService            # Backend communication
@@ -170,6 +239,7 @@ User Input → PipelineContext → FIA → EIA → RIL → FMRA → CIA →
 - Chat opens in <50ms
 - Session auto-loads if returning to conversation
 - Scanner with beautiful glass UI
+- **@Mention profiles** accessible from toolbar
 
 ### Backend Development
 ```bash
@@ -191,13 +261,14 @@ python -m backend.pipeline.runner "I want to apologize to my wife" --pretty
 
 ## 📊 Performance Metrics
 
-| Metric | v0.13 | v0.14 | Status |
+| Metric | v0.14 | v0.15 | Status |
 |--------|-------|-------|--------|
 | Chat Open Delay | <50ms | <50ms | ✅ Maintained |
-| Scanner UI | ⚠️ Basic | ✅ Liquid Glass | 🎉 Redesigned |
-| iOS 26 Features | ❌ None | ✅ Full | 🎉 New |
-| Glass Components | 3 | 10+ | 📈 Expanded |
-| Fallback Support | — | iOS 15-25 | ✅ Complete |
+| @Mention Trigger | — | <100ms | 🎉 New |
+| Profile CRUD | — | Async | 🎉 New |
+| Glass Components | 10+ | 12+ | 📈 Expanded |
+| Photo Storage | — | Documents | ✅ Optimized |
+| Fallback Support | iOS 15-25 | iOS 15-25 | ✅ Complete |
 
 ---
 
@@ -207,6 +278,7 @@ python -m backend.pipeline.runner "I want to apologize to my wife" --pretty
 - **SwiftUI** — Declarative UI framework (iOS 26+)
 - **Combine** — Reactive state management
 - **Swift Concurrency** — Async/await, actors
+- **PhotosUI** — PhotosPicker integration
 - **AVFoundation** — Camera capture
 - **UIKit** — Keyboard pre-warming, camera integration
 
@@ -262,29 +334,74 @@ PYTHONPATH=. pytest backend/tests/ --cov=backend --cov-report=html
 4. **Context Preservation** — Sessions persist, search highlights, archive organizes
 5. **Native Feel** — Respect iOS patterns (sheets, toolbars, haptics)
 6. **Accessibility First** — Dynamic Type, VoiceOver, reduce motion
+7. **Personalization** — Remember people and their preferences
 
 ---
 
 ## 🔍 Feature Deep Dive
 
-### Liquid Glass Scanner
+### @Mention Autocomplete System
 
+**Trigger Detection:**
 ```swift
-// Glass button pattern used throughout
-if #available(iOS 26, *) {
-    content
-        .glassEffect(.regular.interactive(), in: .circle)
-} else {
-    content
-        .background(.ultraThinMaterial, in: Circle())
+// MentionParser extracts query from text
+static func extractMentionQuery(from text: String) -> String? {
+    guard let atIndex = text.lastIndex(of: "@") else { return nil }
+    let afterAt = text[text.index(after: atIndex)...]
+    if afterAt.contains(" ") { return nil }
+    return String(afterAt)
 }
 ```
 
-**Components:**
-- `GlassModeToggle` — Segmented control with `matchedGeometryEffect`
-- `GlassCircleButton` — Reusable 44/56px glass buttons
-- `GlassButtonStyle` — Custom button style for action buttons
-- `CaptureButtonStyle` — Scale animation on press
+**VStack Positioning:**
+```swift
+VStack(alignment: .leading, spacing: 8) {
+    // Mentions list - appears ABOVE input
+    if showMentionAutocomplete, let query = mentionQuery {
+        mentionsListView(query: query)
+            .padding(.leading, 62)  // Align with text field
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    // Input bar - always at bottom
+    GlassEffectContainer { ... }
+}
+.animation(.spring(response: 0.3), value: showMentionAutocomplete)
+```
+
+**Glass Effect:**
+```swift
+if #available(iOS 26, *) {
+    content
+        .glassEffect(
+            .regular.tint(.white.opacity(0.2)),
+            in: .rect(cornerRadius: 20)
+        )
+} else {
+    content
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+}
+```
+
+### Loved Ones Service
+
+**Persistence:**
+```swift
+@MainActor
+class LovedOnesService: ObservableObject {
+    static let shared = LovedOnesService()
+    @Published private(set) var profiles: [LovedOneProfile] = []
+
+    func addProfile(_ profile: LovedOneProfile) async {
+        profiles.append(profile)
+        await saveProfiles()
+    }
+
+    private func saveProfiles() async {
+        // Async UserDefaults save
+    }
+}
+```
 
 ### Chat Session Persistence
 ```swift
@@ -308,23 +425,25 @@ if let session = controller.sessionToLoad {
 
 ## 🔮 Roadmap
 
-### v0.15 (Next Sprint)
+### v0.16 (Next Sprint)
+- [ ] AI recommendations using Loved Ones profiles
+- [ ] Mention context in agent pipeline (RIL integration)
+- [ ] Birthday reminders with flower suggestions
+- [ ] Profile-based search filters
+
+### v0.2.0
 - [ ] Scan history with thumbnails
 - [ ] Flower detail cards from scan results
 - [ ] Share scan results
-- [ ] Scan-to-chat integration
-
-### v0.2.0
 - [ ] Multi-language support (localization)
 - [ ] Flower dictionary with visual search
-- [ ] Share recommendations to social media
-- [ ] Home screen widget
 
 ### v0.3.0
 - [ ] Voice input for chat (Whisper API)
 - [ ] AR flower visualization (ARKit)
 - [ ] Local florist integration (Maps)
 - [ ] Offline mode with cached recommendations
+- [ ] Home screen widget with upcoming dates
 
 ---
 
@@ -349,6 +468,6 @@ This is a private project. For questions or collaboration inquiries, please cont
 ---
 
 **Made with ❤️ and 🌸**
-*Helping you say it with flowers*
+*Helping you say it with flowers, one person at a time*
 
 > "The earth laughs in flowers." — Ralph Waldo Emerson
