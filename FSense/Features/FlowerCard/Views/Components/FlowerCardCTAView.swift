@@ -16,7 +16,7 @@ struct FlowerCardCTAView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .gray))
                     }
                     
-                    Text(isProcessing ? "Processing..." : "Ask AI: is this a good choice?")
+                    Text(isProcessing ? "Searching..." : "Find Flowers")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.black)
                     

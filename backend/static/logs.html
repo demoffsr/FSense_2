@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FSense Pipeline Logs - Real-time</title>
+    <title>FSense Logs - Real-time</title>
     <style>
         * {
             margin: 0;
@@ -37,6 +37,41 @@
             font-size: 14px;
         }
 
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: #2a2a2a;
+            color: #999;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            background: #3a3a3a;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
         .status {
             display: flex;
             gap: 20px;
@@ -58,6 +93,10 @@
             border-radius: 50%;
             background: #4ade80;
             animation: pulse 2s infinite;
+        }
+
+        .status-dot.yandex {
+            background: #ff5722;
         }
 
         @keyframes pulse {
@@ -91,14 +130,14 @@
             transform: scale(0.98);
         }
 
-        #logs {
+        .logs-container {
             background: #0d1117;
             border: 1px solid #30363d;
             border-radius: 8px;
             padding: 20px;
             font-size: 13px;
             line-height: 1.6;
-            max-height: 70vh;
+            max-height: 60vh;
             overflow-y: auto;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
@@ -134,25 +173,33 @@
             color: #fbbf24;
         }
 
+        .log-yandex {
+            color: #ff5722;
+        }
+
+        .log-product {
+            color: #8b5cf6;
+        }
+
         .emoji {
             margin-right: 5px;
         }
 
-        #logs::-webkit-scrollbar {
+        .logs-container::-webkit-scrollbar {
             width: 8px;
         }
 
-        #logs::-webkit-scrollbar-track {
+        .logs-container::-webkit-scrollbar-track {
             background: #161b22;
             border-radius: 4px;
         }
 
-        #logs::-webkit-scrollbar-thumb {
+        .logs-container::-webkit-scrollbar-thumb {
             background: #30363d;
             border-radius: 4px;
         }
 
-        #logs::-webkit-scrollbar-thumb:hover {
+        .logs-container::-webkit-scrollbar-thumb:hover {
             background: #484f58;
         }
 
@@ -161,43 +208,105 @@
             padding: 40px;
             color: #6e7681;
         }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .section-header h2 {
+            font-size: 18px;
+            color: #e0e0e0;
+        }
+
+        .section-header .icon {
+            font-size: 24px;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🌸 FSense Pipeline Monitor</h1>
-        <div class="subtitle">Real-time agent execution logs</div>
+        <h1>🌸 FSense Monitor</h1>
+        <div class="subtitle">Real-time pipeline and search logs</div>
     </div>
 
-    <div class="status">
-        <div class="status-item">
-            <div class="status-dot"></div>
-            <span>Connected to server</span>
-        </div>
-        <div class="status-item">
-            <span id="requestCount">0 requests processed</span>
-        </div>
-    </div>
-
-    <div class="controls">
-        <button onclick="clearLogs()">Clear Logs</button>
-        <button onclick="toggleAutoScroll()">
-            <span id="autoScrollText">Auto-scroll: ON</span>
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('pipeline')">
+            🧠 AI Pipeline
+        </button>
+        <button class="tab" onclick="switchTab('yandex')">
+            🔍 Yandex Search (RU)
         </button>
     </div>
 
-    <div id="logs">
-        <div class="empty-state">
-            Waiting for pipeline requests...<br>
-            Send a request from your iOS app to see the magic! ✨
+    <!-- Pipeline Section -->
+    <div id="pipeline-section" class="section active">
+        <div class="status">
+            <div class="status-item">
+                <div class="status-dot"></div>
+                <span>Connected</span>
+            </div>
+            <div class="status-item">
+                <span id="pipelineCount">0 requests</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="clearLogs('pipeline')">Clear</button>
+            <button onclick="toggleAutoScroll('pipeline')">
+                <span id="pipelineAutoScroll">Auto-scroll: ON</span>
+            </button>
+        </div>
+
+        <div id="pipeline-logs" class="logs-container">
+            <div class="empty-state">
+                Waiting for pipeline requests...<br>
+                Send a chat message from your iOS app ✨
+            </div>
+        </div>
+    </div>
+
+    <!-- Yandex Section -->
+    <div id="yandex-section" class="section">
+        <div class="status">
+            <div class="status-item">
+                <div class="status-dot yandex"></div>
+                <span>Connected</span>
+            </div>
+            <div class="status-item">
+                <span id="yandexCount">0 searches</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="clearLogs('yandex')">Clear</button>
+            <button onclick="toggleAutoScroll('yandex')">
+                <span id="yandexAutoScroll">Auto-scroll: ON</span>
+            </button>
+        </div>
+
+        <div id="yandex-logs" class="logs-container">
+            <div class="empty-state">
+                Waiting for Yandex searches...<br>
+                Tap "Find Flowers" in the app 🌹
+            </div>
         </div>
     </div>
 
     <script>
-        let autoScroll = true;
-        let requestCount = 0;
+        let autoScroll = { pipeline: true, yandex: true };
+        let requestCount = { pipeline: 0, yandex: 0 };
         let eventSource = null;
-        let reconnectInterval = null;
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+
+            document.querySelector(`.tab:nth-child(${tab === 'pipeline' ? 1 : 2})`).classList.add('active');
+            document.getElementById(`${tab}-section`).classList.add('active');
+        }
 
         function connectToStream() {
             if (eventSource) {
@@ -210,10 +319,15 @@
                 try {
                     const data = JSON.parse(event.data);
                     console.log('Received log:', data);
-                    addLogEntry(data);
+
+                    // Route to appropriate section
+                    if (data.source === 'yandex' || data.type?.startsWith('yandex_')) {
+                        addYandexEntry(data);
+                    } else {
+                        addPipelineEntry(data);
+                    }
                 } catch (e) {
                     console.error('Failed to parse log:', event.data, e);
-                    addLogEntry({type: 'error', message: 'Parse error: ' + event.data});
                 }
             };
 
@@ -223,15 +337,11 @@
             };
         }
 
-        function addLogEntry(data) {
-            const logsDiv = document.getElementById('logs');
+        function addPipelineEntry(data) {
+            const logsDiv = document.getElementById('pipeline-logs');
 
-            // Skip keepalive
-            if (data.type === 'keepalive') {
-                return;
-            }
+            if (data.type === 'keepalive') return;
 
-            // Remove empty state
             if (logsDiv.querySelector('.empty-state')) {
                 logsDiv.innerHTML = '';
             }
@@ -239,67 +349,99 @@
             const entry = document.createElement('div');
             entry.className = 'log-entry';
 
-            // Handle different log types
             if (data.type === 'separator') {
                 entry.className = 'log-separator';
             } else if (data.type === 'pipeline_start') {
-                requestCount++;
-                document.getElementById('requestCount').textContent = `${requestCount} requests processed`;
+                requestCount.pipeline++;
+                document.getElementById('pipelineCount').textContent = `${requestCount.pipeline} requests`;
                 entry.className = 'log-entry log-header';
-                const msg = data.message || `PIPELINE STARTED | Request: ${data.request_id || 'unknown'}`;
-                entry.innerHTML = `<span class="emoji">🚀</span>${escapeHtml(msg)}`;
+                entry.innerHTML = `<span class="emoji">🚀</span>${escapeHtml(data.message || 'PIPELINE STARTED')}`;
             } else if (data.type === 'pipeline_end') {
                 entry.className = 'log-entry log-success';
-                const msg = data.message || 'PIPELINE COMPLETED';
-                entry.innerHTML = `<span class="emoji">✅</span>${escapeHtml(msg)}`;
+                entry.innerHTML = `<span class="emoji">✅</span>${escapeHtml(data.message || 'PIPELINE COMPLETED')}`;
             } else if (data.type === 'agent_start') {
                 entry.className = 'log-entry log-agent';
-                const emoji = data.emoji || '🔧';
-                const msg = data.message || `${data.agent} starting...`;
-                entry.innerHTML = `<span class="emoji">${emoji}</span>${escapeHtml(msg)}`;
+                entry.innerHTML = `<span class="emoji">${data.emoji || '🔧'}</span>${escapeHtml(data.message || data.agent)}`;
             } else if (data.type === 'agent_result') {
                 entry.className = 'log-entry log-info';
-                const msg = data.message || `${data.key}: ${data.value}`;
-                entry.innerHTML = `  • ${escapeHtml(msg)}`;
+                entry.innerHTML = `  • ${escapeHtml(data.message || data.key + ': ' + data.value)}`;
             } else if (data.type === 'agent_end') {
                 entry.className = 'log-entry log-success';
-                const msg = data.message || `${data.agent} completed`;
-                entry.innerHTML = `<span class="emoji">✅</span>${escapeHtml(msg)}`;
+                entry.innerHTML = `<span class="emoji">✅</span>${escapeHtml(data.message || data.agent + ' completed')}`;
             } else if (data.type === 'error') {
                 entry.className = 'log-entry log-error';
-                const msg = data.message || data.error || 'Unknown error';
-                entry.innerHTML = `<span class="emoji">❌</span>${escapeHtml(msg)}`;
+                entry.innerHTML = `<span class="emoji">❌</span>${escapeHtml(data.message || data.error)}`;
             } else {
-                // Fallback
-                const msg = data.message || JSON.stringify(data);
-                entry.textContent = msg;
+                entry.textContent = data.message || JSON.stringify(data);
             }
 
             logsDiv.appendChild(entry);
+            if (autoScroll.pipeline) logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
 
-            if (autoScroll) {
-                logsDiv.scrollTop = logsDiv.scrollHeight;
+        function addYandexEntry(data) {
+            const logsDiv = document.getElementById('yandex-logs');
+
+            if (data.type === 'keepalive') return;
+
+            if (logsDiv.querySelector('.empty-state')) {
+                logsDiv.innerHTML = '';
             }
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            if (data.type === 'yandex_search_start') {
+                requestCount.yandex++;
+                document.getElementById('yandexCount').textContent = `${requestCount.yandex} searches`;
+                entry.className = 'log-entry log-yandex';
+                entry.innerHTML = `<span class="emoji">🔍</span><strong>SEARCH:</strong> ${escapeHtml(data.query)} in ${escapeHtml(data.city)}`;
+            } else if (data.type === 'yandex_cache_hit') {
+                requestCount.yandex++;
+                document.getElementById('yandexCount').textContent = `${requestCount.yandex} searches`;
+                entry.className = 'log-entry log-success';
+                entry.innerHTML = `<span class="emoji">💾</span><strong>CACHE HIT:</strong> ${escapeHtml(data.query)} in ${escapeHtml(data.city)} (${data.count} products)`;
+            } else if (data.type === 'yandex_search_end') {
+                entry.className = 'log-entry log-success';
+                entry.innerHTML = `<span class="emoji">✅</span>Found ${data.count} products (${data.time}s)`;
+            } else if (data.type === 'yandex_product') {
+                entry.className = 'log-entry log-product';
+                const price = data.price || 'N/A';
+                entry.innerHTML = `  • ${escapeHtml(data.name.substring(0, 50))}... | <strong>${price}</strong> | ${escapeHtml(data.vendor)}`;
+            } else if (data.type === 'yandex_error') {
+                entry.className = 'log-entry log-error';
+                entry.innerHTML = `<span class="emoji">❌</span>${escapeHtml(data.message || data.error)}`;
+            } else if (data.type === 'separator' || data.type === 'yandex_separator') {
+                entry.className = 'log-separator';
+            } else {
+                entry.textContent = data.message || JSON.stringify(data);
+            }
+
+            logsDiv.appendChild(entry);
+            if (autoScroll.yandex) logsDiv.scrollTop = logsDiv.scrollHeight;
         }
 
         function escapeHtml(text) {
+            if (!text) return '';
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        function clearLogs() {
-            document.getElementById('logs').innerHTML = '<div class="empty-state">Logs cleared. Waiting for new requests...</div>';
-            requestCount = 0;
-            document.getElementById('requestCount').textContent = '0 requests processed';
+        function clearLogs(section) {
+            const msg = section === 'pipeline'
+                ? 'Waiting for pipeline requests...'
+                : 'Waiting for Yandex searches...';
+            document.getElementById(`${section}-logs`).innerHTML = `<div class="empty-state">${msg}</div>`;
+            requestCount[section] = 0;
+            document.getElementById(`${section}Count`).textContent = section === 'pipeline' ? '0 requests' : '0 searches';
         }
 
-        function toggleAutoScroll() {
-            autoScroll = !autoScroll;
-            document.getElementById('autoScrollText').textContent = `Auto-scroll: ${autoScroll ? 'ON' : 'OFF'}`;
+        function toggleAutoScroll(section) {
+            autoScroll[section] = !autoScroll[section];
+            document.getElementById(`${section}AutoScroll`).textContent = `Auto-scroll: ${autoScroll[section] ? 'ON' : 'OFF'}`;
         }
 
-        // Connect on load
         connectToStream();
     </script>
 </body>

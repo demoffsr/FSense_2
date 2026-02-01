@@ -998,6 +998,65 @@ async def cleanup_stale_images():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# FLOWER PRODUCT SEARCH ENDPOINT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from backend.schemas.flower_product import (
+    FlowerSearchRequest,
+    FlowerSearchResponse,
+)
+
+
+@app.post("/api/flowers/search", response_model=FlowerSearchResponse)
+async def search_flower_products(request: FlowerSearchRequest):
+    """
+    Search for flower products online.
+
+    Uses region-specific providers:
+    - Yandex XML for Russia (RU)
+    - Florist One API for US/Canada (US, CA)
+    - Fallback provider for other regions
+
+    Args:
+        request: Contains flower_name, city, region, and max_results
+
+    Returns:
+        FlowerSearchResponse with list of products
+    """
+    from backend.services.flower_search_service import FlowerSearchService, FlowerSearchError
+
+    try:
+        service = FlowerSearchService()
+        result = await service.search_products(
+            flower_name=request.flower_name,
+            city=request.city,
+            region=request.region,
+            max_results=request.max_results,
+            skip_cache=request.skip_cache,
+        )
+        return result
+
+    except FlowerSearchError as e:
+        logger.error(f"Flower search error: {e}")
+        return FlowerSearchResponse(
+            success=False,
+            query=f"{request.flower_name} {request.city}",
+            provider="unknown",
+            products=[],
+            error=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Unexpected flower search error: {e}")
+        return FlowerSearchResponse(
+            success=False,
+            query=f"{request.flower_name} {request.city}",
+            provider="unknown",
+            products=[],
+            error="Failed to search for flowers. Please try again.",
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN ENTRYPOINT
 # ═══════════════════════════════════════════════════════════════════════════════
 

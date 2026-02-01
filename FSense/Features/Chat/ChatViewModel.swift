@@ -410,22 +410,40 @@ final class ChatViewModel: ObservableObject {
                     await handleFlowerRequest(userQuery, image: image, context: context)
 
                 case nil:
-                    // General mode: use existing intent classification + pipeline logic
-                    let classification = try? await APIService.shared.classifyIntent(
-                        prompt: userQuery,
-                        context: context
-                    )
+                    // General mode: show typing indicator during classification
+                    let typingMessage = ChatMessage(content: .typing, sender: .ai)
+                    messages.append(typingMessage)
+                    let typingMessageId = typingMessage.id
 
-                    guard !Task.isCancelled else { return }
+                    do {
+                        let classification = try await APIService.shared.classifyIntent(
+                            prompt: userQuery,
+                            context: context
+                        )
 
-                    let intent = classification?.intent ?? "flower_request"
+                        guard !Task.isCancelled else {
+                            messages.removeFirst(withId: typingMessageId)
+                            return
+                        }
 
-                    // Route based on intent
-                    if intent == "off_topic" || intent == "clarification" {
-                        // Non-flower query: get text response directly (no acknowledgement)
-                        await handleNonFlowerQuery(userQuery, image: image, context: context)
-                    } else {
-                        // Flower request: show acknowledgement + pipeline
+                        // Remove typing indicator before routing
+                        messages.removeFirst(withId: typingMessageId)
+
+                        let intent = classification.intent
+
+                        // Route based on intent
+                        if intent == "off_topic" || intent == "clarification" {
+                            // Non-flower query: get text response directly (no acknowledgement)
+                            await handleNonFlowerQuery(userQuery, image: image, context: context)
+                        } else {
+                            // Flower request: show acknowledgement + pipeline
+                            await handleFlowerRequest(userQuery, image: image, context: context)
+                        }
+                    } catch {
+                        print("[ChatViewModel] classifyIntent failed: \(error)")
+                        messages.removeFirst(withId: typingMessageId)
+
+                        // Fallback: treat as flower request
                         await handleFlowerRequest(userQuery, image: image, context: context)
                     }
                 }

@@ -17,10 +17,12 @@ struct FlowerCardState: Equatable {
     var selectedSegment: FlowerCardSegment = .meaning
     var isLoading: Bool = false
     var errorMessage: String?
-    
+
+    // Find Flowers state
+    var isSearchingProducts: Bool = false
+    var flowerProducts: [FlowerProduct] = []
+    var productSearchError: String?
+
     // Navigation state
-    var shouldNavigateToBouquetRecommendations: Bool = false
-    
-    // AI CTA state
-    var isAIProcessing: Bool = false
+    var shouldNavigateToFlowerProducts: Bool = false
 }

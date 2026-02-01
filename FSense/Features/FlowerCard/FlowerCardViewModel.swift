@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// ViewModel for Flower Card screen
 /// Responsibility: Handles state and actions for the Flower Card feature
@@ -34,38 +35,41 @@ final class FlowerCardViewModel: ObservableObject {
         switch action {
         case .onAppear:
             handleOnAppear()
-            
+
         case .onDisappear:
             handleOnDisappear()
-            
+
         case .selectSegment(let segment):
             state.selectedSegment = segment
-            
-        case .askAITapped:
-            handleAskAI()
-            
-        case .aiResponseReceived(let response):
-            state.isAIProcessing = false
-            // Future: Handle AI response presentation
-            _ = response
-            
-        case .aiRequestFailed(let error):
-            state.isAIProcessing = false
-            state.errorMessage = error
-            
-        case .navigateToBouquetRecommendations:
-            state.shouldNavigateToBouquetRecommendations = true
-            
-        case .dismissBouquetRecommendations:
-            state.shouldNavigateToBouquetRecommendations = false
-            
+
+        case .findFlowersTapped:
+            handleFindFlowers()
+
+        case .flowerProductsLoaded(let products):
+            state.isSearchingProducts = false
+            state.flowerProducts = products
+            state.shouldNavigateToFlowerProducts = true
+
+        case .flowerProductsLoadFailed(let error):
+            state.isSearchingProducts = false
+            state.productSearchError = error
+
+        case .navigateToFlowerProducts:
+            state.shouldNavigateToFlowerProducts = true
+
+        case .dismissFlowerProducts:
+            state.shouldNavigateToFlowerProducts = false
+
+        case .openProductLink(let url):
+            UIApplication.shared.open(url)
+
         case .loadFlowerDetails(let id):
             handleLoadFlowerDetails(id: id)
-            
+
         case .flowerDetailsLoaded(let flower):
             state.flower = flower
             state.isLoading = false
-            
+
         case .flowerDetailsLoadFailed(let error):
             state.errorMessage = error
             state.isLoading = false
@@ -85,9 +89,13 @@ final class FlowerCardViewModel: ObservableObject {
     var isLoading: Bool {
         state.isLoading
     }
-    
-    var isAIProcessing: Bool {
-        state.isAIProcessing
+
+    var isSearchingProducts: Bool {
+        state.isSearchingProducts
+    }
+
+    var flowerProducts: [FlowerProduct] {
+        state.flowerProducts
     }
     
     // MARK: - Segment Data Accessors
@@ -126,14 +134,32 @@ final class FlowerCardViewModel: ObservableObject {
         // Future: Cleanup, cancel pending requests, etc.
     }
     
-    private func handleAskAI() {
-        state.isAIProcessing = true
-        
-        // Future: Call AI service
-        // For now, simulate with placeholder
+    private func handleFindFlowers() {
+        guard let flower = state.flower else { return }
+
+        state.isSearchingProducts = true
+        state.productSearchError = nil
+
+        // TODO: Get city from user settings or location
+        let city = "Москва"  // Default city for testing
+        let region = "RU"    // Default region for testing
+
         Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            send(.navigateToBouquetRecommendations)
+            do {
+                let response = try await APIService.shared.searchFlowerProducts(
+                    flowerName: flower.name,
+                    city: city,
+                    region: region
+                )
+
+                if response.success {
+                    send(.flowerProductsLoaded(response.products))
+                } else {
+                    send(.flowerProductsLoadFailed(response.error ?? "Unknown error"))
+                }
+            } catch {
+                send(.flowerProductsLoadFailed(error.localizedDescription))
+            }
         }
     }
     

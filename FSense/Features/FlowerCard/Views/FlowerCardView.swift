@@ -53,18 +53,25 @@ struct FlowerCardView: View {
             VStack {
                 Spacer()
                 FlowerCardCTAView(
-                    isProcessing: viewModel.isAIProcessing,
-                    onTap: { viewModel.send(.askAITapped) }
+                    isProcessing: viewModel.isSearchingProducts,
+                    onTap: { viewModel.send(.findFlowersTapped) }
                 )
             }
         }
         .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
-        .navigationDestination(isPresented: Binding(
-            get: { viewModel.state.shouldNavigateToBouquetRecommendations },
-            set: { if !$0 { viewModel.send(.dismissBouquetRecommendations) } }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.shouldNavigateToFlowerProducts },
+            set: { if !$0 { viewModel.send(.dismissFlowerProducts) } }
         )) {
-            BouquetRecommendationsPlaceholderView()
+            FlowerProductsSheet(
+                products: viewModel.flowerProducts,
+                flowerName: viewModel.flower?.name ?? "Flowers",
+                isPresented: Binding(
+                    get: { viewModel.state.shouldNavigateToFlowerProducts },
+                    set: { if !$0 { viewModel.send(.dismissFlowerProducts) } }
+                )
+            )
         }
         .onAppear { viewModel.send(.onAppear) }
         .onDisappear { viewModel.send(.onDisappear) }

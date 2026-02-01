@@ -88,6 +88,15 @@ class Settings:
     # Debug
     debug_mode: bool = False
     log_level: str = "INFO"
+
+    # External APIs (optional)
+    serper_api_key: str = ""  # Legacy, kept for backward compatibility
+
+    # Flower Search Providers
+    yandex_cloud_api_key: str = ""    # Yandex Cloud Search API key
+    yandex_cloud_folder_id: str = ""  # Yandex Cloud folder ID
+    florist_one_api_key: str = ""     # Florist One API key for US
+    florist_one_api_key_ca: str = ""  # Florist One API key for Canada
     
     @classmethod
     def from_env(cls) -> "Settings":
@@ -140,6 +149,15 @@ class Settings:
             # Debug
             debug_mode=os.getenv("DEBUG_MODE", "false").lower() == "true",
             log_level=os.getenv("LOG_LEVEL", "INFO"),
+
+            # External APIs
+            serper_api_key=os.getenv("SERPER_API_KEY", ""),
+
+            # Flower Search Providers
+            yandex_cloud_api_key=os.getenv("YANDEX_CLOUD_API_KEY", ""),
+            yandex_cloud_folder_id=os.getenv("YANDEX_CLOUD_FOLDER_ID", ""),
+            florist_one_api_key=os.getenv("FLORIST_ONE_API_KEY", ""),
+            florist_one_api_key_ca=os.getenv("FLORIST_ONE_API_KEY_CA", ""),
         )
     
     def validate(self) -> None:

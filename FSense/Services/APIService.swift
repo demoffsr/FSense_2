@@ -14,7 +14,7 @@ actor APIService {
     /// Use this static property from other services to avoid hardcoding URLs
     static let baseURL: String = {
         #if DEBUG
-        return "http://192.168.1.176:8000"  // Use Mac's IP for real device testing
+        return "http://192.168.1.16:8000"  // Use Mac's IP for real device testing
         // Use "http://localhost:8000" if running on iOS Simulator
         #else
         return "http://localhost:8000" // TODO: Replace with production URL
@@ -604,6 +604,80 @@ private struct ScanDetailRequestBody: Encodable {
     enum CodingKeys: String, CodingKey {
         case requestId = "request_id"
         case flowerId = "flower_id"
+    }
+}
+
+// MARK: - Flower Product Search API
+
+extension APIService {
+
+    /// Search for flower products online
+    /// - Parameters:
+    ///   - flowerName: Name of flower to search
+    ///   - city: City for delivery/search
+    ///   - region: Geographic region (US, CA, RU)
+    ///   - maxResults: Maximum products to return
+    /// - Returns: FlowerSearchResponse with products
+    func searchFlowerProducts(
+        flowerName: String,
+        city: String,
+        region: String = "US",
+        maxResults: Int = 10
+    ) async throws -> FlowerSearchResponse {
+        let endpoint = "\(apiBaseURL)/api/flowers/search"
+
+        guard let url = URL(string: endpoint) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = FlowerSearchRequestBody(
+            flowerName: flowerName,
+            city: city,
+            region: region,
+            maxResults: maxResults
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            return try decoder.decode(FlowerSearchResponse.self, from: data)
+
+        case 400..<500:
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.detail)
+            }
+            throw APIError.clientError(httpResponse.statusCode)
+
+        case 500..<600:
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+
+        default:
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
+}
+
+private struct FlowerSearchRequestBody: Encodable {
+    let flowerName: String
+    let city: String
+    let region: String
+    let maxResults: Int
+
+    enum CodingKeys: String, CodingKey {
+        case flowerName = "flower_name"
+        case city
+        case region
+        case maxResults = "max_results"
     }
 }
 
