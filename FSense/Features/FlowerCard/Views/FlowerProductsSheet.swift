@@ -4,8 +4,10 @@ import SwiftUI
 struct FlowerProductsSheet: View {
     let products: [FlowerProduct]
     let flowerName: String
+    let cachedAt: String?  // ISO timestamp when results were cached
+    let isRefreshing: Bool
     @Binding var isPresented: Bool
-    var onFindMore: (() -> Void)?
+    var onRefresh: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,14 +32,83 @@ struct FlowerProductsSheet: View {
     // MARK: - Header
 
     private var sheetHeader: some View {
-        HStack {
-            Text(flowerName)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundColor(.primary)
+        HStack(alignment: .center) {
+            // Title + Updated text (2px spacing)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(flowerName)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(.primary)
+
+                Text(timeAgoText)
+                    .font(.system(size: 13))
+                    .foregroundColor(.black.opacity(0.5))
+            }
 
             Spacer()
+
+            // Refresh button (32x32, centered vertically)
+            refreshButton
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+
+    private var refreshButton: some View {
+        Button {
+            onRefresh?()
+        } label: {
+            Group {
+                if isRefreshing {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.black)
+                }
+            }
+            .frame(width: 32, height: 32)
+            .background(Color(red: 0.98, green: 0.98, blue: 0.98))
+            .cornerRadius(100)
+            .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: 100)
+                    .inset(by: 0.5)
+                    .stroke(.white, lineWidth: 1)
+            )
+        }
+        .disabled(isRefreshing)
+    }
+
+    private var timeAgoText: String {
+        guard let cachedAt else { return "Updated just now" }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        // Try parsing with fractional seconds first, then without
+        var date = formatter.date(from: cachedAt)
+        if date == nil {
+            formatter.formatOptions = [.withInternetDateTime]
+            date = formatter.date(from: cachedAt)
+        }
+
+        guard let cachedDate = date else { return "Updated recently" }
+
+        let interval = Date().timeIntervalSince(cachedDate)
+
+        if interval < 60 {
+            return "Updated just now"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "Updated \(minutes)m ago"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "Updated \(hours)h ago"
+        } else {
+            let days = Int(interval / 86400)
+            return "Updated \(days)d ago"
+        }
     }
 
     // MARK: - Product List
@@ -63,7 +134,7 @@ struct FlowerProductsSheet: View {
 
     private var findMoreButton: some View {
         Button {
-            onFindMore?()
+            onRefresh?()
         } label: {
             Text("Find more")
                 .font(.system(size: 17, weight: .medium))
@@ -229,6 +300,8 @@ struct ShopProductCard: View {
     FlowerProductsSheet(
         products: FlowerProduct.mockProducts,
         flowerName: "Red Rose",
+        cachedAt: "2026-02-01T15:00:00Z",
+        isRefreshing: false,
         isPresented: .constant(true)
     )
 }
@@ -237,6 +310,8 @@ struct ShopProductCard: View {
     FlowerProductsSheet(
         products: [],
         flowerName: "Orchids",
+        cachedAt: nil,
+        isRefreshing: false,
         isPresented: .constant(true)
     )
 }
