@@ -2,15 +2,106 @@
 
 > AI-powered flower recommendation system that understands context, emotion, and meaning
 
-**Version 0.15** • Built with SwiftUI + Python
-An intelligent assistant that helps you find the perfect flower for any occasion—now with personalized profiles.
+**Version 0.16** • Built with SwiftUI + Python
+An intelligent assistant that helps you find the perfect flower for any occasion—now with real product links.
 
 ---
 
-## ✨ What's New in v0.15
+## ✨ What's New in v0.16
 
-### 👥 Loved Ones Profiles & @Mentions
-FSense now remembers the people you care about with personalized profiles:
+### 🛒 Find Flowers — Real Product Links
+Turn AI recommendations into real purchases with integrated product search:
+
+```
+┌─────────────────────────────────────┐
+│  🌹 Red Roses                       │
+│  Updated 2 min ago            🔄    │  ← 32px refresh button
+├─────────────────────────────────────┤
+│  ┌─────────┐  ┌─────────┐          │
+│  │  📷     │  │  📷     │          │  ← Product cards
+│  │ $29.99  │  │ $34.50  │          │     with images
+│  │ Florist │  │ Shop    │          │
+│  └─────────┘  └─────────┘          │
+└─────────────────────────────────────┘
+```
+
+**Features:**
+- **One-tap search** — "Find Flowers" button on every FlowerCard
+- **Smart caching** — Results cached 24h, instant reload
+- **"Show links"** — Skip API when products already loaded
+- **Refresh on demand** — Pull fresh results anytime
+- **Product cards** — Image, price, merchant, direct link
+- **Time ago display** — "Updated 2 min ago" with live refresh
+
+### 🔍 Yandex Search Integration
+Powerful backend search with intelligent parsing:
+
+- **Multi-region support** — Adapts to user locale
+- **Price extraction** — Parses prices from merchant pages
+- **Image thumbnails** — High-quality product images
+- **Merchant detection** — Shows store name for trust
+- **Rate limiting** — Respectful API usage with backoff
+- **Error recovery** — Graceful fallbacks on failures
+
+### 💾 Search Caching System
+Efficient caching reduces API calls and speeds up UX:
+
+- **SQLite backend** — Persistent across app launches
+- **24-hour TTL** — Fresh results without constant fetching
+- **Skip cache option** — Force refresh when needed
+- **Automatic cleanup** — Expired entries purged on access
+- **Query normalization** — Case-insensitive matching
+
+### 🎨 FlowerProducts Sheet UI
+Beautiful bottom sheet with Liquid Glass design:
+
+- **Compact header** — Title + "Updated" with 2px spacing
+- **32x32 refresh button** — Vertically centered, glass effect
+- **LazyVGrid layout** — Responsive 2-column product grid
+- **Loading states** — Skeleton cards during search
+- **Empty states** — Helpful message when no products found
+- **Safari integration** — Tap product to open in browser
+
+### 🔧 Technical Implementation
+
+**iOS Components:**
+```
+FSense/Features/FlowerCard/
+├── Views/
+│   ├── FlowerCardView.swift          # CTA integration
+│   ├── FlowerProductsSheet.swift     # Product grid UI
+│   └── Components/
+│       ├── FlowerCardCTAView.swift   # Find/Show links button
+│       └── FlowerProductCard.swift   # Individual product
+├── Models/
+│   └── FlowerProduct.swift           # Product data model
+└── FlowerCardViewModel.swift         # Search orchestration
+```
+
+**Backend Services:**
+```
+backend/services/
+├── flower_search_service.py          # Search orchestrator
+├── search_cache.py                   # SQLite caching
+└── providers/
+    └── yandex_provider.py            # Yandex API integration
+```
+
+**Key Patterns:**
+- **Cached-first strategy** — Check cache before API call
+- **Skip redundant calls** — "Show links" opens sheet directly
+- **Async image loading** — AsyncImage with placeholders
+- **Price formatting** — Locale-aware currency display
+- **Deep linking** — Direct merchant URLs in Safari
+
+---
+
+## 📦 Previous Release: v0.15
+
+<details>
+<summary><strong>👥 Loved Ones Profiles & @Mentions</strong></summary>
+
+FSense remembers the people you care about with personalized profiles:
 
 - **Loved Ones Management** — Create profiles with photos, relationships, and preferences
 - **@Mention Autocomplete** — Type `@` in chat to tag people with Liquid Glass picker
@@ -19,90 +110,35 @@ FSense now remembers the people you care about with personalized profiles:
 - **Hierarchical Relationships** — Family, Romance, Friends, Professional categories
 - **Users Screen** — Accessible from toolbar, organized by relationship type
 
-### 🎨 Liquid Glass @Mention Picker
-Beautiful iOS 26+ autocomplete with glass morphism:
-
-```
-When you type @ in chat:
-┌───────────────────────────┐
-│  👤  Anna Demidov         │  ← Glass container
-│  👤  Anna Demidov         │     32pt avatars
-└───────────────────────────┘     13pt medium names
-      ▲ Slides up from input
-```
-
-**Features:**
-- **VStack positioning** — Clean layout without overlay hacks
-- **Liquid Glass UI** — `.glassEffect(.regular.tint(.white))` on iOS 26+
-- **Smart filtering** — Matches name and nickname
-- **Instant insertion** — Tap to insert `@Name` in chat
-- **Spring animation** — Smooth slide-up transition
-- **Empty states** — Helpful hints when no users exist
-
-### 📝 Profile System
-Comprehensive user profile management:
-
-**Data Model:**
-- Name + nickname + photo (stored in Documents)
-- Relationship type (Mom, Girlfriend, Best Friend, Boss, etc.)
-- Birthday + anniversary + custom important dates
-- Flower taste profile:
-  - Style (minimal, classic, modern, lush, wildflower)
-  - Budget range (budget, moderate, premium, luxury)
-  - Mood preferences (romantic, celebratory, apologetic, etc.)
-  - Favorite flowers list
-  - Disliked flowers list
-  - ⚠️ **Allergies** (critical for safety!)
-  - Personal notes
-
-**Views:**
-- `LovedOnesListView` — Expandable categories with search
-- `LovedOneDetailView` — Hero avatar with upcoming events
-- `LovedOneEditView` — PhotosPicker, date pickers, chip selection
-
-### 🔧 Technical Implementation
-
 **Components:**
 ```
 FSense/Features/LovedOnes/
 ├── Models/
-│   ├── LovedOneProfile.swift        # Core profile model
-│   ├── RelationshipModels.swift     # Category + relationship enums
-│   └── TasteProfile.swift           # Flower preferences
+│   ├── LovedOneProfile.swift
+│   ├── RelationshipModels.swift
+│   └── TasteProfile.swift
 ├── Views/
-│   ├── LovedOnesListView.swift      # Main list with categories
-│   ├── LovedOneDetailView.swift     # Profile detail screen
-│   ├── LovedOneEditView.swift       # Create/edit form
-│   └── Components/
-│       ├── LovedOneRowView.swift
-│       ├── ProfileAvatarView.swift  # 46pt (list), 120pt (detail)
-│       ├── UpcomingEventCard.swift
-│       ├── ChipSelectionView.swift
-│       └── TagInputView.swift
+│   ├── LovedOnesListView.swift
+│   ├── LovedOneDetailView.swift
+│   └── LovedOneEditView.swift
 └── Services/
-    └── LovedOnesService.swift       # Singleton with persistence
+    └── LovedOnesService.swift
 ```
-
-**Chat Integration:**
-```
-FSense/Features/Chat/Views/Components/
-├── MentionAutocompleteView.swift    # Glass picker UI
-├── MentionInputField.swift          # Standalone component
-└── BottomInputBarView.swift         # Integrated @mention
-```
-
-**Key Patterns:**
-- **Singleton service** — `LovedOnesService.shared` with async UserDefaults
-- **Photo storage** — Documents directory, not UserDefaults
-- **VStack layout** — Mentions list positioned BEFORE input in code
-- **Spring animations** — `.spring(response: 0.3, dampingFraction: 0.8)`
-- **Liquid Glass** — `#available(iOS 26, *)` with material fallbacks
+</details>
 
 ---
 
 ## 🎯 Features
 
-### 👥 Loved Ones Profiles (NEW!)
+### 🛒 Find Flowers (NEW!)
+- **Real Product Links** — Search actual flower products for purchase
+- **Yandex Integration** — Powerful search with price extraction
+- **Smart Caching** — 24-hour cache, instant reload on repeat
+- **Product Cards** — Image, price, merchant with direct links
+- **One-tap Purchase** — Open merchant page in Safari
+- **Refresh Anytime** — Pull fresh results on demand
+
+### 👥 Loved Ones Profiles
 - **Profile Management** — CRUD operations with photo support
 - **Relationship Hierarchy** — Family, Romance, Friends, Professional
 - **Taste Profiles** — Remember preferences for personalized recommendations
@@ -172,19 +208,27 @@ FSense/
 │   │   ├── Views/
 │   │   │   ├── ChatView.swift
 │   │   │   └── Components/
-│   │   │       ├── MentionAutocompleteView.swift  # 🆕 Glass picker
-│   │   │       └── MentionInputField.swift        # 🆕 Standalone
-│   │   ├── UsersView.swift                        # 🆕 Profiles list
+│   │   │       ├── MentionAutocompleteView.swift
+│   │   │       └── MentionInputField.swift
+│   │   ├── UsersView.swift
 │   │   └── ChatViewModel.swift
-│   ├── LovedOnes/            # 🆕 Profile management
+│   ├── LovedOnes/            # Profile management
 │   │   ├── Models/
 │   │   ├── Views/
 │   │   └── Components/
 │   ├── FlowerCard/           # Recommendation details
+│   │   ├── Views/
+│   │   │   ├── FlowerCardView.swift
+│   │   │   ├── FlowerProductsSheet.swift    # 🆕 Product grid
+│   │   │   └── Components/
+│   │   │       ├── FlowerCardCTAView.swift  # 🆕 Find/Show links
+│   │   │       └── FlowerProductCard.swift  # 🆕 Product card
+│   │   └── Models/
+│   │       └── FlowerProduct.swift          # 🆕 Product model
 │   ├── Scan/                 # 📸 Camera & Liquid Glass UI
 │   └── Profile/              # History, archive, settings
 ├── Services/
-│   ├── LovedOnesService      # 🆕 Profile persistence
+│   ├── LovedOnesService      # Profile persistence
 │   ├── ChatHistoryManager    # Session persistence
 │   ├── ChatArchiveService    # Archive management
 │   ├── APIService            # Backend communication
@@ -192,7 +236,7 @@ FSense/
 └── Shared/                   # Components, utilities
 ```
 
-### Python Backend (Agent Pipeline)
+### Python Backend (Agent Pipeline + Search)
 ```
 backend/
 ├── pipeline/                 # Orchestrator, context, runner
@@ -207,8 +251,14 @@ backend/
 │   ├── cri.py               # Cultural & Regional Intelligence
 │   ├── srfl.py              # Self-Reflection Layer
 │   └── sfa.py               # Symbolic Flower Agent (final)
+├── services/                 # 🆕 External integrations
+│   ├── flower_search_service.py    # Search orchestrator
+│   ├── search_cache.py             # SQLite caching (24h TTL)
+│   └── providers/
+│       └── yandex_provider.py      # Yandex search API
 ├── schemas/                  # Pydantic models
 │   ├── flower_card_payload.py
+│   ├── flower_product.py           # 🆕 Product schema
 │   └── pipeline_enums.py
 └── core/                     # Settings, AI client
 ```
@@ -261,14 +311,14 @@ python -m backend.pipeline.runner "I want to apologize to my wife" --pretty
 
 ## 📊 Performance Metrics
 
-| Metric | v0.14 | v0.15 | Status |
+| Metric | v0.15 | v0.16 | Status |
 |--------|-------|-------|--------|
 | Chat Open Delay | <50ms | <50ms | ✅ Maintained |
-| @Mention Trigger | — | <100ms | 🎉 New |
-| Profile CRUD | — | Async | 🎉 New |
-| Glass Components | 10+ | 12+ | 📈 Expanded |
-| Photo Storage | — | Documents | ✅ Optimized |
-| Fallback Support | iOS 15-25 | iOS 15-25 | ✅ Complete |
+| Product Search | — | <2s | 🎉 New |
+| Cache Hit | — | <50ms | 🎉 New |
+| @Mention Trigger | <100ms | <100ms | ✅ Maintained |
+| Glass Components | 12+ | 15+ | 📈 Expanded |
+| Cache TTL | — | 24h | ✅ Optimized |
 
 ---
 
@@ -425,11 +475,19 @@ if let session = controller.sessionToLoad {
 
 ## 🔮 Roadmap
 
-### v0.16 (Next Sprint)
+### ✅ v0.16 (Current)
+- [x] Find Flowers with real product links
+- [x] Yandex search integration
+- [x] 24-hour search caching
+- [x] FlowerProducts sheet with product cards
+- [x] "Show links" smart button state
+
+### v0.17 (Next Sprint)
 - [ ] AI recommendations using Loved Ones profiles
 - [ ] Mention context in agent pipeline (RIL integration)
 - [ ] Birthday reminders with flower suggestions
-- [ ] Profile-based search filters
+- [ ] Multiple search providers (Google, Bing)
+- [ ] Price comparison across merchants
 
 ### v0.2.0
 - [ ] Scan history with thumbnails
@@ -437,6 +495,7 @@ if let session = controller.sessionToLoad {
 - [ ] Share scan results
 - [ ] Multi-language support (localization)
 - [ ] Flower dictionary with visual search
+- [ ] Favorites & wishlist
 
 ### v0.3.0
 - [ ] Voice input for chat (Whisper API)
