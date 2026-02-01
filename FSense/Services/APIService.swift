@@ -622,7 +622,8 @@ extension APIService {
         flowerName: String,
         city: String,
         region: String = "US",
-        maxResults: Int = 10
+        maxResults: Int = 10,
+        skipCache: Bool = false
     ) async throws -> FlowerSearchResponse {
         let endpoint = "\(apiBaseURL)/api/flowers/search"
 
@@ -638,7 +639,8 @@ extension APIService {
             flowerName: flowerName,
             city: city,
             region: region,
-            maxResults: maxResults
+            maxResults: maxResults,
+            skipCache: skipCache
         )
         request.httpBody = try JSONEncoder().encode(body)
 
@@ -672,12 +674,14 @@ private struct FlowerSearchRequestBody: Encodable {
     let city: String
     let region: String
     let maxResults: Int
+    let skipCache: Bool
 
     enum CodingKeys: String, CodingKey {
         case flowerName = "flower_name"
         case city
         case region
         case maxResults = "max_results"
+        case skipCache = "skip_cache"
     }
 }
 

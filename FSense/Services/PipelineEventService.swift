@@ -82,8 +82,9 @@ final class PipelineEventService: ObservableObject {
     // MARK: - SSE Connection (Using URLSessionDataDelegate for real-time)
 
     private func connect() {
-        guard let baseURL = UserDefaults.standard.string(forKey: "api_base_url") ?? getDefaultBaseURL(),
-              let url = URL(string: "\(baseURL)/api/logs/stream") else {
+        // Use APIService.baseURL as single source of truth for backend URL
+        let baseURL = APIService.baseURL
+        guard let url = URL(string: "\(baseURL)/api/logs/stream") else {
             print("[SSE] Invalid URL")
             return
         }
@@ -112,15 +113,6 @@ final class PipelineEventService: ObservableObject {
         dataTask?.resume()
 
         isConnected = true
-    }
-
-    private func getDefaultBaseURL() -> String? {
-        // Match APIService configuration for consistency
-        #if DEBUG
-        return "http://192.168.1.176:8000"  // Use Mac's IP for real device testing
-        #else
-        return "http://localhost:8000"
-        #endif
     }
 
     // MARK: - Data Handling (Batched)
@@ -247,23 +239,30 @@ struct SSEEvent: Decodable {
 
 // MARK: - URLSession Delegate for Real-time Streaming
 
-private final class SSEDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+/// Thread-safe SSE delegate using actor isolation pattern.
+/// The delegate is called on URLSession's delegate queue (arbitrary thread),
+/// and safely dispatches to MainActor via the onData closure.
+private final class SSEDelegate: NSObject, URLSessionDataDelegate, Sendable {
+    /// Immutable, Sendable closure - safe for concurrent access.
+    /// Constant with Sendable type is inherently thread-safe.
     let onData: @Sendable (Data) -> Void
 
     init(onData: @escaping @Sendable (Data) -> Void) {
         self.onData = onData
+        super.init()
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         // Called immediately when data arrives - no buffering!
+        // onData dispatches to MainActor, so this is thread-safe
         onData(data)
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+    nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         completionHandler(.allow)
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error = error {
             print("[SSE] Connection error: \(error.localizedDescription)")
         }

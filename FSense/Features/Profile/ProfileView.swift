@@ -6,6 +6,7 @@ struct ProfileView: View {
     @StateObject private var chatArchiveService = ChatArchiveService.shared
     @State private var navigateToArchive = false
     @State private var navigateToChatArchive = false
+    @State private var navigateToSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,6 +36,17 @@ struct ProfileView: View {
                 ) {
                     navigateToChatArchive = true
                 }
+
+                Divider()
+                    .padding(.leading, 60)
+
+                ProfileMenuButton(
+                    icon: "gearshape.fill",
+                    title: "Settings",
+                    subtitle: settingsSubtitle
+                ) {
+                    navigateToSettings = true
+                }
             }
             .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -50,6 +62,9 @@ struct ProfileView: View {
         }
         .navigationDestination(isPresented: $navigateToChatArchive) {
             ChatArchiveView()
+        }
+        .navigationDestination(isPresented: $navigateToSettings) {
+            SettingsView()
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -87,6 +102,10 @@ struct ProfileView: View {
         } else {
             return "\(count) chats saved"
         }
+    }
+
+    private var settingsSubtitle: String {
+        "\(UserSettings.selectedCity), \(UserSettings.selectedRegion)"
     }
 }
 

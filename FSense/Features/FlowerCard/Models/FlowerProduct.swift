@@ -41,6 +41,7 @@ struct FlowerSearchResponse: Codable {
     let provider: String?
     let products: [FlowerProduct]
     let error: String?
+    let cachedAt: String?  // ISO timestamp when results were cached
 }
 
 // MARK: - Mock Data

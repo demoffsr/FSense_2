@@ -12,7 +12,8 @@ enum FlowerCardAction: Equatable {
 
     // Find Flowers CTA
     case findFlowersTapped
-    case flowerProductsLoaded([FlowerProduct])
+    case refreshFlowerProducts  // Force refresh bypassing cache
+    case flowerProductsLoaded([FlowerProduct], cachedAt: String?)
     case flowerProductsLoadFailed(String)
 
     // Navigation
