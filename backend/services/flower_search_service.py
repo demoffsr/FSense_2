@@ -11,6 +11,7 @@ Includes SQLite caching to avoid repeated API calls.
 
 import logging
 import time
+from datetime import datetime
 from typing import Optional
 
 from backend.schemas.flower_product import FlowerSearchResponse
@@ -62,7 +63,7 @@ class FlowerSearchService:
 
         # Check cache first (unless skip_cache)
         if not skip_cache:
-            cached_products = cache.get(flower_name, city, region)
+            cached_products, cached_at = cache.get_with_metadata(flower_name, city, region)
             if cached_products:
                 logger.info(f"Cache HIT for '{flower_name}' in '{city}' ({region})")
 
@@ -81,6 +82,7 @@ class FlowerSearchService:
                     query=query,
                     provider="cache",
                     products=cached_products[:max_results],
+                    cached_at=cached_at,
                 )
 
         # Get provider for region
@@ -134,6 +136,7 @@ class FlowerSearchService:
                 })
 
             # Cache successful results
+            now = datetime.utcnow().isoformat()
             if products:
                 cache.set(flower_name, city, region, products, provider.name)
                 logger.info(f"Cached {len(products)} products for '{flower_name}' in '{city}' ({region})")
@@ -143,6 +146,7 @@ class FlowerSearchService:
                 query=query,
                 provider=provider.name,
                 products=products,
+                cached_at=now,  # Fresh results cached just now
             )
 
         except ProviderError as e:

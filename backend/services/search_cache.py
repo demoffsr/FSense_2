@@ -65,6 +65,23 @@ class FlowerSearchCache:
         Returns:
             List of ShopCard if cache hit, None if miss or expired
         """
+        products, _ = self.get_with_metadata(flower_name, city, region)
+        return products
+
+    def get_with_metadata(
+        self, flower_name: str, city: str, region: str
+    ) -> tuple[Optional[List[ShopCard]], Optional[str]]:
+        """
+        Get cached products with metadata.
+
+        Args:
+            flower_name: Name of flower
+            city: City for search
+            region: Region code (RU, US, etc.)
+
+        Returns:
+            Tuple of (products, cached_at_timestamp) or (None, None) if miss/expired
+        """
         key = self._make_key(flower_name, city, region)
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -81,8 +98,10 @@ class FlowerSearchCache:
                 )
                 conn.commit()
                 products_data = json.loads(row["products"])
-                return [ShopCard(**p) for p in products_data]
-        return None
+                products = [ShopCard(**p) for p in products_data]
+                cached_at = row["created_at"]
+                return products, cached_at
+        return None, None
 
     def set(
         self,

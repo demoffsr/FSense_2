@@ -97,6 +97,27 @@ class TestYandexProvider:
         assert value is None
         assert price == ""
 
+    def test_translate_flower_name_english(self):
+        """Translates English flower names to Russian."""
+        provider = YandexFlowerProvider()
+        assert provider._translate_flower_name("rose") == "розы"
+        assert provider._translate_flower_name("Roses") == "розы"
+        assert provider._translate_flower_name("crocus") == "крокусы"
+        assert provider._translate_flower_name("tulips") == "тюльпаны"
+
+    def test_translate_flower_name_russian_passthrough(self):
+        """Russian names pass through unchanged."""
+        provider = YandexFlowerProvider()
+        assert provider._translate_flower_name("розы") == "розы"
+        assert provider._translate_flower_name("тюльпаны") == "тюльпаны"
+
+    def test_translate_flower_name_partial_match(self):
+        """Partial matches work for compound names."""
+        provider = YandexFlowerProvider()
+        # "red rose" should match "rose" -> "розы"
+        assert provider._translate_flower_name("red rose") == "розы"
+        assert provider._translate_flower_name("white tulip") == "тюльпаны"
+
 
 class TestFloristOneProvider:
     """Tests for FloristOneProvider."""

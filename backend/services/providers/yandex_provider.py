@@ -13,6 +13,13 @@ from typing import List, ClassVar
 
 import httpx
 from lxml import etree
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+)
 
 from backend.core.settings import get_settings
 from backend.schemas.flower_product import ShopCard
@@ -102,8 +109,128 @@ class YandexFlowerProvider(BaseFlowerProvider):
     # Default region ID (Moscow)
     DEFAULT_REGION_ID = 213
 
+    # English -> Russian flower name translations
+    FLOWER_TRANSLATIONS = {
+        # Common flowers
+        "rose": "розы",
+        "roses": "розы",
+        "tulip": "тюльпаны",
+        "tulips": "тюльпаны",
+        "lily": "лилии",
+        "lilies": "лилии",
+        "orchid": "орхидеи",
+        "orchids": "орхидеи",
+        "sunflower": "подсолнухи",
+        "sunflowers": "подсолнухи",
+        "carnation": "гвоздики",
+        "carnations": "гвоздики",
+        "chrysanthemum": "хризантемы",
+        "chrysanthemums": "хризантемы",
+        "peony": "пионы",
+        "peonies": "пионы",
+        "daisy": "ромашки",
+        "daisies": "ромашки",
+        "gerbera": "герберы",
+        "gerberas": "герберы",
+        "hydrangea": "гортензии",
+        "hydrangeas": "гортензии",
+        "iris": "ирисы",
+        "irises": "ирисы",
+        "lavender": "лаванда",
+        "jasmine": "жасмин",
+        "dahlia": "георгины",
+        "dahlias": "георгины",
+        "freesia": "фрезии",
+        "freesias": "фрезии",
+        "amaryllis": "амариллис",
+        "anemone": "анемоны",
+        "anemones": "анемоны",
+        "aster": "астры",
+        "asters": "астры",
+        "azalea": "азалии",
+        "azaleas": "азалии",
+        "begonia": "бегонии",
+        "begonias": "бегонии",
+        "camellia": "камелии",
+        "camellias": "камелии",
+        "crocus": "крокусы",
+        "crocuses": "крокусы",
+        "daffodil": "нарциссы",
+        "daffodils": "нарциссы",
+        "gardenia": "гардении",
+        "gardenias": "гардении",
+        "gladiolus": "гладиолусы",
+        "gladioli": "гладиолусы",
+        "hibiscus": "гибискус",
+        "hyacinth": "гиацинты",
+        "hyacinths": "гиацинты",
+        "magnolia": "магнолии",
+        "magnolias": "магнолии",
+        "marigold": "бархатцы",
+        "marigolds": "бархатцы",
+        "narcissus": "нарциссы",
+        "pansy": "анютины глазки",
+        "pansies": "анютины глазки",
+        "poppy": "маки",
+        "poppies": "маки",
+        "ranunculus": "ранункулюсы",
+        "snapdragon": "львиный зев",
+        "stock": "левкой",
+        "violet": "фиалки",
+        "violets": "фиалки",
+        "zinnia": "циннии",
+        "zinnias": "циннии",
+        "alstroemeria": "альстромерии",
+        "calla": "каллы",
+        "calla lily": "каллы",
+        "eustoma": "эустома",
+        "lisianthus": "эустома",
+        "gypsophila": "гипсофила",
+        "baby's breath": "гипсофила",
+        "protea": "протея",
+        "anthurium": "антуриум",
+        "bird of paradise": "стрелиция",
+        "strelitzia": "стрелиция",
+        "bouquet": "букет",
+        "mixed bouquet": "сборный букет",
+        "flower arrangement": "цветочная композиция",
+    }
+
     def __init__(self):
         self.settings = get_settings()
+
+    def _translate_flower_name(self, flower_name: str) -> str:
+        """
+        Translate English flower name to Russian for better search results.
+
+        Args:
+            flower_name: Flower name (English or Russian)
+
+        Returns:
+            Russian flower name if translation found, original name otherwise
+        """
+        name_lower = flower_name.lower().strip()
+
+        # Direct match
+        if name_lower in self.FLOWER_TRANSLATIONS:
+            translated = self.FLOWER_TRANSLATIONS[name_lower]
+            logger.debug(f"Translated flower name: '{flower_name}' -> '{translated}'")
+            return translated
+
+        # Check if any translation key is contained in the name
+        for eng, rus in self.FLOWER_TRANSLATIONS.items():
+            if eng in name_lower:
+                logger.debug(f"Partial match translation: '{flower_name}' -> '{rus}'")
+                return rus
+
+        # Check if name already contains Cyrillic (likely already Russian)
+        if any('\u0400' <= char <= '\u04FF' for char in flower_name):
+            logger.debug(f"Flower name appears to be Russian: '{flower_name}'")
+            return flower_name
+
+        # No translation found, return original
+        logger.warning(f"No Russian translation for flower: '{flower_name}'")
+        return flower_name
 
     async def search(
         self,
@@ -115,7 +242,7 @@ class YandexFlowerProvider(BaseFlowerProvider):
         Search for flower products using Yandex Cloud Search API.
 
         Args:
-            flower_name: Flower name in Russian (e.g., "розы", "тюльпаны")
+            flower_name: Flower name (English or Russian)
             city: Russian city name (e.g., "Москва", "Санкт-Петербург")
             max_results: Maximum products to return
 
@@ -127,11 +254,14 @@ class YandexFlowerProvider(BaseFlowerProvider):
             logger.warning("Yandex Cloud API credentials not configured")
             raise ProviderAuthError(self.name, "API credentials not configured")
 
+        # Translate flower name to Russian if needed
+        russian_flower_name = self._translate_flower_name(flower_name)
+
         # Get region ID for city
         region_id = self._get_region_id(city)
 
-        # Build search query
-        query = self._build_query(flower_name, city)
+        # Build search query with Russian flower name
+        query = self._build_query(russian_flower_name, city)
 
         # Make API request
         products = await self._fetch_products(query, region_id, max_results)
@@ -159,13 +289,20 @@ class YandexFlowerProvider(BaseFlowerProvider):
         # Search query: "купить букет {flower_name} {city} с доставкой цена"
         return f"купить букет {flower_name} {city} с доставкой цена"
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     async def _fetch_products(
         self,
         query: str,
         region_id: int,
         max_results: int,
     ) -> List[ShopCard]:
-        """Fetch products from Yandex Cloud Search API v2."""
+        """Fetch products from Yandex Cloud Search API v2 with retry logic."""
         headers = {
             "Authorization": f"Api-Key {self.settings.yandex_cloud_api_key}",
             "Content-Type": "application/json",

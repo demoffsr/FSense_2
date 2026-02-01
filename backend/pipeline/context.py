@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 from datetime import datetime
 import uuid
+import threading
 
 
 @dataclass
@@ -254,6 +255,9 @@ class PipelineContext:
     timings: list[TimingRecord] = field(default_factory=list)
     flags: PipelineFlags = field(default_factory=PipelineFlags)
     errors: list[str] = field(default_factory=list)
+
+    # Thread lock for protecting shared mutable state (timings, errors)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
     
     # ─────────────────────────────────────────────────────────────────────
     # HELPER METHODS
@@ -266,24 +270,27 @@ class PipelineContext:
         return None
     
     def add_error(self, error: str) -> None:
-        """Record an error that occurred during pipeline execution."""
-        self.errors.append(f"[{datetime.utcnow().isoformat()}] {error}")
-    
+        """Record an error that occurred during pipeline execution (thread-safe)."""
+        with self._lock:
+            self.errors.append(f"[{datetime.utcnow().isoformat()}] {error}")
+
     def start_timing(self, agent_name: str) -> None:
-        """Record agent execution start."""
-        self.timings.append(TimingRecord(
-            agent_name=agent_name,
-            started_at=datetime.utcnow(),
-            status="running"
-        ))
-    
+        """Record agent execution start (thread-safe)."""
+        with self._lock:
+            self.timings.append(TimingRecord(
+                agent_name=agent_name,
+                started_at=datetime.utcnow(),
+                status="running"
+            ))
+
     def end_timing(self, agent_name: str, status: str = "completed") -> None:
-        """Record agent execution end."""
-        for record in self.timings:
-            if record.agent_name == agent_name and record.status == "running":
-                record.finished_at = datetime.utcnow()
-                record.status = status
-                if record.started_at:
-                    delta = record.finished_at - record.started_at
-                    record.duration_ms = int(delta.total_seconds() * 1000)
-                break
+        """Record agent execution end (thread-safe)."""
+        with self._lock:
+            for record in self.timings:
+                if record.agent_name == agent_name and record.status == "running":
+                    record.finished_at = datetime.utcnow()
+                    record.status = status
+                    if record.started_at:
+                        delta = record.finished_at - record.started_at
+                        record.duration_ms = int(delta.total_seconds() * 1000)
+                    break

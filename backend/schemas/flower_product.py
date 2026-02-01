@@ -44,3 +44,4 @@ class FlowerSearchResponse(BaseModel):
     provider: str = Field(default="unknown", description="Provider used: yandex, floristone, fallback")
     products: List[ShopCard] = Field(default_factory=list)
     error: Optional[str] = None
+    cached_at: Optional[str] = Field(default=None, description="ISO timestamp when results were cached")
