@@ -22,7 +22,7 @@ enum RelationshipCategory: String, Codable, CaseIterable, Identifiable {
     var color: Color {
         switch self {
         case .family: return .orange
-        case .romance: return Color(red: 1.00, green: 0.14, blue: 0.93)
+        case .romance: return Color("AccentPink")
         case .friends: return .blue
         case .professional: return .gray
         }

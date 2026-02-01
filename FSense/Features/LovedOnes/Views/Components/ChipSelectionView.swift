@@ -39,6 +39,8 @@ struct ChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepresent
 
 /// Multi-select chip picker
 struct MultiChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepresentable, T.RawValue == String {
+    @Environment(\.themeAccent) private var themeAccent
+
     let title: String
     let options: [T]
     @Binding var selection: [T]
@@ -54,7 +56,7 @@ struct MultiChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepr
             FlowLayout(spacing: 10) {
                 ForEach(options) { option in
                     let isSelected = selection.contains(option)
-                    let color = colorProvider?(option) ?? .purple
+                    let color = colorProvider?(option) ?? themeAccent
 
                     ChipButton(
                         label: option.rawValue,
@@ -78,11 +80,17 @@ struct MultiChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepr
 
 /// Individual chip button
 struct ChipButton: View {
+    @Environment(\.themeAccent) private var defaultAccent
+
     let label: String
     var icon: String? = nil
     let isSelected: Bool
-    var selectedColor: Color = .purple
+    var selectedColor: Color? = nil
     let action: () -> Void
+
+    private var effectiveColor: Color {
+        selectedColor ?? defaultAccent
+    }
 
     var body: some View {
         Button(action: action) {
@@ -100,14 +108,14 @@ struct ChipButton: View {
                         .font(.system(size: 11, weight: .bold))
                 }
             }
-            .foregroundColor(isSelected ? selectedColor : .primary)
+            .foregroundColor(isSelected ? effectiveColor : .primary)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(isSelected ? selectedColor.opacity(0.12) : Color(white: 0.95))
+            .background(isSelected ? effectiveColor.opacity(0.12) : Color(white: 0.95))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? selectedColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                    .stroke(isSelected ? effectiveColor.opacity(0.3) : Color.clear, lineWidth: 1)
             )
             .scaleEffect(isSelected ? 1.0 : 0.98)
         }

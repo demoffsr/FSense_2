@@ -3,6 +3,8 @@ import SwiftUI
 /// Flower recommendation card with embedded reasoning panel
 struct RecommendationCardView: View {
 
+    @Environment(\.themeAccent) private var themeAccent
+
     let recommendation: FlowerRecommendation
     let steps: [ProgressStep]
     var isThinkingExpanded: Bool = false
@@ -15,12 +17,14 @@ struct RecommendationCardView: View {
     // Static shadow color to avoid recreation
     private static let shadowColor = Color.black.opacity(0.08)
 
-    // Static button gradient to avoid recreation on each render
-    private static let buttonGradient = LinearGradient(
-        colors: [Color.purple, Color.purple.opacity(0.8)],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
+    // Button gradient using theme accent
+    private var buttonGradient: LinearGradient {
+        LinearGradient(
+            colors: [themeAccent, themeAccent.opacity(0.8)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -86,7 +90,7 @@ struct RecommendationCardView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Self.buttonGradient)
+                    .background(buttonGradient)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -128,7 +132,7 @@ struct RecommendationCardView: View {
         HStack(spacing: 10) {
             Image(systemName: "brain")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.purple.opacity(0.7))
+                .foregroundColor(themeAccent.opacity(0.7))
 
             Text("Here's how I thought about this")
                 .font(.system(size: 14, weight: .medium))

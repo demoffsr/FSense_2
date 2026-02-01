@@ -68,7 +68,7 @@ struct FlowerProductsSheet: View {
                 }
             }
             .frame(width: 32, height: 32)
-            .background(Color(red: 0.98, green: 0.98, blue: 0.98))
+            .background(Color("InputBackground"))
             .cornerRadius(100)
             .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
             .overlay(
@@ -141,7 +141,7 @@ struct FlowerProductsSheet: View {
                 .foregroundColor(.primary)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 50, maxHeight: 50)
-                .background(Color(red: 0.98, green: 0.98, blue: 0.98))
+                .background(Color("InputBackground"))
                 .cornerRadius(16)
                 .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 0)
                 .overlay(
@@ -223,7 +223,7 @@ struct ShopProductCard: View {
                             .padding(.horizontal, 0)
                             .padding(.vertical, 4)
                             .frame(width: 60, alignment: .center)
-                            .background(Color(red: 0.98, green: 0.98, blue: 0.98))
+                            .background(Color("InputBackground"))
                             .cornerRadius(100)
                             .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
                             .overlay(

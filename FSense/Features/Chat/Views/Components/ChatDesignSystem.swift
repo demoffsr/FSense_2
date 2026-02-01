@@ -9,28 +9,28 @@ enum ChatDesign {
     
     enum Colors {
         /// Primary purple accent
-        static let accentPurple = Color(red: 0.45, green: 0.00, blue: 1.00)
-        
-        /// Secondary pink accent  
-        static let accentPink = Color(red: 1.00, green: 0.14, blue: 0.93)
-        
+        static let accentPurple = Color("AccentPurple")
+
+        /// Secondary pink accent
+        static let accentPink = Color("AccentPink")
+
         /// Success green
-        static let success = Color(red: 0, green: 0.76, blue: 0.14)
-        
+        static let success = Color("Success")
+
         /// Card background
-        static let cardBackground = Color.white
-        
+        static let cardBackground = Color("CardBackground")
+
         /// Secondary background (for nested elements)
-        static let secondaryBackground = Color(red: 0.97, green: 0.97, blue: 0.97)
-        
+        static let secondaryBackground = Color("SecondaryBackground")
+
         /// Primary text
-        static let textPrimary = Color.black
-        
+        static let textPrimary = Color("TextPrimary")
+
         /// Secondary text
-        static let textSecondary = Color.black.opacity(0.6)
-        
+        static let textSecondary = Color("TextSecondary")
+
         /// Muted text
-        static let textMuted = Color.black.opacity(0.4)
+        static let textMuted = Color("TextMuted")
         
         /// Accent gradient (static to avoid recreation)
         static let accentGradient = LinearGradient(

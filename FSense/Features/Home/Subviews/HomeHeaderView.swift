@@ -95,9 +95,9 @@ struct UsersButtonContent: View {
             // Gradient background для preview
             LinearGradient(
                 colors: [
-                    Color(red: 0, green: 0.11, blue: 0.92),
-                    Color(red: 0.55, green: 0, blue: 0.92),
-                    Color(red: 0.91, green: 0, blue: 0.89)
+                    Color("GradientBlobBlue"),
+                    Color("GradientBlobPurple"),
+                    Color("GradientBlobMagenta")
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing

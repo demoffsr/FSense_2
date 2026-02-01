@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FlowerArchiveView: View {
 
+    @Environment(\.themeAccent) private var themeAccent
     @StateObject private var archiveService = FlowerArchiveService.shared
     @State private var selectedFlower: Flower?
     @State private var navigateToDetail = false
@@ -111,6 +112,8 @@ struct FlowerArchiveView: View {
 
 struct FlowerArchiveRow: View {
 
+    @Environment(\.themeAccent) private var themeAccent
+
     let flower: Flower
     let lastViewedAt: Date
 
@@ -171,7 +174,7 @@ struct FlowerArchiveRow: View {
         Rectangle()
             .fill(
                 LinearGradient(
-                    colors: [Color.pink.opacity(0.3), Color.purple.opacity(0.2)],
+                    colors: [Color.pink.opacity(0.3), themeAccent.opacity(0.2)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

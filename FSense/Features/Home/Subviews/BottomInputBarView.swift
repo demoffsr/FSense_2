@@ -55,7 +55,7 @@ struct BottomInputBarView: View {
     private static let shadowColor = Color.black.opacity(0.15)
     private static let lightShadowColor = Color.black.opacity(0.08)
     private static let inactiveGradient = LinearGradient(
-        colors: [Color(red: 0.55, green: 0, blue: 0.92), Color(red: 0.91, green: 0.04, blue: 0.79)],
+        colors: [Color("GradientBlobPurple"), Color("AccentPink")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
@@ -225,12 +225,12 @@ struct ExpandedChatSheet: View {
     }
 
     // MARK: - Static Constants (performance optimization)
-    private static let inputBgColor = Color(red: 0.98, green: 0.98, blue: 0.98)
+    private static let inputBgColor = Color("InputBackground")
     private static let shadowColor = Color.black.opacity(0.15)
     private static let lightShadowColor = Color.black.opacity(0.08)
     private static let toolbarSymbols = ["magnifyingglass", "ellipsis"]
     private static let sendButtonGradient = LinearGradient(
-        colors: [Color(red: 0.55, green: 0, blue: 0.92), Color(red: 0.91, green: 0.04, blue: 0.79)],
+        colors: [Color("GradientBlobPurple"), Color("AccentPink")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
@@ -780,7 +780,7 @@ struct ExpandedChatSheet: View {
                     .foregroundStyle(.black)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
-                    .background(Color(red: 0.988, green: 0.988, blue: 0.988))  // #fcfcfc
+                    .background(Color("InputBackground"))
                     .cornerRadius(10)
                     .shadow(color: .black.opacity(0.1), radius: 3, x: 0, y: 2)
                     .overlay(

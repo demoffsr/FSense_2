@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChatArchiveView: View {
 
+    @Environment(\.themeAccent) private var themeAccent
     @StateObject private var archiveService = ChatArchiveService.shared
 
     // Pagination
@@ -99,6 +100,8 @@ struct ChatArchiveView: View {
 
 struct ChatArchiveRow: View {
 
+    @Environment(\.themeAccent) private var themeAccent
+
     let session: ChatSession
     let archivedAt: Date
 
@@ -163,7 +166,7 @@ struct ChatArchiveRow: View {
         Rectangle()
             .fill(
                 LinearGradient(
-                    colors: [Color.purple.opacity(0.3), Color.pink.opacity(0.2)],
+                    colors: [themeAccent.opacity(0.3), Color.pink.opacity(0.2)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

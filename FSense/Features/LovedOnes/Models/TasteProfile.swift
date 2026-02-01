@@ -157,7 +157,7 @@ enum ColorPreference: String, Codable, CaseIterable, Identifiable {
         case .purple: return .purple
         case .blue: return .blue
         case .green: return .green
-        case .mixed: return Color(red: 0.45, green: 0.00, blue: 1.00)
+        case .mixed: return Color("AccentPurple")
         }
     }
 }

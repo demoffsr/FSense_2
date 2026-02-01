@@ -2,8 +2,9 @@ import SwiftUI
 
 /// Full-screen chat - optimized
 struct FullScreenChatView: View {
-    
+
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.themeAccent) private var themeAccent
     @StateObject private var viewModel = ChatViewModel()
     @FocusState private var isInputFocused: Bool
     
@@ -145,7 +146,7 @@ struct FullScreenChatView: View {
                             .foregroundColor(.white)
                             .frame(width: 32, height: 32)
                             .background(
-                                Circle().fill(Color.purple.opacity(viewModel.canSendMessage ? 1 : 0.4))
+                                Circle().fill(themeAccent.opacity(viewModel.canSendMessage ? 1 : 0.4))
                             )
                     }
                     .disabled(!viewModel.canSendMessage)

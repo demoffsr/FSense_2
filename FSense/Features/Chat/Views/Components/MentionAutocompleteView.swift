@@ -48,7 +48,7 @@ struct MentionAutocompleteView: View {
             }
         }
         .padding(14)
-        .background(Color(red: 0.976, green: 0.976, blue: 0.976))
+        .background(Color("SecondaryBackground"))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)

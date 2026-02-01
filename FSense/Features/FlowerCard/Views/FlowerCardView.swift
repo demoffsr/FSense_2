@@ -5,6 +5,7 @@ struct FlowerCardView: View {
     // MARK: - Environment
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.themeAccent) private var themeAccent
 
     // MARK: - State
 
@@ -212,11 +213,13 @@ struct PressButtonStyle: ButtonStyle {
 // MARK: - Placeholder
 
 struct BouquetRecommendationsPlaceholderView: View {
+    @Environment(\.themeAccent) private var themeAccent
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "sparkles")
                 .font(.system(size: 48))
-                .foregroundColor(.purple.opacity(0.6))
+                .foregroundColor(themeAccent.opacity(0.6))
             
             Text("Bouquet Recommendations")
                 .font(.title2)

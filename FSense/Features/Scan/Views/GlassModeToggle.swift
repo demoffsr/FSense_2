@@ -7,7 +7,7 @@ struct GlassModeToggle: View {
     @Namespace private var animation
 
     // Selected mode accent color #E90ACA
-    private let accentColor = Color(red: 0.914, green: 0.039, blue: 0.792)
+    private let accentColor = Color("AccentPink")
 
     var body: some View {
         if #available(iOS 26, *) {
@@ -113,9 +113,9 @@ struct GlassModeToggle: View {
     ZStack {
         LinearGradient(
             colors: [
-                Color(red: 0, green: 0.11, blue: 0.92),
-                Color(red: 0.55, green: 0, blue: 0.92),
-                Color(red: 0.91, green: 0, blue: 0.89)
+                Color("GradientBlobBlue"),
+                Color("GradientBlobPurple"),
+                Color("GradientBlobMagenta")
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing

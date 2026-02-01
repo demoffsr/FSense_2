@@ -3,6 +3,8 @@ import SwiftUI
 /// Async image view with local asset fallback and polling
 struct AsyncFlowerImageView: View {
 
+    @Environment(\.themeAccent) private var themeAccent
+
     let imageUrl: String?
     let imageAsset: String?
     let cacheKey: String?
@@ -55,7 +57,7 @@ struct AsyncFlowerImageView: View {
         Rectangle()
             .fill(
                 LinearGradient(
-                    colors: [Color.pink.opacity(0.2), Color.purple.opacity(0.15)],
+                    colors: [Color.pink.opacity(0.2), themeAccent.opacity(0.15)],
                     startPoint: .topTrailing,
                     endPoint: .bottomLeading
                 )

@@ -3,6 +3,8 @@ import SwiftUI
 /// Real-time pipeline progress card
 struct ThinkingCardView: View {
 
+    @Environment(\.themeAccent) private var themeAccent
+
     let steps: [ProgressStep]
     let isExpanded: Bool
     let onToggle: () -> Void
@@ -89,6 +91,8 @@ struct ThinkingCardView: View {
 
 struct ProgressStepRow: View {
 
+    @Environment(\.themeAccent) private var themeAccent
+
     let step: ProgressStep
 
     // Static colors to avoid recreation on each render
@@ -96,7 +100,7 @@ struct ProgressStepRow: View {
     private static let activeTextColor = Color.black
     private static let completedTextColor = Color.black.opacity(0.7)
     private static let pendingCircleColor = Color.gray.opacity(0.2)
-    private static let activePulseColor = Color.purple.opacity(0.5)
+    private var activePulseColor: Color { themeAccent.opacity(0.5) }
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -124,11 +128,11 @@ struct ProgressStepRow: View {
 
         case .active:
             Circle()
-                .fill(Color.purple)
+                .fill(themeAccent)
                 .frame(width: 8, height: 8)
                 .overlay(
                     Circle()
-                        .stroke(Self.activePulseColor, lineWidth: 2)
+                        .stroke(activePulseColor, lineWidth: 2)
                         .scaleEffect(1.5)
                 )
 

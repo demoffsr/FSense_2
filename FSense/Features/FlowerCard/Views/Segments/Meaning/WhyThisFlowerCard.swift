@@ -7,8 +7,8 @@ struct WhyThisFlowerCard: View {
     // Static gradient to avoid recreation on each render
     private static let accentGradient = LinearGradient(
         colors: [
-            Color(red: 0.45, green: 0.00, blue: 1.00),
-            Color(red: 1.00, green: 0.14, blue: 0.93)
+            Color("AccentPurple"),
+            Color("AccentPink")
         ],
         startPoint: .top,
         endPoint: .bottom

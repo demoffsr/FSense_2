@@ -6,6 +6,7 @@ struct ChatView: View {
 
     // MARK: - State & StateObject (property ordering per swiftui-view-refactor guidelines)
 
+    @Environment(\.themeAccent) private var themeAccent
     @StateObject private var viewModel = ChatViewModel()
 
     @State private var selectedFlower: Flower?
@@ -182,7 +183,7 @@ struct ChatView: View {
                 PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                     Image(systemName: "photo")
                         .font(.system(size: 18))
-                        .foregroundColor(.purple)
+                        .foregroundColor(themeAccent)
                         .frame(width: 36, height: 36)
                 }
                 .onChange(of: selectedPhotoItem) { oldValue, newValue in
@@ -234,7 +235,7 @@ struct ChatView: View {
                             .foregroundColor(.white)
                             .frame(width: 30, height: 30)
                             .background(
-                                Circle().fill(Color.purple.opacity(viewModel.canSendMessage ? 1 : 0.4))
+                                Circle().fill(themeAccent.opacity(viewModel.canSendMessage ? 1 : 0.4))
                             )
                     }
                     .disabled(!viewModel.canSendMessage)

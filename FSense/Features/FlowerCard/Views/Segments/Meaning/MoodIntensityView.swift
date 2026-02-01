@@ -43,7 +43,7 @@ struct MoodIntensityView: View {
             HStack {
                 Text(String(format: "%.1f", displayValue))
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(Color(red: 0.12, green: 0.11, blue: 0.09))
+                    .foregroundColor(Color("TextPrimary"))
                 
                 Spacer()
                 

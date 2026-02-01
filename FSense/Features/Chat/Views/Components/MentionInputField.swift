@@ -58,7 +58,7 @@ struct MentionInputField: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity)
-        .background(Color(red: 0.976, green: 0.976, blue: 0.976))
+        .background(Color("SecondaryBackground"))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -115,7 +115,7 @@ struct MentionInputField: View {
         .padding(.leading, 16)
         .padding(.trailing, 10)
         .padding(.vertical, 12)
-        .background(Color(red: 0.976, green: 0.976, blue: 0.976))
+        .background(Color("SecondaryBackground"))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -134,10 +134,7 @@ struct MentionInputField: View {
                 .background(
                     Circle().fill(
                         LinearGradient(
-                            colors: [
-                                Color(red: 0.55, green: 0, blue: 0.92),
-                                Color(red: 0.91, green: 0.04, blue: 0.79)
-                            ],
+                            colors: [Color("GradientBlobPurple"), Color("AccentPink")],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )

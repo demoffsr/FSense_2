@@ -2,11 +2,15 @@ import SwiftUI
 
 /// Tag input with flow layout and add button
 struct TagInputView: View {
+    @Environment(\.themeAccent) private var defaultAccent
+
     let title: String
     @Binding var tags: [String]
     var placeholder: String = "Add..."
-    var tagColor: Color = .purple
+    var tagColor: Color? = nil
     var showWarning: Bool = false
+
+    private var effectiveColor: Color { tagColor ?? defaultAccent }
 
     @State private var isAdding = false
     @State private var newTagText = ""
@@ -32,7 +36,7 @@ struct TagInputView: View {
                 ForEach(tags, id: \.self) { tag in
                     TagView(
                         text: tag,
-                        color: tagColor,
+                        color: effectiveColor,
                         onDelete: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 tags.removeAll { $0 == tag }
@@ -66,14 +70,14 @@ struct TagInputView: View {
                 Text(placeholder)
                     .font(.system(size: 14, weight: .medium))
             }
-            .foregroundColor(tagColor)
+            .foregroundColor(effectiveColor)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(tagColor.opacity(0.08))
+            .background(effectiveColor.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(tagColor.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [4]))
+                    .stroke(effectiveColor.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [4]))
             )
         }
         .buttonStyle(.plain)
@@ -95,7 +99,7 @@ struct TagInputView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 24, height: 24)
-                    .background(tagColor)
+                    .background(effectiveColor)
                     .clipShape(Circle())
             }
             .disabled(newTagText.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -143,25 +147,29 @@ struct TagInputView: View {
 
 /// Individual tag with delete button
 struct TagView: View {
+    @Environment(\.themeAccent) private var defaultAccent
+
     let text: String
-    var color: Color = .purple
+    var color: Color? = nil
     let onDelete: () -> Void
+
+    private var effectiveColor: Color { color ?? defaultAccent }
 
     var body: some View {
         HStack(spacing: 6) {
             Text(text)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(color)
+                .foregroundColor(effectiveColor)
 
             Button(action: onDelete) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(color.opacity(0.6))
+                    .foregroundColor(effectiveColor.opacity(0.6))
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(color.opacity(0.1))
+        .background(effectiveColor.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }

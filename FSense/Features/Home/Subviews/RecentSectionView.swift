@@ -201,7 +201,7 @@ struct RecentScanRowView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 9)
                 .inset(by: 0.5)
-                .stroke(Color(red: 0.95, green: 0.95, blue: 0.95), lineWidth: 1)
+                .stroke(Color("BorderStroke"), lineWidth: 1)
         )
     }
 
@@ -238,16 +238,20 @@ struct RecentScanRowView: View {
 // MARK: - Recent Chat Row
 
 struct RecentChatRowView: View {
+    @Environment(\.themeAccent) private var themeAccent
+
     let viewModel: ChatSessionViewModel
     var onRename: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
 
-    /// Static gradient to avoid recreation on each render
-    private static let placeholderGradient = LinearGradient(
-        colors: [Color.purple.opacity(0.2), Color.pink.opacity(0.2)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    /// Gradient using theme accent
+    private var placeholderGradient: LinearGradient {
+        LinearGradient(
+            colors: [themeAccent.opacity(0.2), Color.pink.opacity(0.2)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -327,7 +331,7 @@ struct RecentChatRowView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 9)
                 .inset(by: 0.5)
-                .stroke(Color(red: 0.95, green: 0.95, blue: 0.95), lineWidth: 1)
+                .stroke(Color("BorderStroke"), lineWidth: 1)
         )
     }
 
@@ -343,12 +347,12 @@ struct RecentChatRowView: View {
             } else {
                 // Placeholder gradient (uses static property to avoid recreation)
                 RoundedRectangle(cornerRadius: 9)
-                    .fill(Self.placeholderGradient)
+                    .fill(placeholderGradient)
                     .frame(width: 46, height: 46)
                     .overlay(
                         Image(systemName: "bubble.left.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(.purple.opacity(0.6))
+                            .foregroundColor(themeAccent.opacity(0.6))
                     )
             }
         }

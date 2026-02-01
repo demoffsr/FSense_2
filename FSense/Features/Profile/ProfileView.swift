@@ -112,6 +112,8 @@ struct ProfileView: View {
 // MARK: - Profile Menu Button
 
 struct ProfileMenuButton: View {
+    @Environment(\.themeAccent) private var themeAccent
+
     let icon: String
     let title: String
     let subtitle: String
@@ -122,9 +124,9 @@ struct ProfileMenuButton: View {
             HStack(spacing: 16) {
                 Image(systemName: icon)
                     .font(.system(size: 24))
-                    .foregroundColor(.purple)
+                    .foregroundColor(themeAccent)
                     .frame(width: 44, height: 44)
-                    .background(Color.purple.opacity(0.1))
+                    .background(themeAccent.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 2) {

@@ -4,6 +4,7 @@ struct LovedOneDetailView: View {
     let profile: LovedOneProfile
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.themeAccent) private var themeAccent
     @StateObject private var service = LovedOnesService.shared
     @State private var showingEditSheet = false
 
@@ -163,7 +164,7 @@ struct LovedOneDetailView: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(.purple)
+                .foregroundColor(themeAccent)
                 .frame(width: 32)
 
             Text(label)
@@ -184,7 +185,7 @@ struct LovedOneDetailView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "heart")
                 .font(.system(size: 16))
-                .foregroundColor(.purple)
+                .foregroundColor(themeAccent)
                 .frame(width: 32)
                 .padding(.top, 2)
 
@@ -284,25 +285,25 @@ struct LovedOneDetailView: View {
             .background(
                 LinearGradient(
                     colors: [
-                        Color(red: 0.45, green: 0.00, blue: 1.00),
-                        Color(red: 1.00, green: 0.14, blue: 0.93)
+                        Color("AccentPurple"),
+                        Color("AccentPink")
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
+            .shadow(color: themeAccent.opacity(0.3), radius: 8, x: 0, y: 4)
         }
     }
 
     // MARK: - Helper Views
 
-    private func sectionHeader(_ title: String, icon: String, color: Color = .purple) -> some View {
+    private func sectionHeader(_ title: String, icon: String, color: Color? = nil) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(color)
+                .foregroundColor(color ?? themeAccent)
 
             Text(title)
                 .font(.system(size: 17, weight: .semibold))

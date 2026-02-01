@@ -53,5 +53,5 @@ struct FlowerContextView: View {
         FlowerContextView(data: .mock)
             .padding()
     }
-    .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+    .background(Color("SecondaryBackground"))
 }

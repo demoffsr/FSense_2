@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LovedOnesListView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.themeAccent) private var themeAccent
     @StateObject private var service = LovedOnesService.shared
 
     @State private var searchText = ""
@@ -148,7 +149,7 @@ struct LovedOnesListView: View {
         VStack(spacing: 16) {
             Image(systemName: "heart.circle")
                 .font(.system(size: 56))
-                .foregroundColor(.purple.opacity(0.4))
+                .foregroundColor(themeAccent.opacity(0.4))
 
             Text("No loved ones yet")
                 .font(.system(size: 20, weight: .semibold))
@@ -173,8 +174,8 @@ struct LovedOnesListView: View {
                 .background(
                     LinearGradient(
                         colors: [
-                            Color(red: 0.45, green: 0.00, blue: 1.00),
-                            Color(red: 1.00, green: 0.14, blue: 0.93)
+                            Color("AccentPurple"),
+                            Color("AccentPink")
                         ],
                         startPoint: .leading,
                         endPoint: .trailing

@@ -21,6 +21,7 @@ struct LovedOneEditView: View {
     let mode: LovedOneEditMode
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.themeAccent) private var themeAccent
     @StateObject private var service = LovedOnesService.shared
 
     // Basic Info
@@ -126,7 +127,7 @@ struct LovedOneEditView: View {
                         .overlay(alignment: .bottomTrailing) {
                             Image(systemName: "pencil.circle.fill")
                                 .font(.system(size: 28))
-                                .foregroundColor(.purple)
+                                .foregroundColor(themeAccent)
                                 .background(Circle().fill(.white).padding(6))
                         }
                 } else {
@@ -205,7 +206,7 @@ struct LovedOneEditView: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(.purple)
+                .foregroundColor(themeAccent)
                 .frame(width: 24)
 
             TextField(placeholder, text: text)
@@ -220,7 +221,7 @@ struct LovedOneEditView: View {
             HStack(spacing: 12) {
                 Image(systemName: "heart.fill")
                     .font(.system(size: 16))
-                    .foregroundColor(.purple)
+                    .foregroundColor(themeAccent)
                     .frame(width: 24)
 
                 Text(selectedRelationship?.rawValue ?? "Relationship *")
@@ -302,13 +303,13 @@ struct LovedOneEditView: View {
                                             if selectedRelationship == relationship {
                                                 Image(systemName: "checkmark")
                                                     .font(.system(size: 14, weight: .semibold))
-                                                    .foregroundColor(.purple)
+                                                    .foregroundColor(themeAccent)
                                             }
                                         }
                                         .padding(.leading, 52)
                                         .padding(.trailing, 14)
                                         .padding(.vertical, 10)
-                                        .background(selectedRelationship == relationship ? Color.purple.opacity(0.06) : .clear)
+                                        .background(selectedRelationship == relationship ? themeAccent.opacity(0.06) : .clear)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -360,12 +361,12 @@ struct LovedOneEditView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 16))
-                            .foregroundColor(.purple)
+                            .foregroundColor(themeAccent)
                             .frame(width: 24)
 
                         Text("Add Custom Date")
                             .font(.system(size: 16))
-                            .foregroundColor(.purple)
+                            .foregroundColor(themeAccent)
 
                         Spacer()
                     }
@@ -390,7 +391,7 @@ struct LovedOneEditView: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .foregroundColor(.purple)
+                    .foregroundColor(themeAccent)
                     .frame(width: 24)
 
                 Text(title)
@@ -401,7 +402,7 @@ struct LovedOneEditView: View {
 
                 Toggle("", isOn: isEnabled)
                     .labelsHidden()
-                    .tint(.purple)
+                    .tint(themeAccent)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
@@ -423,7 +424,7 @@ struct LovedOneEditView: View {
         HStack(spacing: 12) {
             Image(systemName: "calendar")
                 .font(.system(size: 16))
-                .foregroundColor(.purple)
+                .foregroundColor(themeAccent)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {

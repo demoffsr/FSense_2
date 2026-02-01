@@ -95,8 +95,8 @@ struct RecipientFitList: View {
     
     private func fitColor(for fit: GiftSuitability) -> Color {
         switch fit {
-        case .excellent: return Color(red: 0, green: 0.76, blue: 0.14)
-        case .good: return Color(red: 0, green: 0.76, blue: 0.14)
+        case .excellent: return Color("Success")
+        case .good: return Color("Success")
         case .moderate: return .orange
         case .risky: return .red.opacity(0.8)
         case .notRecommended: return .red
@@ -134,7 +134,7 @@ struct RecipientProfileView: View {
         }
         .padding(.top, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+        .background(Color("SecondaryBackground"))
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -161,6 +161,6 @@ struct RecipientProfileView: View {
             RecipientFit(recipientType: "Friend", fitLevel: .notRecommended, note: "May send wrong signals")
         ])
         .padding()
-        .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+        .background(Color("SecondaryBackground"))
     }
 }
