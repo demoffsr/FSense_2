@@ -1,18 +1,28 @@
 import SwiftUI
 
 struct FlowerCardView: View {
-    
-    @StateObject private var viewModel: FlowerCardViewModel
+
+    // MARK: - Environment
+
     @Environment(\.dismiss) private var dismiss
-    
-    @State private var scrollOffset: CGFloat = 0
-    
+
+    // MARK: - State
+
+    @StateObject private var viewModel: FlowerCardViewModel
+    @State private var showOverlayToolbar = false
+
+    // MARK: - Constants
+
     private let heroHeight: CGFloat = 360
     private let toolbarThreshold: CGFloat = 250
-    
-    private var showOverlayToolbar: Bool {
-        scrollOffset > toolbarThreshold
-    }
+
+    // MARK: - Static Properties (cached to avoid recreation)
+
+    private static let heroGradient = LinearGradient(
+        colors: [.black.opacity(0.3), .clear, .black.opacity(0.7)],
+        startPoint: .top,
+        endPoint: .bottom
+    )
     
     init(flower: Flower) {
         _viewModel = StateObject(wrappedValue: FlowerCardViewModel(flower: flower))
@@ -23,26 +33,14 @@ struct FlowerCardView: View {
             // MARK: - Scrollable Content
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    // Anchor for tracking
-                    Color.clear
-                        .frame(height: 0)
-                        .id("top")
-                    
                     heroSection
                     contentSection
                 }
-                .background(
-                    GeometryReader { proxy in
-                        let offset = -proxy.frame(in: .global).minY
-                        Color.clear
-                            .onChange(of: offset) { _, newValue in
-                                scrollOffset = newValue
-                            }
-                            .onAppear {
-                                scrollOffset = offset
-                            }
-                    }
-                )
+            }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y > toolbarThreshold
+            } action: { _, newValue in
+                showOverlayToolbar = newValue
             }
             
             // MARK: - Back Button on Hero
@@ -55,18 +53,29 @@ struct FlowerCardView: View {
             VStack {
                 Spacer()
                 FlowerCardCTAView(
-                    isProcessing: viewModel.isAIProcessing,
-                    onTap: { viewModel.send(.askAITapped) }
+                    isProcessing: viewModel.isSearchingProducts,
+                    hasProducts: !viewModel.flowerProducts.isEmpty,
+                    onTap: { viewModel.send(.findFlowersTapped) }
                 )
             }
         }
         .ignoresSafeArea(edges: .top)
         .navigationBarHidden(true)
-        .navigationDestination(isPresented: Binding(
-            get: { viewModel.state.shouldNavigateToBouquetRecommendations },
-            set: { if !$0 { viewModel.send(.dismissBouquetRecommendations) } }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.shouldNavigateToFlowerProducts },
+            set: { if !$0 { viewModel.send(.dismissFlowerProducts) } }
         )) {
-            BouquetRecommendationsPlaceholderView()
+            FlowerProductsSheet(
+                products: viewModel.flowerProducts,
+                flowerName: viewModel.flower?.name ?? "Flowers",
+                cachedAt: viewModel.productsCachedAt,
+                isRefreshing: viewModel.isSearchingProducts,
+                isPresented: Binding(
+                    get: { viewModel.state.shouldNavigateToFlowerProducts },
+                    set: { if !$0 { viewModel.send(.dismissFlowerProducts) } }
+                ),
+                onRefresh: { viewModel.send(.refreshFlowerProducts) }
+            )
         }
         .onAppear { viewModel.send(.onAppear) }
         .onDisappear { viewModel.send(.onDisappear) }
@@ -76,23 +85,15 @@ struct FlowerCardView: View {
     
     private var heroSection: some View {
         ZStack(alignment: .bottom) {
-            if let imageAsset = viewModel.flower?.imageAsset {
-                Image(imageAsset)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: heroHeight)
-                    .clipped()
-            } else {
-                Rectangle()
-                    .fill(Color(.systemGray4))
-                    .frame(height: heroHeight)
-            }
-            
-            LinearGradient(
-                colors: [.black.opacity(0.3), .clear, .black.opacity(0.7)],
-                startPoint: .top,
-                endPoint: .bottom
+            AsyncFlowerImageView(
+                imageUrl: viewModel.flower?.imageURL?.absoluteString,
+                imageAsset: viewModel.flower?.imageAsset,
+                cacheKey: nil  // TODO: Extract from FlowerCardPayload if needed
             )
+            .frame(height: heroHeight)
+            .clipped()
+
+            Self.heroGradient
             
             HStack {
                 Text(viewModel.flower?.name ?? "Flower")

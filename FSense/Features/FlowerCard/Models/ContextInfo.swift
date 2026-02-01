@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Cultural Interpretation
 
-struct CulturalInterpretation: Identifiable, Equatable, Hashable {
+struct CulturalInterpretation: Identifiable, Equatable, Hashable, Codable {
     let id: UUID
     let emoji: String
     let culture: String
@@ -28,7 +28,7 @@ struct CulturalInterpretation: Identifiable, Equatable, Hashable {
 
 // MARK: - Relationship Context
 
-struct RelationshipContext: Identifiable, Equatable, Hashable {
+struct RelationshipContext: Identifiable, Equatable, Hashable, Codable {
     let id: UUID
     let relationshipType: String
     let appropriateness: ContextAppropriatenessLevel
@@ -51,7 +51,7 @@ struct RelationshipContext: Identifiable, Equatable, Hashable {
 
 // MARK: - Timing Sensitivity
 
-struct TimingSensitivity: Identifiable, Equatable, Hashable {
+struct TimingSensitivity: Identifiable, Equatable, Hashable, Codable {
     let id: UUID
     let timing: String
     let sensitivity: ContextSensitivityLevel
@@ -74,7 +74,7 @@ struct TimingSensitivity: Identifiable, Equatable, Hashable {
 
 // MARK: - Misinterpretation
 
-struct CommonMisinterpretation: Identifiable, Equatable, Hashable {
+struct CommonMisinterpretation: Identifiable, Equatable, Hashable, Codable {
     let id: UUID
     let misinterpretation: String
     let clarification: String
@@ -94,37 +94,37 @@ struct CommonMisinterpretation: Identifiable, Equatable, Hashable {
 
 // MARK: - Supporting Enums
 
-enum ContextSentiment: String, CaseIterable, Identifiable {
+enum ContextSentiment: String, CaseIterable, Identifiable, Codable {
     case positive = "Positive"
     case neutral = "Neutral"
     case negative = "Negative"
     case mixed = "Mixed"
-    
+
     var id: String { rawValue }
 }
 
-enum ContextAppropriatenessLevel: String, CaseIterable, Identifiable {
+enum ContextAppropriatenessLevel: String, CaseIterable, Identifiable, Codable {
     case highlyAppropriate = "Highly Appropriate"
     case appropriate = "Appropriate"
     case neutral = "Neutral"
     case inappropriate = "Inappropriate"
     case highlyInappropriate = "Highly Inappropriate"
-    
+
     var id: String { rawValue }
 }
 
-enum ContextSensitivityLevel: String, CaseIterable, Identifiable {
+enum ContextSensitivityLevel: String, CaseIterable, Identifiable, Codable {
     case low = "Low"
     case moderate = "Moderate"
     case high = "High"
     case critical = "Critical"
-    
+
     var id: String { rawValue }
 }
 
 // MARK: - Context Info Model
 
-struct ContextInfo: Identifiable, Equatable, Hashable {
+struct ContextInfo: Identifiable, Equatable, Hashable, Codable {
     let id: UUID
     let summaryText: String
     
