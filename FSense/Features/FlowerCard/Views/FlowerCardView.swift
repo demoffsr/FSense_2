@@ -54,6 +54,7 @@ struct FlowerCardView: View {
                 Spacer()
                 FlowerCardCTAView(
                     isProcessing: viewModel.isSearchingProducts,
+                    hasProducts: !viewModel.flowerProducts.isEmpty,
                     onTap: { viewModel.send(.findFlowersTapped) }
                 )
             }
@@ -67,10 +68,13 @@ struct FlowerCardView: View {
             FlowerProductsSheet(
                 products: viewModel.flowerProducts,
                 flowerName: viewModel.flower?.name ?? "Flowers",
+                cachedAt: viewModel.productsCachedAt,
+                isRefreshing: viewModel.isSearchingProducts,
                 isPresented: Binding(
                     get: { viewModel.state.shouldNavigateToFlowerProducts },
                     set: { if !$0 { viewModel.send(.dismissFlowerProducts) } }
-                )
+                ),
+                onRefresh: { viewModel.send(.refreshFlowerProducts) }
             )
         }
         .onAppear { viewModel.send(.onAppear) }
