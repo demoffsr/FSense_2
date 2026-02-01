@@ -1,13 +1,12 @@
 import SwiftUI
-import Combine
 
 /// ViewModel for Home screen
 /// Responsibility: Handles state and actions for Home feature
 @MainActor
 final class HomeViewModel: ObservableObject {
-    
+
     @Published var state = HomeState()
-    
+
     /// Access to chat history
     let chatHistory = ChatHistoryManager.shared
 
@@ -15,12 +14,20 @@ final class HomeViewModel: ObservableObject {
     let scanHistory = ScanHistoryManager.shared
 
     /// Per-session view models (granular dependencies for performance)
-    @Published private(set) var sessionViewModels: [UUID: ChatSessionViewModel] = [:]
+    @Published private(set) var sessionViewModels: [UUID: ChatSessionViewModel] = [:] {
+        didSet {
+            // Recompute sorted cache only when dictionary changes
+            _cachedSortedViewModels = Array(sessionViewModels.values)
+                .sorted { $0.updatedAt > $1.updatedAt }
+        }
+    }
 
-    /// Sorted recent chat view models (computed from dictionary)
+    /// Cached sorted array - O(1) access, O(n log n) only on mutation
+    private var _cachedSortedViewModels: [ChatSessionViewModel] = []
+
+    /// Sorted recent chat view models (cached, O(1) access)
     var recentChatViewModels: [ChatSessionViewModel] {
-        Array(sessionViewModels.values)
-            .sorted { $0.updatedAt > $1.updatedAt }
+        _cachedSortedViewModels
     }
 
     /// Legacy accessor for compatibility (TODO: remove after migration)
@@ -41,8 +48,9 @@ final class HomeViewModel: ObservableObject {
             )
         }
     }
-    
-    private var cancellables = Set<AnyCancellable>()
+
+    /// Task for observing chat history changes (replaces Combine subscription)
+    private var observationTask: Task<Void, Never>?
     private var isSetup = false
 
     init() {
@@ -50,44 +58,53 @@ final class HomeViewModel: ObservableObject {
         // Will be triggered on first onAppear
     }
 
-    /// Setup Combine bindings - called lazily on first onAppear
+    deinit {
+        observationTask?.cancel()
+    }
+
+    /// Setup async observation - called lazily on first onAppear
     private func setupBindingsIfNeeded() {
         guard !isSetup else { return }
         isSetup = true
 
-        // Observe chat history changes and update view models granularly
-        chatHistory.$sessions
-            .removeDuplicates() // Skip redundant updates
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] sessions in
-                guard let self = self else { return }
+        // Observe chat history changes using async/await
+        observationTask = Task { [weak self] in
+            guard let self = self else { return }
 
-                // Filter sessions with user messages
-                let validSessions = sessions.filter { session in
-                    session.messages.contains { $0.sender == .user }
-                }
-
-                // Update view models dictionary (granular updates)
-                // Only affected sessions will trigger SwiftUI updates
-                var newViewModels: [UUID: ChatSessionViewModel] = [:]
-
-                for session in validSessions {
-                    if let existing = self.sessionViewModels[session.id] {
-                        // Update existing view model (only this row updates)
-                        existing.update(from: session)
-                        newViewModels[session.id] = existing
-                    } else {
-                        // Create new view model
-                        newViewModels[session.id] = ChatSessionViewModel(from: session)
-                    }
-                }
-
-                self.sessionViewModels = newViewModels
-
-                // Keep legacy array for compatibility
-                self.recentChats = validSessions
+            // Use .values to convert Combine publisher to AsyncSequence
+            for await sessions in chatHistory.$sessions.values {
+                guard !Task.isCancelled else { break }
+                self.handleSessionsUpdate(sessions)
             }
-            .store(in: &cancellables)
+        }
+    }
+
+    /// Handle sessions update from async observation
+    private func handleSessionsUpdate(_ sessions: [ChatSession]) {
+        // Filter sessions with user messages
+        let validSessions = sessions.filter { session in
+            session.messages.contains { $0.sender == .user }
+        }
+
+        // Update view models dictionary (granular updates)
+        // Only affected sessions will trigger SwiftUI updates
+        var newViewModels: [UUID: ChatSessionViewModel] = [:]
+
+        for session in validSessions {
+            if let existing = sessionViewModels[session.id] {
+                // Update existing view model (only this row updates)
+                existing.update(from: session)
+                newViewModels[session.id] = existing
+            } else {
+                // Create new view model
+                newViewModels[session.id] = ChatSessionViewModel(from: session)
+            }
+        }
+
+        sessionViewModels = newViewModels
+
+        // Keep legacy array for compatibility
+        recentChats = validSessions
     }
     
     func send(_ action: HomeAction) {

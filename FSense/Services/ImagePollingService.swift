@@ -13,11 +13,8 @@ actor ImagePollingService {
     private var pollingTasks: [String: Task<String?, Never>] = [:]
 
     private init() {
-        #if DEBUG
-        self.baseURL = "http://192.168.1.176:8000"
-        #else
-        self.baseURL = "http://localhost:8000"
-        #endif
+        // Use centralized base URL from APIService
+        self.baseURL = APIService.baseURL
 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 10

@@ -39,11 +39,6 @@ struct RecentCardsListView: View {
     var onRenameChat: ((ChatSession) -> Void)? = nil
     var onDeleteChat: ((ChatSession) -> Void)? = nil
 
-    /// O(1) session lookup dictionary - built once per render instead of 3x O(n) per row
-    private var sessionLookup: [UUID: ChatSession] {
-        Dictionary(uniqueKeysWithValues: viewModel.chatHistory.sessions.map { ($0.id, $0) })
-    }
-
     var body: some View {
         VStack(spacing: 12) {
             if viewModel.state.selectedTab == .chats {
@@ -65,7 +60,9 @@ struct RecentCardsListView: View {
                 subtitle: "Start a conversation to get flower recommendations"
             )
         } else {
-            let lookup = sessionLookup // Capture once for all rows
+            // Build lookup once per chatsList evaluation (O(n) once, not per row)
+            let lookup = Dictionary(uniqueKeysWithValues:
+                viewModel.chatHistory.sessions.map { ($0.id, $0) })
             ForEach(viewModel.recentChatViewModels) { chatVM in
                 Button {
                     if let session = lookup[chatVM.id] {
@@ -220,8 +217,10 @@ struct RecentScanRowView: View {
     }
 
     private func loadImage(from path: String) -> UIImage? {
-        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("scan_images/\(path)")
+        guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let url = documentsDir.appendingPathComponent("scan_images/\(path)")
         return UIImage(contentsOfFile: url.path)
     }
 

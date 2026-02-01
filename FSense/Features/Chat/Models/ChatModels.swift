@@ -12,7 +12,8 @@ final class ImageStorageManager: @unchecked Sendable {
     private let cacheDirectory: URL
 
     private init() {
-        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
         cacheDirectory = caches.appendingPathComponent("ChatImages", isDirectory: true)
 
         // Create directory if needed

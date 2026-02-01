@@ -351,8 +351,10 @@ final class ChatViewModel: ObservableObject {
         isInputEnabled = false
 
         // STATE 1: User message appears
+        // Note: currentAttachedImage is already compressed by compressImageForAttachment (0.7 quality)
+        // Use 1.0 here to avoid double-compression quality loss
         let messageContent: MessageContent
-        if let image = currentAttachedImage, let imageData = image.jpegData(compressionQuality: 0.7) {
+        if let image = currentAttachedImage, let imageData = image.jpegData(compressionQuality: 1.0) {
             messageContent = .textWithImage(userText.isEmpty ? "Attached Image review" : userText, imageData: imageData)
         } else {
             messageContent = .text(userText)

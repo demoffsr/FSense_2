@@ -10,13 +10,19 @@ actor APIService {
 
     // MARK: - Configuration
 
-    /// Base URL for the API - change this for different environments
-    #if DEBUG
-    private let baseURL = "http://192.168.1.176:8000"  // Use Mac's IP for real device testing
-    // Use "http://localhost:8000" if running on iOS Simulator
-    #else
-    private let baseURL = "http://localhost:8000" // TODO: Replace with production URL
-    #endif
+    /// Centralized base URL - single source of truth for all services
+    /// Use this static property from other services to avoid hardcoding URLs
+    static let baseURL: String = {
+        #if DEBUG
+        return "http://192.168.1.176:8000"  // Use Mac's IP for real device testing
+        // Use "http://localhost:8000" if running on iOS Simulator
+        #else
+        return "http://localhost:8000" // TODO: Replace with production URL
+        #endif
+    }()
+
+    /// Instance base URL (uses static property)
+    private let baseURL = APIService.baseURL
 
     private let session: URLSession
     private let decoder: JSONDecoder

@@ -16,13 +16,27 @@ struct HomeView: View {
         endPoint: .bottom
     )
 
-    // Rename alert state
-    @State private var showRenameAlert = false
-    @State private var sessionToRename: ChatSession?
+    // Consolidated chat edit action (replaces 4 separate @State variables)
+    @State private var chatEditAction: ChatEditAction?
 
-    // Delete confirmation alert state
-    @State private var showDeleteConfirmation = false
-    @State private var sessionToDelete: ChatSession?
+    /// Chat editing actions - consolidates rename/delete state
+    enum ChatEditAction: Identifiable {
+        case rename(ChatSession)
+        case delete(ChatSession)
+
+        var id: String {
+            switch self {
+            case .rename(let session): return "rename-\(session.id)"
+            case .delete(let session): return "delete-\(session.id)"
+            }
+        }
+
+        var session: ChatSession {
+            switch self {
+            case .rename(let session), .delete(let session): return session
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -82,12 +96,10 @@ struct HomeView: View {
                                     chatSheetController.openChat(session: session)
                                 },
                                 onRenameChat: { session in
-                                    sessionToRename = session
-                                    showRenameAlert = true
+                                    chatEditAction = .rename(session)
                                 },
                                 onDeleteChat: { session in
-                                    sessionToDelete = session
-                                    showDeleteConfirmation = true
+                                    chatEditAction = .delete(session)
                                 }
                             )
                             .padding(.horizontal, 16)
@@ -109,29 +121,51 @@ struct HomeView: View {
                 FlowerCardView(flower: flower)
                     .id(flower.id) // Force view recreation on flower change
             }
+            .navigationDestination(for: HomeNavDestination.self) { destination in
+                switch destination {
+                case .profile:
+                    ProfileView()
+                case .search:
+                    SearchView()
+                case .users:
+                    UsersView()
+                }
+            }
         }
         .onAppear {
             viewModel.send(.onAppear)
         }
         .textFieldAlert(
-            isPresented: $showRenameAlert,
+            isPresented: Binding(
+                get: { if case .rename = chatEditAction { return true } else { return false } },
+                set: { if !$0 { chatEditAction = nil } }
+            ),
             title: "Rename Chat",
             message: "Enter a new name for this chat",
             placeholder: "Chat name",
-            initialText: sessionToRename?.title ?? "",
+            initialText: chatEditAction?.session.title ?? "",
             confirmButtonTitle: "Rename"
         ) { newTitle in
-            if let session = sessionToRename {
+            if let action = chatEditAction, case .rename(let session) = action {
                 viewModel.send(.renameChat(session, newTitle: newTitle))
             }
+            chatEditAction = nil
         }
-        .alert("Delete Chat", isPresented: $showDeleteConfirmation, presenting: sessionToDelete) { session in
-            Button("Cancel", role: .cancel) { }
+        .alert(
+            "Delete Chat",
+            isPresented: Binding(
+                get: { if case .delete = chatEditAction { return true } else { return false } },
+                set: { if !$0 { chatEditAction = nil } }
+            ),
+            presenting: chatEditAction
+        ) { action in
+            Button("Cancel", role: .cancel) { chatEditAction = nil }
             Button("Delete", role: .destructive) {
-                viewModel.send(.deleteChat(session))
+                viewModel.send(.deleteChat(action.session))
+                chatEditAction = nil
             }
-        } message: { session in
-            Text("Are you sure you want to delete \"\(session.title)\"? This action cannot be undone.")
+        } message: { action in
+            Text("Are you sure you want to delete \"\(action.session.title)\"? This action cannot be undone.")
         }
     }
 }

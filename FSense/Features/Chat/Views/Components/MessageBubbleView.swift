@@ -220,8 +220,9 @@ private final class MessageImageCache: @unchecked Sendable {
     private let cache = NSCache<NSUUID, UIImage>()
 
     private init() {
-        // Limit cache to ~50MB (assuming ~1MB per image)
         cache.countLimit = 50
+        // Size-based eviction: limit total memory to ~30MB
+        cache.totalCostLimit = 30 * 1024 * 1024
     }
 
     func image(for id: UUID) -> UIImage? {
@@ -229,6 +230,8 @@ private final class MessageImageCache: @unchecked Sendable {
     }
 
     func setImage(_ image: UIImage, for id: UUID) {
-        cache.setObject(image, forKey: id as NSUUID)
+        // Estimate memory cost: width × height × 4 bytes (RGBA) × scale²
+        let cost = Int(image.size.width * image.size.height * 4 * image.scale * image.scale)
+        cache.setObject(image, forKey: id as NSUUID, cost: cost)
     }
 }

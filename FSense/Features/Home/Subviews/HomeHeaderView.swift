@@ -1,24 +1,33 @@
 import SwiftUI
 
+// MARK: - Navigation Destinations
+
+/// Type-safe navigation destinations for Home header
+enum HomeNavDestination: Hashable {
+    case profile
+    case search
+    case users
+}
+
 struct HomeHeaderView: View {
     var body: some View {
         GlassEffectContainer(spacing: 12) {
             HStack(alignment: .center, spacing: 12) {
-                
+
                 // 1) Profile button
-                NavigationLink(destination: ProfileView()) {
+                NavigationLink(value: HomeNavDestination.profile) {
                     ProfileButtonContent()
                 }
                 .buttonStyle(.plain)
-                
+
                 // 2) Search bar
-                NavigationLink(destination: SearchView()) {
+                NavigationLink(value: HomeNavDestination.search) {
                     SearchBarContent()
                 }
                 .buttonStyle(.plain)
-                
+
                 // 3) Users button
-                NavigationLink(destination: UsersView()) {
+                NavigationLink(value: HomeNavDestination.users) {
                     UsersButtonContent()
                 }
                 .buttonStyle(.plain)

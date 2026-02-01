@@ -93,15 +93,9 @@ struct AsyncFlowerImageView: View {
     // MARK: - Helper Methods
 
     private func constructFullURL(from urlString: String) -> URL? {
-        // If URL is relative (starts with /), construct full URL
+        // If URL is relative (starts with /), construct full URL using centralized baseURL
         if urlString.hasPrefix("/") {
-            #if DEBUG
-            let baseURL = "http://192.168.1.176:8000"
-            #else
-            let baseURL = "http://localhost:8000"
-            #endif
-
-            return URL(string: baseURL + urlString)
+            return URL(string: APIService.baseURL + urlString)
         }
 
         // Otherwise parse as-is

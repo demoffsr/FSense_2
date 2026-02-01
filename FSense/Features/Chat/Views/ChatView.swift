@@ -187,10 +187,19 @@ struct ChatView: View {
                 }
                 .onChange(of: selectedPhotoItem) { oldValue, newValue in
                     Task {
-                        if let item = newValue,
-                           let data = try? await item.loadTransferable(type: Data.self),
-                           let image = UIImage(data: data) {
+                        guard let item = newValue else { return }
+                        do {
+                            guard let data = try await item.loadTransferable(type: Data.self) else {
+                                print("[ChatView] Photo picker returned nil data")
+                                return
+                            }
+                            guard let image = UIImage(data: data) else {
+                                print("[ChatView] Failed to decode image from data (\(data.count) bytes)")
+                                return
+                            }
                             viewModel.send(.attachImage(image))
+                        } catch {
+                            print("[ChatView] Failed to load photo: \(error.localizedDescription)")
                         }
                     }
                 }
