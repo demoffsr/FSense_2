@@ -826,6 +826,8 @@ struct ExpandedChatSheet: View {
             selectedFlower = Flower(
                 name: recommendation.flowerName,
                 imageAsset: recommendation.imageAsset,
+                imageURL: recommendation.imageUrl.flatMap { URL(string: $0) },
+                imageCacheKey: recommendation.imageCacheKey,
                 meanings: ["Love", "Appreciation"],
                 symbolismText: recommendation.explanation,
                 whyThisFlowerText: recommendation.meaning,

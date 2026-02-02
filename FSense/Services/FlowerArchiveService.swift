@@ -114,7 +114,7 @@ struct ArchivedFlower: Identifiable, Codable {
 
 extension Flower: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, name, imageAsset, imageURL
+        case id, name, imageAsset, imageURL, imageCacheKey
         case meanings, symbolismText, whyThisFlowerText, moodIntensityValue
         case giftingInfo, contextInfo
     }
@@ -132,6 +132,8 @@ extension Flower: Codable {
             imageURL = nil
         }
 
+        imageCacheKey = try container.decodeIfPresent(String.self, forKey: .imageCacheKey)
+
         meanings = try container.decode([String].self, forKey: .meanings)
         symbolismText = try container.decode(String.self, forKey: .symbolismText)
         whyThisFlowerText = try container.decode(String.self, forKey: .whyThisFlowerText)
@@ -148,6 +150,7 @@ extension Flower: Codable {
         try container.encode(name, forKey: .name)
         try container.encodeIfPresent(imageAsset, forKey: .imageAsset)
         try container.encodeIfPresent(imageURL?.absoluteString, forKey: .imageURL)
+        try container.encodeIfPresent(imageCacheKey, forKey: .imageCacheKey)
         try container.encode(meanings, forKey: .meanings)
         try container.encode(symbolismText, forKey: .symbolismText)
         try container.encode(whyThisFlowerText, forKey: .whyThisFlowerText)

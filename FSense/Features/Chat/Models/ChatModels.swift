@@ -121,6 +121,7 @@ struct ChatSession: Identifiable, Codable, Equatable {
     var flowerName: String?
     var flowerImageAsset: String?
     var flowerImageUrl: String?
+    var flowerImageCacheKey: String?
 
     init(
         id: UUID = UUID(),
@@ -131,7 +132,8 @@ struct ChatSession: Identifiable, Codable, Equatable {
         messages: [ChatMessage] = [],
         flowerName: String? = nil,
         flowerImageAsset: String? = nil,
-        flowerImageUrl: String? = nil
+        flowerImageUrl: String? = nil,
+        flowerImageCacheKey: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -142,6 +144,7 @@ struct ChatSession: Identifiable, Codable, Equatable {
         self.flowerName = flowerName
         self.flowerImageAsset = flowerImageAsset
         self.flowerImageUrl = flowerImageUrl
+        self.flowerImageCacheKey = flowerImageCacheKey
     }
     
     /// Generate title from first user message
@@ -175,6 +178,7 @@ struct ChatSession: Identifiable, Codable, Equatable {
                 flowerName = rec.flowerName
                 flowerImageAsset = rec.imageAsset
                 flowerImageUrl = rec.imageUrl
+                flowerImageCacheKey = rec.imageCacheKey
             }
         }
     }

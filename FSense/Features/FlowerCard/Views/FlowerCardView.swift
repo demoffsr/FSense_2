@@ -89,7 +89,7 @@ struct FlowerCardView: View {
             AsyncFlowerImageView(
                 imageUrl: viewModel.flower?.imageURL?.absoluteString,
                 imageAsset: viewModel.flower?.imageAsset,
-                cacheKey: nil  // TODO: Extract from FlowerCardPayload if needed
+                cacheKey: viewModel.flower?.imageCacheKey
             )
             .frame(height: heroHeight)
             .clipped()

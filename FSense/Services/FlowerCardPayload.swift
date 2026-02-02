@@ -145,6 +145,7 @@ extension FlowerCardPayload {
             name: header.name,
             imageAsset: header.imageAsset,
             imageURL: header.imageUrl.flatMap { URL(string: $0) },
+            imageCacheKey: header.imageCacheKey,
             meanings: meaning.meanings,
             symbolismText: meaning.symbolism.text,
             whyThisFlowerText: meaning.whyThisFlower.text,

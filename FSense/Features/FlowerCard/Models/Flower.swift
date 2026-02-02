@@ -40,7 +40,8 @@ struct Flower: Identifiable, Equatable, Hashable {
     let name: String
     let imageAsset: String?
     let imageURL: URL?
-    
+    let imageCacheKey: String?
+
     // Meaning data
     let meanings: [String]
     let symbolismText: String
@@ -61,6 +62,7 @@ struct Flower: Identifiable, Equatable, Hashable {
         name: String,
         imageAsset: String? = nil,
         imageURL: URL? = nil,
+        imageCacheKey: String? = nil,
         meanings: [String] = [],
         symbolismText: String = "",
         whyThisFlowerText: String = "",
@@ -72,6 +74,7 @@ struct Flower: Identifiable, Equatable, Hashable {
         self.name = name
         self.imageAsset = imageAsset
         self.imageURL = imageURL
+        self.imageCacheKey = imageCacheKey
         self.meanings = meanings
         self.symbolismText = symbolismText
         self.whyThisFlowerText = whyThisFlowerText

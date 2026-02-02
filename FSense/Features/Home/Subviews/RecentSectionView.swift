@@ -238,20 +238,9 @@ struct RecentScanRowView: View {
 // MARK: - Recent Chat Row
 
 struct RecentChatRowView: View {
-    @Environment(\.themeAccent) private var themeAccent
-
     let viewModel: ChatSessionViewModel
     var onRename: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
-
-    /// Gradient using theme accent
-    private var placeholderGradient: LinearGradient {
-        LinearGradient(
-            colors: [themeAccent.opacity(0.2), Color.pink.opacity(0.2)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -310,52 +299,18 @@ struct RecentChatRowView: View {
     }
     
     private var thumbnail: some View {
-        Group {
-            // Priority: imageUrl > imageAsset > placeholder
-            if let imageUrlString = viewModel.flowerImageUrl,
-               let imageUrl = URL(string: imageUrlString) {
-                // Remote AI-generated image with caching
-                CachedAsyncImage(url: imageUrl) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 46, height: 46)
-                        .clipShape(RoundedRectangle(cornerRadius: 9))
-                } placeholder: {
-                    localImageOrPlaceholder
-                }
-            } else {
-                localImageOrPlaceholder
-            }
-        }
+        AsyncFlowerImageView(
+            imageUrl: viewModel.flowerImageUrl,
+            imageAsset: viewModel.flowerImageAsset,
+            cacheKey: viewModel.flowerImageCacheKey
+        )
+        .frame(width: 46, height: 46)
+        .clipShape(RoundedRectangle(cornerRadius: 9))
         .overlay(
             RoundedRectangle(cornerRadius: 9)
                 .inset(by: 0.5)
                 .stroke(Color("BorderStroke"), lineWidth: 1)
         )
-    }
-
-    private var localImageOrPlaceholder: some View {
-        Group {
-            if let imageName = viewModel.flowerImageAsset {
-                // Local asset image
-                Image(imageName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 46, height: 46)
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
-            } else {
-                // Placeholder gradient (uses static property to avoid recreation)
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(placeholderGradient)
-                    .frame(width: 46, height: 46)
-                    .overlay(
-                        Image(systemName: "bubble.left.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(themeAccent.opacity(0.6))
-                    )
-            }
-        }
     }
 }
 

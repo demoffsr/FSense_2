@@ -11,6 +11,7 @@ final class ChatSessionViewModel: Identifiable {
     var updatedAt: Date
     var flowerImageUrl: String?
     var flowerImageAsset: String?
+    var flowerImageCacheKey: String?
 
     // MARK: - Computed Display Properties (cached in view model)
 
@@ -31,6 +32,7 @@ final class ChatSessionViewModel: Identifiable {
         self.updatedAt = session.updatedAt
         self.flowerImageUrl = session.flowerImageUrl
         self.flowerImageAsset = session.flowerImageAsset
+        self.flowerImageCacheKey = session.flowerImageCacheKey
 
         // Pre-compute display title (expensive: iterates messages)
         self.displayTitle = Self.computeDisplayTitle(session: session)
@@ -45,6 +47,7 @@ final class ChatSessionViewModel: Identifiable {
         self.updatedAt = session.updatedAt
         self.flowerImageUrl = session.flowerImageUrl
         self.flowerImageAsset = session.flowerImageAsset
+        self.flowerImageCacheKey = session.flowerImageCacheKey
 
         // Recompute display title if needed
         self.displayTitle = Self.computeDisplayTitle(session: session)
