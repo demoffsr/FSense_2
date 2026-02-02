@@ -132,7 +132,7 @@ def validate_input(prompt: str) -> ValidationResult:
     2. Length validation
     3. Unicode normalization
     4. Whitespace normalization
-    5. Suspicious pattern detection (warning only, doesn't block)
+    5. Suspicious pattern detection (BLOCKS prompt injection attempts)
 
     Args:
         prompt: Raw user input
@@ -187,15 +187,21 @@ def validate_input(prompt: str) -> ValidationResult:
             error_message=f"Message too long (maximum {MAX_PROMPT_LENGTH} characters)",
         )
 
-    # Check for suspicious patterns (warning only)
+    # Check for suspicious patterns - BLOCK if detected
     warnings = check_suspicious_patterns(sanitized)
     if warnings:
-        logger.warning(f"Input validation warnings: {warnings}")
+        logger.warning(f"Prompt injection attempt blocked: {warnings}")
+        return ValidationResult(
+            is_valid=False,
+            sanitized_input="",
+            error_message="Your message contains disallowed content. Please rephrase your request.",
+            warnings=warnings,
+        )
 
     return ValidationResult(
         is_valid=True,
         sanitized_input=sanitized,
-        warnings=warnings,
+        warnings=[],
     )
 
 

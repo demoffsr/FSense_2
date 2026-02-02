@@ -14,6 +14,7 @@ Features:
 from typing import Any, Optional
 import json
 import logging
+import threading
 
 from openai import OpenAI
 from openai import APIError, APIConnectionError, RateLimitError, APITimeoutError
@@ -314,41 +315,49 @@ class AIClient:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SINGLETON PATTERN
+# SINGLETON PATTERN (Thread-Safe)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _default_client: Optional[AIClient] = None
 _fast_client: Optional[AIClient] = None
+_client_lock = threading.Lock()
 
 
 def get_ai_client() -> AIClient:
     """
-    Get default AI client (gpt-4o) for complex tasks.
+    Get default AI client (gpt-4o) for complex tasks (thread-safe).
 
     Use for: FMRA, CRI, SFA - tasks requiring deep reasoning.
+    Uses double-checked locking for thread safety.
     """
     global _default_client
     if _default_client is None:
-        _default_client = AIClient()
+        with _client_lock:
+            if _default_client is None:
+                _default_client = AIClient()
     return _default_client
 
 
 def get_ai_client_fast() -> AIClient:
     """
-    Get fast AI client (gpt-4o-mini) for simple tasks.
+    Get fast AI client (gpt-4o-mini) for simple tasks (thread-safe).
 
     Use for: FIA, EIA, RIL, CIA, AITB, RFFA, SRFL - simpler analysis tasks.
     ~3x faster than gpt-4o with good quality for these tasks.
+    Uses double-checked locking for thread safety.
     """
     global _fast_client
     if _fast_client is None:
-        settings = get_settings()
-        _fast_client = AIClient(model=settings.openai_model_fast)
+        with _client_lock:
+            if _fast_client is None:
+                settings = get_settings()
+                _fast_client = AIClient(model=settings.openai_model_fast)
     return _fast_client
 
 
 def reset_ai_client() -> None:
-    """Reset AI client singletons (for testing)."""
+    """Reset AI client singletons (for testing). Thread-safe."""
     global _default_client, _fast_client
-    _default_client = None
-    _fast_client = None
+    with _client_lock:
+        _default_client = None
+        _fast_client = None

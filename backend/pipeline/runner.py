@@ -157,18 +157,21 @@ def run_flower_chat(
                 "success": False,
                 "error": "Failed to generate flower recommendation. Please try again.",
             }
-        
-        # Check for critical errors
-        if ctx.errors:
-            logger.warning(f"Pipeline completed with errors: {ctx.errors}")
-            # Still return payload if available (graceful degradation)
-        
+
         logger.info(f"Flower chat completed: request_id={ctx.request_id}")
-        
-        return {
+
+        # Build response
+        response: PipelineResponse = {
             "success": True,
             "data": ctx.ui_payload,
         }
+
+        # Include warnings if any non-critical errors occurred
+        if ctx.errors:
+            logger.warning(f"Pipeline completed with warnings: {ctx.errors}")
+            response["warnings"] = ctx.errors
+
+        return response
         
     except SettingsError as e:
         logger.error(f"Settings error: {e}")
@@ -274,11 +277,15 @@ def run_flower_chat_v2(
 
             # Wrap in v2 format
             if result["success"]:
-                return {
+                response = {
                     "success": True,
                     "type": ResponseType.RECOMMENDATION.value,
                     "data": result["data"],
                 }
+                # Pass through warnings if present
+                if "warnings" in result:
+                    response["warnings"] = result["warnings"]
+                return response
             else:
                 return {
                     "success": False,

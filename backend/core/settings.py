@@ -13,6 +13,7 @@ from typing import Optional
 from pathlib import Path
 import os
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -175,34 +176,40 @@ class Settings:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SINGLETON PATTERN
+# SINGLETON PATTERN (Thread-Safe)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _settings: Optional[Settings] = None
+_settings_lock = threading.Lock()
 
 
 def get_settings() -> Settings:
     """
-    Get or create settings singleton.
-    
+    Get or create settings singleton (thread-safe).
+
     First call loads settings from environment.
     Subsequent calls return cached instance.
-    
+    Uses double-checked locking for thread safety.
+
     Raises:
         SettingsError: If required settings are missing
     """
     global _settings
     if _settings is None:
-        _settings = Settings.from_env()
-        _settings.validate()
+        with _settings_lock:
+            if _settings is None:
+                _settings = Settings.from_env()
+                _settings.validate()
     return _settings
 
 
 def reset_settings() -> None:
     """
     Reset settings singleton (for testing).
-    
+
     Next call to get_settings() will reload from environment.
+    Thread-safe.
     """
     global _settings
-    _settings = None
+    with _settings_lock:
+        _settings = None

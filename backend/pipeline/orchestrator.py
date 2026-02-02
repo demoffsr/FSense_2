@@ -89,6 +89,7 @@ class PipelineOrchestrator:
         self._step_counter = 0
         self._step_lock = threading.Lock()
         self._total_steps = 10  # Updated dynamically if VIA runs
+        self._executor: Optional[ThreadPoolExecutor] = None  # Shared executor for pipeline run
 
     @property
     def agent_names(self) -> list[str]:
@@ -117,75 +118,86 @@ class PipelineOrchestrator:
         console.pipeline_start(ctx.request_id, ctx.user_input, ctx.region)
         logger.info(f"Pipeline started (optimized): request_id={ctx.request_id}")
 
-        try:
-            # Phase 0: Vision analysis (only if image provided)
-            if ctx.image_base64:
-                self._total_steps = 11  # Add VIA to step count
-                self._execute_agent(self._via, ctx)
+        # Create shared executor for entire pipeline run
+        # 4 workers = max parallel batch size (CIA + AITB + RFFA + CRI)
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            self._executor = executor
+            try:
+                # Phase 0: Vision analysis (only if image provided)
+                if ctx.image_base64:
+                    self._total_steps = 11  # Add VIA to step count
+                    self._execute_agent(self._via, ctx)
 
-                # Check if clarification needed - early exit
-                if ctx.vision.needs_clarification:
-                    logger.info("Vision analysis needs clarification, returning early")
-                    # Build a clarification response instead of full pipeline
-                    ctx.ui_payload = self._build_clarification_payload(ctx)
-                    total_time = time.time() - start_time
-                    console.pipeline_end(ctx.request_id, True, total_time)
-                    return ctx
+                    # Check if clarification needed - early exit
+                    if ctx.vision.needs_clarification:
+                        logger.info("Vision analysis needs clarification, returning early")
+                        # Build a clarification response instead of full pipeline
+                        ctx.ui_payload = self._build_clarification_payload(ctx)
+                        total_time = time.time() - start_time
+                        console.pipeline_end(ctx.request_id, True, total_time)
+                        return ctx
 
-            # Phase 1: Input analysis (parallel)
-            self._run_parallel(ctx, [self._fia, self._eia])
+                # Phase 1: Input analysis (parallel)
+                self._run_parallel(ctx, [self._fia, self._eia])
 
-            # Phase 2: Relationship analysis (needs intent + emotions)
-            self._execute_agent(self._ril, ctx)
+                # Phase 2: Relationship analysis (needs intent + emotions)
+                self._execute_agent(self._ril, ctx)
 
-            # Phase 3: Flower matching
-            self._execute_agent(self._fmra, ctx)
+                # Phase 3: Flower matching
+                self._execute_agent(self._fmra, ctx)
 
-            # Phase 4: Post-matching analysis (parallel)
-            self._run_parallel(ctx, [self._cia, self._aitb, self._rffa, self._cri])
+                # Phase 4: Post-matching analysis (parallel)
+                self._run_parallel(ctx, [self._cia, self._aitb, self._rffa, self._cri])
 
-            # Phase 5: Self-reflection
-            self._execute_agent(self._srfl, ctx)
+                # Phase 5: Self-reflection
+                self._execute_agent(self._srfl, ctx)
 
-            # Phase 6: Final assembly
-            self._execute_agent(self._sfa, ctx)
+                # Phase 6: Final assembly
+                self._execute_agent(self._sfa, ctx)
 
-            total_time = time.time() - start_time
-            success = len(ctx.errors) == 0
+                total_time = time.time() - start_time
+                success = len(ctx.errors) == 0
 
-            console.pipeline_end(ctx.request_id, success, total_time)
-            logger.info(f"Pipeline completed: request_id={ctx.request_id}, time={total_time:.2f}s")
+                console.pipeline_end(ctx.request_id, success, total_time)
+                logger.info(f"Pipeline completed: request_id={ctx.request_id}, time={total_time:.2f}s")
 
-        except CriticalAgentError as e:
-            total_time = time.time() - start_time
-            ctx.add_error(f"Pipeline aborted: {str(e)}")
-            console.pipeline_end(ctx.request_id, False, total_time)
-            logger.error(f"Pipeline aborted due to critical agent failure: {e}")
+            except CriticalAgentError as e:
+                total_time = time.time() - start_time
+                ctx.add_error(f"Pipeline aborted: {str(e)}")
+                console.pipeline_end(ctx.request_id, False, total_time)
+                logger.error(f"Pipeline aborted due to critical agent failure: {e}")
+
+            finally:
+                self._executor = None
 
         return ctx
 
     def _run_parallel(self, ctx: PipelineContext, agents: List[BaseAgent]) -> None:
-        """Run multiple agents in parallel using ThreadPoolExecutor.
+        """Run multiple agents in parallel using shared executor.
 
         If a critical agent fails, CriticalAgentError is raised after
         all parallel agents complete (to avoid orphaned threads).
         """
         critical_error: Optional[CriticalAgentError] = None
 
-        with ThreadPoolExecutor(max_workers=len(agents)) as executor:
-            futures = {
-                executor.submit(self._execute_agent, agent, ctx): agent
-                for agent in agents
-            }
-            for future in as_completed(futures):
-                try:
-                    future.result()
-                except CriticalAgentError as e:
-                    # Capture but don't raise yet - let other agents finish
-                    critical_error = e
-                    logger.error(f"Critical agent failed in parallel batch: {e}")
-                except Exception as e:
-                    logger.error(f"Parallel agent error: {e}")
+        futures = {
+            self._executor.submit(self._execute_agent, agent, ctx, True): agent
+            for agent in agents
+        }
+
+        for future in as_completed(futures, timeout=AGENT_TIMEOUT_SECONDS * len(agents)):
+            agent = futures[future]
+            try:
+                future.result()
+            except CriticalAgentError as e:
+                # Capture but don't raise yet - let other agents finish
+                critical_error = e
+                logger.error(f"Critical agent failed in parallel batch: {e}")
+            except Exception as e:
+                # Capture unexpected errors with agent context
+                error_msg = f"Agent {agent.name} unexpected error: {e}"
+                ctx.add_error(error_msg)
+                logger.error(f"Parallel agent error: {error_msg}", exc_info=True)
 
         # Raise critical error after all agents complete
         if critical_error:
@@ -215,8 +227,19 @@ class PipelineOrchestrator:
             "pipeline_version": "0.3.0",
         }
 
-    def _execute_agent(self, agent: BaseAgent, ctx: PipelineContext) -> None:
+    def _execute_agent(
+        self,
+        agent: BaseAgent,
+        ctx: PipelineContext,
+        _in_thread: bool = False
+    ) -> None:
         """Execute a single agent with timing, timeout, and error handling.
+
+        Args:
+            agent: Agent to execute
+            ctx: Pipeline context
+            _in_thread: If True, agent is already running in executor thread,
+                        skip timeout wrapper. Used by _run_parallel.
 
         Critical agents (FIA, EIA, FMRA, SFA) will raise CriticalAgentError
         on failure, stopping the pipeline. Non-critical agents log errors
@@ -235,9 +258,12 @@ class PipelineOrchestrator:
             logger.debug(f"Starting agent: {agent_name}")
             ctx.start_timing(agent_name)
 
-            # Run agent with timeout to prevent hangs
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(agent.run, ctx)
+            if _in_thread:
+                # Already in executor thread (called from _run_parallel)
+                agent.run(ctx)
+            else:
+                # Sequential call - use shared executor with timeout
+                future = self._executor.submit(agent.run, ctx)
                 try:
                     future.result(timeout=AGENT_TIMEOUT_SECONDS)
                 except FuturesTimeoutError:

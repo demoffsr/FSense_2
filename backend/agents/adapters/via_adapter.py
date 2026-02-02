@@ -10,6 +10,7 @@ Position in pipeline: FIRST (before FIA), only runs if image_base64 is present.
 """
 
 import logging
+from typing import Any, Optional
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import (
@@ -66,6 +67,38 @@ class VIAAdapter(BaseAgent):
 
     name = "VIA"
 
+    def _safe_parse_confidence(self, value: Any) -> float:
+        """Safely parse confidence value to float in range [0.0, 1.0]."""
+        try:
+            conf = float(value)
+            # Clamp to valid range
+            return max(0.0, min(1.0, conf))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _parse_detected_flower(self, data: Any) -> Optional[DetectedFlower]:
+        """Parse and validate flower data from Vision API response.
+
+        Returns None if data is invalid (missing name, wrong type, etc.)
+        """
+        if not isinstance(data, dict):
+            return None
+
+        name = data.get("name", "")
+        if not name or not isinstance(name, str):
+            return None
+
+        name = name.strip()
+        if not name:
+            return None
+
+        color = data.get("color")
+        return DetectedFlower(
+            name=name,
+            color=color if isinstance(color, str) else None,
+            confidence=self._safe_parse_confidence(data.get("confidence", 0.0)),
+        )
+
     def run(self, ctx: PipelineContext) -> None:
         """Analyze bouquet image and extract flower information."""
         # Skip if no image provided
@@ -89,25 +122,22 @@ If you cannot clearly identify a single main flower, indicate that clarification
                 max_tokens=600,
             )
 
-            # Parse main flower
+            # Parse main flower with validation
             main_flower = None
             main_data = response.get("main_flower")
-            if main_data and isinstance(main_data, dict):
-                main_flower = DetectedFlower(
-                    name=main_data.get("name", ""),
-                    color=main_data.get("color"),
-                    confidence=float(main_data.get("confidence", 0.0)),
-                )
+            if main_data:
+                main_flower = self._parse_detected_flower(main_data)
+                if main_data and not main_flower:
+                    logger.warning(f"VIA: Invalid main_flower data: {main_data}")
 
-            # Parse secondary flowers
+            # Parse secondary flowers with validation
             secondary_flowers = []
             for flower_data in response.get("secondary_flowers", [])[:5]:
-                if isinstance(flower_data, dict) and flower_data.get("name"):
-                    secondary_flowers.append(DetectedFlower(
-                        name=flower_data.get("name", ""),
-                        color=flower_data.get("color"),
-                        confidence=float(flower_data.get("confidence", 0.0)),
-                    ))
+                flower = self._parse_detected_flower(flower_data)
+                if flower:
+                    secondary_flowers.append(flower)
+                elif flower_data:
+                    logger.debug(f"VIA: Skipping invalid secondary flower: {flower_data}")
 
             # Determine if clarification is needed
             needs_clarification = response.get("needs_clarification", False)

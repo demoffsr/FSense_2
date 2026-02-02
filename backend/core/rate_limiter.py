@@ -139,15 +139,22 @@ class SlidingWindowRateLimiter:
 # FASTAPI MIDDLEWARE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Global rate limiter instance
+# Global rate limiter instance (Thread-Safe)
 _rate_limiter: Optional[SlidingWindowRateLimiter] = None
+_rate_limiter_lock = threading.Lock()
 
 
 def get_rate_limiter() -> SlidingWindowRateLimiter:
-    """Get or create global rate limiter instance."""
+    """
+    Get or create global rate limiter instance (thread-safe).
+
+    Uses double-checked locking for thread safety.
+    """
     global _rate_limiter
     if _rate_limiter is None:
-        _rate_limiter = SlidingWindowRateLimiter()
+        with _rate_limiter_lock:
+            if _rate_limiter is None:
+                _rate_limiter = SlidingWindowRateLimiter()
     return _rate_limiter
 
 
@@ -156,16 +163,17 @@ def configure_rate_limiter(
     burst_size: int = DEFAULT_BURST_SIZE,
     enabled: bool = True,
 ) -> SlidingWindowRateLimiter:
-    """Configure global rate limiter."""
+    """Configure global rate limiter (thread-safe)."""
     global _rate_limiter
-    config = RateLimitConfig(
-        requests_per_minute=requests_per_minute,
-        burst_size=burst_size,
-        enabled=enabled,
-    )
-    _rate_limiter = SlidingWindowRateLimiter(config)
-    logger.info(f"Rate limiter configured: {requests_per_minute} req/min + {burst_size} burst")
-    return _rate_limiter
+    with _rate_limiter_lock:
+        config = RateLimitConfig(
+            requests_per_minute=requests_per_minute,
+            burst_size=burst_size,
+            enabled=enabled,
+        )
+        _rate_limiter = SlidingWindowRateLimiter(config)
+        logger.info(f"Rate limiter configured: {requests_per_minute} req/min + {burst_size} burst")
+        return _rate_limiter
 
 
 def get_client_ip(request: Request) -> str:

@@ -27,10 +27,15 @@ Stats:
 """
 
 from typing import Optional, List, Dict
-from functools import lru_cache
+import json
+import logging
 from sqlalchemy import Column, String, DateTime, Integer, Text, Index, Float, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
+
+from backend.database.connection import get_flower_db, check_flower_db_exists
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -1859,8 +1864,8 @@ FLOWERS_DATA = [
     },
 ]
 
-# Pre-built index for O(1) lookups by flower ID
-FLOWERS_BY_ID: dict[str, dict] = {f["id"]: f for f in FLOWERS_DATA}
+# NOTE: FLOWERS_BY_ID removed - using SQLite queries instead
+# See get_flower_by_id() and get_flowers_by_ids() below
 
 
 # =============================================================================
@@ -2353,48 +2358,186 @@ def seed_database(session):
 
 
 # =============================================================================
-# QUICK LOOKUP FUNCTIONS (for agent use without DB)
+# DATABASE LOOKUP FUNCTIONS (SQLite-backed)
 # =============================================================================
 
-@lru_cache(maxsize=128)
+def _row_to_flower_dict(row) -> dict:
+    """Convert SQLite row to flower dict with JSON parsing."""
+    result = dict(row)
+    # Parse JSON fields
+    if result.get("primary_meanings"):
+        try:
+            result["primary_meanings"] = json.loads(result["primary_meanings"])
+        except (json.JSONDecodeError, TypeError):
+            result["primary_meanings"] = []
+    return result
+
+
+def _row_to_meaning_dict(row) -> dict:
+    """Convert SQLite row to meaning dict with JSON parsing."""
+    result = dict(row)
+    if result.get("phrases"):
+        try:
+            result["phrases"] = json.loads(result["phrases"])
+        except (json.JSONDecodeError, TypeError):
+            result["phrases"] = []
+    return result
+
+
 def get_flowers_by_emotion(emotion: str, top_n: int = 5) -> tuple:
-    """Quick lookup: get best flowers for an emotion. Cached for performance."""
-    matches = [m for m in FLOWER_MEANINGS_DATA if m["emotion"] == emotion]
-    matches.sort(key=lambda x: x["match_score"], reverse=True)
-    # Return tuple for hashability (lru_cache requirement)
-    return tuple(matches[:top_n])
+    """
+    Get best flowers for an emotion from SQLite.
+
+    Returns tuple of meaning dicts sorted by match_score descending.
+    """
+    if not check_flower_db_exists():
+        # Fallback to in-memory data if DB not initialized
+        matches = [m for m in FLOWER_MEANINGS_DATA if m["emotion"] == emotion]
+        matches.sort(key=lambda x: x["match_score"], reverse=True)
+        return tuple(matches[:top_n])
+
+    with get_flower_db() as conn:
+        cursor = conn.execute("""
+            SELECT flower_id, emotion, occasion, match_score, meaning_en, meaning_ru, phrases
+            FROM flower_meanings
+            WHERE emotion = ?
+            ORDER BY match_score DESC
+            LIMIT ?
+        """, (emotion, top_n))
+        return tuple(_row_to_meaning_dict(row) for row in cursor.fetchall())
 
 
 def get_flower_by_id(flower_id: str) -> Optional[dict]:
-    """O(1) lookup by ID using pre-built index."""
-    return FLOWERS_BY_ID.get(flower_id)
+    """
+    Get flower by ID from SQLite.
+
+    Returns flower dict or None if not found.
+    """
+    if not check_flower_db_exists():
+        # Fallback to in-memory data if DB not initialized
+        for f in FLOWERS_DATA:
+            if f["id"] == flower_id:
+                return f
+        return None
+
+    with get_flower_db() as conn:
+        cursor = conn.execute(
+            "SELECT * FROM flowers WHERE id = ?", (flower_id,)
+        )
+        row = cursor.fetchone()
+        return _row_to_flower_dict(row) if row else None
 
 
 def get_flowers_by_ids(flower_ids: tuple) -> dict:
-    """Batch lookup: O(n) where n = len(flower_ids)."""
-    return {fid: FLOWERS_BY_ID.get(fid) for fid in flower_ids}
+    """
+    Batch lookup: get multiple flowers by IDs from SQLite.
+
+    Returns dict mapping flower_id -> flower dict (None if not found).
+    """
+    if not flower_ids:
+        return {}
+
+    if not check_flower_db_exists():
+        # Fallback to in-memory data if DB not initialized
+        result = {}
+        for fid in flower_ids:
+            for f in FLOWERS_DATA:
+                if f["id"] == fid:
+                    result[fid] = f
+                    break
+            else:
+                result[fid] = None
+        return result
+
+    placeholders = ",".join("?" * len(flower_ids))
+    with get_flower_db() as conn:
+        cursor = conn.execute(
+            f"SELECT * FROM flowers WHERE id IN ({placeholders})", flower_ids
+        )
+        found = {row["id"]: _row_to_flower_dict(row) for row in cursor.fetchall()}
+        # Return dict with None for missing IDs
+        return {fid: found.get(fid) for fid in flower_ids}
 
 
 def get_cultural_warnings(flower_id: str, region: str) -> Optional[dict]:
-    """Quick lookup: check if flower is taboo in region."""
-    for ctx in CULTURAL_CONTEXTS_DATA:
-        if ctx["flower_id"] == flower_id and ctx["region"] == region:
-            if ctx["is_taboo"]:
-                return ctx
-    return None
+    """
+    Get cultural taboo warning for flower in region from SQLite.
+
+    Returns cultural context dict if flower is taboo in region, else None.
+    """
+    if not check_flower_db_exists():
+        # Fallback to in-memory data if DB not initialized
+        for ctx in CULTURAL_CONTEXTS_DATA:
+            if ctx["flower_id"] == flower_id and ctx["region"] == region:
+                if ctx["is_taboo"]:
+                    return ctx
+        return None
+
+    with get_flower_db() as conn:
+        cursor = conn.execute("""
+            SELECT flower_id, region, meaning, is_taboo, taboo_reason,
+                   taboo_occasions, recommended_occasions
+            FROM flower_cultural_contexts
+            WHERE flower_id = ? AND region = ? AND is_taboo = 1
+        """, (flower_id, region))
+        row = cursor.fetchone()
+        if row:
+            result = dict(row)
+            # Parse JSON fields
+            for field in ("taboo_occasions", "recommended_occasions"):
+                if result.get(field):
+                    try:
+                        result[field] = json.loads(result[field])
+                    except (json.JSONDecodeError, TypeError):
+                        result[field] = []
+            return result
+        return None
 
 
 def get_number_rules(region: str) -> Optional[dict]:
-    """Quick lookup: get number rules for region."""
-    for rule in REGION_NUMBER_RULES_DATA:
-        if rule["region"] == region:
-            return rule
-    return None
+    """
+    Get flower quantity rules for region from SQLite.
+
+    Returns rule dict or None if no rules for region.
+    """
+    if not check_flower_db_exists():
+        # Fallback to in-memory data if DB not initialized
+        for rule in REGION_NUMBER_RULES_DATA:
+            if rule["region"] == region:
+                return rule
+        return None
+
+    with get_flower_db() as conn:
+        cursor = conn.execute("""
+            SELECT region, avoid_numbers, prefer_numbers, notes
+            FROM region_number_rules
+            WHERE region = ?
+        """, (region,))
+        row = cursor.fetchone()
+        if row:
+            result = dict(row)
+            # Parse JSON fields
+            for field in ("avoid_numbers", "prefer_numbers"):
+                if result.get(field):
+                    try:
+                        result[field] = json.loads(result[field])
+                    except (json.JSONDecodeError, TypeError):
+                        result[field] = []
+            return result
+        return None
 
 
 def get_all_flower_ids() -> List[str]:
-    """Get list of all valid flower IDs."""
-    return [f["id"] for f in FLOWERS_DATA]
+    """
+    Get list of all valid flower IDs from SQLite.
+    """
+    if not check_flower_db_exists():
+        # Fallback to in-memory data if DB not initialized
+        return [f["id"] for f in FLOWERS_DATA]
+
+    with get_flower_db() as conn:
+        cursor = conn.execute("SELECT id FROM flowers")
+        return [row["id"] for row in cursor.fetchall()]
 
 
 # =============================================================================
