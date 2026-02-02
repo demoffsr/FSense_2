@@ -124,9 +124,14 @@ def run_flower_chat(
     # Use sanitized input
     prompt = validation.sanitized_input
 
-    # Log warnings if any suspicious patterns detected
+    # Defense-in-depth: Block if any suspicious patterns detected
+    # (Primary blocking is in validate_input, this is secondary safety)
     if validation.warnings:
-        logger.warning(f"Input validation warnings for prompt: {validation.warnings}")
+        logger.warning(f"Prompt injection attempt blocked: {validation.warnings}")
+        return {
+            "success": False,
+            "error": "Your message contains disallowed content. Please rephrase your request.",
+        }
 
     # Validate and normalize region
     region = validate_region(region)

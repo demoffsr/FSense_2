@@ -8,6 +8,7 @@ for the same flower+city+region combination.
 import sqlite3
 import json
 import os
+import threading
 from datetime import datetime, timedelta
 from typing import Optional, List
 from backend.schemas.flower_product import ShopCard
@@ -24,9 +25,22 @@ class FlowerSearchCache:
         self.db_path = db_path
         self._init_db()
 
+    def _connect(self) -> sqlite3.Connection:
+        """
+        Create database connection with optimized settings.
+
+        - timeout=30: Wait up to 30s for locks (vs 5s default)
+        - check_same_thread=False: Allow cross-thread access (singleton is thread-safe)
+        """
+        return sqlite3.connect(
+            self.db_path,
+            timeout=30.0,
+            check_same_thread=False,
+        )
+
     def _init_db(self):
-        """Create cache table if not exists."""
-        with sqlite3.connect(self.db_path) as conn:
+        """Create cache table if not exists and enable WAL mode."""
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS search_cache (
                     cache_key TEXT PRIMARY KEY,
@@ -44,6 +58,9 @@ class FlowerSearchCache:
                 CREATE INDEX IF NOT EXISTS idx_expires_at
                 ON search_cache(expires_at)
             """)
+            # Enable WAL mode for better concurrency
+            # (allows concurrent readers + one writer, reduces "database is locked" errors)
+            conn.execute("PRAGMA journal_mode=WAL")
 
     def _normalize(self, text: str) -> str:
         """Normalize text for cache key."""
@@ -83,7 +100,7 @@ class FlowerSearchCache:
             Tuple of (products, cached_at_timestamp) or (None, None) if miss/expired
         """
         key = self._make_key(flower_name, city, region)
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT * FROM search_cache WHERE cache_key = ? AND expires_at > ?",
@@ -129,7 +146,7 @@ class FlowerSearchCache:
 
         products_json = json.dumps([p.model_dump() for p in products])
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO search_cache
                 (cache_key, flower_name, city, region, products, provider, created_at, expires_at, hit_count)
@@ -147,7 +164,7 @@ class FlowerSearchCache:
         Returns:
             Number of deleted entries
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 "DELETE FROM search_cache WHERE expires_at < ?",
                 (datetime.utcnow().isoformat(),)
@@ -157,7 +174,7 @@ class FlowerSearchCache:
 
     def get_stats(self) -> dict:
         """Get cache statistics."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
 
             total = conn.execute("SELECT COUNT(*) as count FROM search_cache").fetchone()["count"]
@@ -180,13 +197,27 @@ class FlowerSearchCache:
             }
 
 
-# Singleton instance
+# Singleton instance (Thread-Safe)
 _cache: Optional[FlowerSearchCache] = None
+_cache_lock = threading.Lock()
 
 
 def get_search_cache() -> FlowerSearchCache:
-    """Get or create the global search cache instance."""
+    """
+    Get or create the global search cache instance.
+
+    Uses double-checked locking for thread safety.
+    """
     global _cache
     if _cache is None:
-        _cache = FlowerSearchCache()
+        with _cache_lock:
+            if _cache is None:
+                _cache = FlowerSearchCache()
     return _cache
+
+
+def reset_search_cache() -> None:
+    """Reset search cache singleton (for testing). Thread-safe."""
+    global _cache
+    with _cache_lock:
+        _cache = None
