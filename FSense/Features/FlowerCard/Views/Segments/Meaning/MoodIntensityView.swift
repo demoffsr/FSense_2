@@ -1,9 +1,12 @@
 import SwiftUI
 
 struct MoodIntensityView: View {
-    
+
     let value: Double
     let level: MoodIntensityLevel
+
+    // Static shadow color to avoid recreation on each render
+    private static let shadowColor = Color.black.opacity(0.1)
     
     // Scale range (0-16)
     private let minValue: Double = 0
@@ -40,7 +43,7 @@ struct MoodIntensityView: View {
             HStack {
                 Text(String(format: "%.1f", displayValue))
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(Color(red: 0.12, green: 0.11, blue: 0.09))
+                    .foregroundColor(Color("TextPrimary"))
                 
                 Spacer()
                 
@@ -109,7 +112,8 @@ struct MoodIntensityView: View {
         .frame(maxWidth: .infinity)
         .background(Color.white)
         .cornerRadius(20)
-        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 2)
+        .compositingGroup()
+        .shadow(color: Self.shadowColor, radius: 10, x: 0, y: 2)
     }
     
     private func legendDot(color: Color, text: String) -> some View {

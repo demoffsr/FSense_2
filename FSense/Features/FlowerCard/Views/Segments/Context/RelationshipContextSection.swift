@@ -80,5 +80,5 @@ struct RelationshipContextSection: View {
         RelationshipContext(relationshipType: "Professional", appropriateness: .inappropriate, guidance: "Could be misinterpreted; choose neutral flowers")
     ])
     .padding()
-    .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+    .background(Color("SecondaryBackground"))
 }

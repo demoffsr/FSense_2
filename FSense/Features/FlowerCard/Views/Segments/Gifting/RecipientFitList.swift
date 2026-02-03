@@ -2,10 +2,13 @@ import SwiftUI
 
 /// List showing how appropriate this flower is for different recipient types
 struct RecipientFitList: View {
-    
+
     let recipients: [RecipientFit]
     @State private var selectedRecipient: RecipientFit?
-    
+
+    // Static shadow color to avoid recreation on each render
+    private static let shadowColor = Color.black.opacity(0.1)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Header
@@ -28,7 +31,8 @@ struct RecipientFitList: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(.white)
         .cornerRadius(24)
-        .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
+        .compositingGroup()
+        .shadow(color: Self.shadowColor, radius: 10.9, x: 0, y: 2)
         .navigationDestination(item: $selectedRecipient) { recipient in
             RecipientProfileView(recipient: recipient)
         }
@@ -75,7 +79,6 @@ struct RecipientFitList: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .background(.white)
         .cornerRadius(16)
-        .shadow(color: .black.opacity(0.1), radius: 10.9, x: 0, y: 2)
     }
     
     // MARK: - Helpers
@@ -92,8 +95,8 @@ struct RecipientFitList: View {
     
     private func fitColor(for fit: GiftSuitability) -> Color {
         switch fit {
-        case .excellent: return Color(red: 0, green: 0.76, blue: 0.14)
-        case .good: return Color(red: 0, green: 0.76, blue: 0.14)
+        case .excellent: return Color("Success")
+        case .good: return Color("Success")
         case .moderate: return .orange
         case .risky: return .red.opacity(0.8)
         case .notRecommended: return .red
@@ -131,7 +134,7 @@ struct RecipientProfileView: View {
         }
         .padding(.top, 60)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+        .background(Color("SecondaryBackground"))
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -158,6 +161,6 @@ struct RecipientProfileView: View {
             RecipientFit(recipientType: "Friend", fitLevel: .notRecommended, note: "May send wrong signals")
         ])
         .padding()
-        .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+        .background(Color("SecondaryBackground"))
     }
 }
