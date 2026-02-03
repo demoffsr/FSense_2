@@ -96,8 +96,8 @@ class Settings:
     # Flower Search Providers
     yandex_cloud_api_key: str = ""    # Yandex Cloud Search API key
     yandex_cloud_folder_id: str = ""  # Yandex Cloud folder ID
-    florist_one_api_key: str = ""     # Florist One API key for US
-    florist_one_api_key_ca: str = ""  # Florist One API key for Canada
+    florist_one_api_key: str = ""     # Florist One API key (username for Basic Auth)
+    florist_one_api_password: str = ""  # Florist One API password
     
     @classmethod
     def from_env(cls) -> "Settings":
@@ -158,7 +158,7 @@ class Settings:
             yandex_cloud_api_key=os.getenv("YANDEX_CLOUD_API_KEY", ""),
             yandex_cloud_folder_id=os.getenv("YANDEX_CLOUD_FOLDER_ID", ""),
             florist_one_api_key=os.getenv("FLORIST_ONE_API_KEY", ""),
-            florist_one_api_key_ca=os.getenv("FLORIST_ONE_API_KEY_CA", ""),
+            florist_one_api_password=os.getenv("FLORIST_ONE_API_PASSWORD", ""),
         )
     
     def validate(self) -> None:

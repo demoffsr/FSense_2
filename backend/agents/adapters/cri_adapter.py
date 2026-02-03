@@ -21,6 +21,8 @@ from backend.pipeline.context import (
 from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 
+logger = logging.getLogger(__name__)
+
 # Import flower database functions
 try:
     from backend.database.flower_database import (
@@ -33,8 +35,6 @@ try:
 except ImportError:
     DATABASE_AVAILABLE = False
     logger.warning("Flower database not available for CRI, using heuristics only")
-
-logger = logging.getLogger(__name__)
 
 CULTURAL_ANALYSIS_PROMPT = """You are CRI v2 — Cultural Reasoning Intelligence for FSense.
 Analyze flowers from the perspective of regional traditions and modern culture.
