@@ -66,6 +66,7 @@ class FlowerCandidate:
     match_score: float = 0.0
     match_reasons: list[str] = field(default_factory=list)
     meanings: list[str] = field(default_factory=list)
+    price_tier: Optional[str] = None  # "budget", "mid", or "premium"
 
 
 @dataclass

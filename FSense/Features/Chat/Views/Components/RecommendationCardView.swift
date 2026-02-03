@@ -67,9 +67,19 @@ struct RecommendationCardView: View {
 
     private var contentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(recommendation.flowerName)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.black)
+            // Flower name + price badge
+            HStack {
+                Text(recommendation.flowerName)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.black)
+
+                Spacer()
+
+                // Price tier badge
+                if let tier = recommendation.priceTier {
+                    priceTierBadge(tier)
+                }
+            }
 
             Text(recommendation.meaning)
                 .font(.system(size: 16, weight: .medium))
@@ -80,6 +90,11 @@ struct RecommendationCardView: View {
                 .foregroundColor(.black.opacity(0.6))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
+
+            // Budget warning (if present)
+            if let warning = recommendation.budgetWarning {
+                budgetWarningView(warning)
+            }
 
             // Explore button
             Button {
@@ -97,6 +112,51 @@ struct RecommendationCardView: View {
             .padding(.top, 4)
         }
         .padding(18)
+    }
+
+    // MARK: - Price Tier Badge
+
+    @ViewBuilder
+    private func priceTierBadge(_ tier: String) -> some View {
+        let (icon, color) = tierStyle(tier)
+        HStack(spacing: 2) {
+            Text(icon)
+                .font(.system(size: 12))
+            if let range = recommendation.estimatedRange {
+                Text(range)
+                    .font(.system(size: 11, weight: .medium))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.15))
+        .foregroundColor(color)
+        .clipShape(Capsule())
+    }
+
+    private func tierStyle(_ tier: String) -> (String, Color) {
+        switch tier {
+        case "budget": return ("💰", .green)
+        case "premium": return ("💎", .purple)
+        default: return ("💰💰", .orange)
+        }
+    }
+
+    // MARK: - Budget Warning
+
+    @ViewBuilder
+    private func budgetWarningView(_ warning: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .foregroundColor(.orange)
+            Text(warning)
+                .font(.system(size: 13))
+                .foregroundColor(.black.opacity(0.7))
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Reasoning Section (Embedded)

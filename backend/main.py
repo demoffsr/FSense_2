@@ -1052,6 +1052,7 @@ async def search_flower_products(request: FlowerSearchRequest):
             region=request.region,
             max_results=request.max_results,
             skip_cache=request.skip_cache,
+            max_price=request.max_price,
         )
         return result
 

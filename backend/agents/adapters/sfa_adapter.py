@@ -39,6 +39,7 @@ from backend.schemas.flower_card_payload import (
     TimingSensitivityItem,
     CommonMisinterpretationItem,
     AskAIMetadata,
+    PricingInfo,
 )
 
 logger = logging.getLogger(__name__)
@@ -159,10 +160,12 @@ class SFAAdapter(BaseAgent):
 
         # Console output
         console = get_console_logger()
+        pricing_info = f"{payload.pricing.price_tier_label} ({payload.pricing.estimated_range})" if payload.pricing else "N/A"
         console.agent_result("SFA", {
             "Final Flower": payload.header.name,
             "Meanings": payload.meaning.meanings[:4],
             "Mood Intensity": f"{payload.meaning.mood_intensity.value:.2f} ({payload.meaning.mood_intensity.label})",
+            "Price Tier": pricing_info,
             "Suitability": payload.gifting.suitability.level,
             "Risk Level": payload.gifting.emotional_risk.level,
             "Alternatives": [f"{a.name} ({a.confidence:.0%})" for a in payload.alternatives],
@@ -213,14 +216,24 @@ class SFAAdapter(BaseAgent):
         # Build context tab from AI
         context_tab = self._build_context_tab(ai_content.get("context", {}))
 
-        # Ask AI metadata
+        # Build pricing info
+        pricing = self._build_pricing_info(ctx, flower)
+        price_tier = getattr(flower, "price_tier", None) or "mid"
+
+        # Ask AI metadata with budget question for premium flowers
+        suggested_questions = ai_content.get("suggested_questions", [
+            f"What other flowers are similar to {flower.name}?",
+            "How should I present this flower?",
+            "What message should I include?",
+        ])[:3]
+
+        # Add budget question for premium flowers if user hasn't specified budget
+        if price_tier == "premium" and not ctx.priors.budget_range:
+            suggested_questions = ["What's your budget for this gift?"] + suggested_questions[:2]
+
         ask_ai = AskAIMetadata(
             enabled=True,
-            suggested_questions=ai_content.get("suggested_questions", [
-                f"What other flowers are similar to {flower.name}?",
-                "How should I present this flower?",
-                "What message should I include?",
-            ])[:3],
+            suggested_questions=suggested_questions,
         )
 
         # Build alternatives from remaining candidates (skip primary)
@@ -231,6 +244,7 @@ class SFAAdapter(BaseAgent):
             meaning=meaning_tab,
             gifting=gifting_tab,
             context=context_tab,
+            pricing=pricing,
             alternatives=alternatives,
             ask_ai=ask_ai,
             pipeline_version="0.4.0",
@@ -794,3 +808,48 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
             "message": message,
             "pipeline_version": "0.4.0",
         }
+
+    # ─────────────────────────────────────────────────────────────────────
+    # PRICING HELPERS
+    # ─────────────────────────────────────────────────────────────────────
+
+    def _build_pricing_info(self, ctx: PipelineContext, flower: Any) -> PricingInfo:
+        """Build pricing information for the recommended flower."""
+        price_tier = getattr(flower, "price_tier", None) or "mid"
+
+        return PricingInfo(
+            price_tier=price_tier,
+            price_tier_label=self._get_tier_label(price_tier),
+            estimated_range=self._get_price_range(price_tier, ctx.region),
+            budget_warning=self._get_budget_warning(price_tier, ctx.priors.budget_range),
+        )
+
+    def _get_tier_label(self, tier: str) -> str:
+        """Get human-readable price tier label."""
+        labels = {
+            "budget": "Budget-friendly",
+            "mid": "Mid-range",
+            "premium": "Premium",
+        }
+        return labels.get(tier, "Mid-range")
+
+    def _get_price_range(self, tier: str, region: str) -> str:
+        """Get estimated price range for tier and region."""
+        ranges = {
+            "US": {"budget": "$20-40", "mid": "$40-80", "premium": "$80-150+"},
+            "CA": {"budget": "CA$25-50", "mid": "CA$50-100", "premium": "CA$100-200+"},
+            "RU": {"budget": "1500-3000 ₽", "mid": "3000-6000 ₽", "premium": "6000-15000 ₽"},
+        }
+        region_upper = region.upper()
+        region_ranges = ranges.get(region_upper, ranges["US"])
+        return region_ranges.get(tier, region_ranges["mid"])
+
+    def _get_budget_warning(self, tier: str, user_budget: Optional[str]) -> Optional[str]:
+        """Get budget warning if flower price doesn't match user's budget."""
+        if tier == "premium":
+            if user_budget in ["modest", "budget", "low", "cheap"]:
+                return "This flower tends to be expensive. Consider the alternatives below for budget-friendly options."
+            return "Premium flower - typically higher priced"
+        elif tier == "budget" and user_budget in ["premium", "high", "expensive", "luxury"]:
+            return "Budget-friendly option - premium alternatives available"
+        return None

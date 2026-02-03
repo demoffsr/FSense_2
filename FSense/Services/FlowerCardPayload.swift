@@ -9,6 +9,7 @@ struct FlowerCardPayload: Decodable, Equatable {
     let meaning: MeaningTab
     let gifting: GiftingTabPayload
     let context: ContextTabPayload
+    let pricing: PricingInfoPayload?
     let alternatives: [AlternativeFlower]
     let askAi: AskAIMetadata
     let pipelineVersion: String
@@ -21,6 +22,7 @@ struct FlowerCardPayload: Decodable, Equatable {
         meaning = try container.decode(MeaningTab.self, forKey: .meaning)
         gifting = try container.decode(GiftingTabPayload.self, forKey: .gifting)
         context = try container.decode(ContextTabPayload.self, forKey: .context)
+        pricing = try container.decodeIfPresent(PricingInfoPayload.self, forKey: .pricing)
         alternatives = try container.decodeIfPresent([AlternativeFlower].self, forKey: .alternatives) ?? []
         askAi = try container.decode(AskAIMetadata.self, forKey: .askAi)
         pipelineVersion = try container.decode(String.self, forKey: .pipelineVersion)
@@ -28,7 +30,7 @@ struct FlowerCardPayload: Decodable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case header, meaning, gifting, context, alternatives, askAi, pipelineVersion, requestId
+        case header, meaning, gifting, context, pricing, alternatives, askAi, pipelineVersion, requestId
     }
 }
 
@@ -144,6 +146,15 @@ struct AskAIMetadata: Decodable, Equatable {
     let suggestedQuestions: [String]
 }
 
+// MARK: - Pricing Info
+
+struct PricingInfoPayload: Decodable, Equatable {
+    let priceTier: String           // "budget", "mid", "premium"
+    let priceTierLabel: String      // "Budget-friendly", "Mid-range", "Premium"
+    let estimatedRange: String      // "$40-80"
+    let budgetWarning: String?      // Optional warning message
+}
+
 // MARK: - Conversion to Domain Models
 
 extension FlowerCardPayload {
@@ -184,7 +195,11 @@ extension FlowerCardPayload {
             imageCacheKey: header.imageCacheKey,
             meaning: meaning.meanings.joined(separator: ", "),
             explanation: meaning.whyThisFlower.text,
-            confidence: gifting.suitability.level.capitalized
+            confidence: gifting.suitability.level.capitalized,
+            priceTier: pricing?.priceTier,
+            priceTierLabel: pricing?.priceTierLabel,
+            estimatedRange: pricing?.estimatedRange,
+            budgetWarning: pricing?.budgetWarning
         )
     }
 

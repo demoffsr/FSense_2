@@ -315,6 +315,11 @@ struct FlowerRecommendation: Equatable, Codable {
     let meaning: String
     let explanation: String
     let confidence: String
+    // Pricing information
+    let priceTier: String?          // "budget", "mid", "premium"
+    let priceTierLabel: String?     // "Budget-friendly", "Mid-range", "Premium"
+    let estimatedRange: String?     // "$40-80"
+    let budgetWarning: String?      // Optional warning message
 
     static let mock = FlowerRecommendation(
         flowerName: "Red Rose",
@@ -323,7 +328,11 @@ struct FlowerRecommendation: Equatable, Codable {
         imageCacheKey: nil,
         meaning: "Deep love and passion",
         explanation: "Given the romantic context you described, a red rose perfectly expresses deep emotional connection. Its timeless symbolism of love makes it ideal for your anniversary.",
-        confidence: "Perfect match"
+        confidence: "Perfect match",
+        priceTier: "mid",
+        priceTierLabel: "Mid-range",
+        estimatedRange: "$40-80",
+        budgetWarning: nil
     )
 }
 

@@ -34,6 +34,7 @@ class FlowerSearchRequest(BaseModel):
     region: str = Field(default="US", description="Geographic region: US, CA, RU")
     max_results: int = Field(default=10, ge=1, le=20, description="Max products to return")
     skip_cache: bool = Field(default=False, description="Bypass cache and force fresh search")
+    max_price: Optional[float] = Field(default=None, description="Filter products by max price")
 
 
 class FlowerSearchResponse(BaseModel):

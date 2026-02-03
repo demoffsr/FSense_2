@@ -271,6 +271,18 @@ class ContextTab(BaseModel):
 # ASK AI METADATA
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class PricingInfo(BaseModel):
+    """
+    Price tier and budget guidance for the recommended flower.
+
+    Maps to: iOS pricing display in recommendation card
+    """
+    price_tier: str = Field(..., description="Price tier: budget/mid/premium", serialization_alias="priceTier")
+    price_tier_label: str = Field(..., description="Human label: Budget-friendly/Mid-range/Premium", serialization_alias="priceTierLabel")
+    estimated_range: str = Field(..., description="e.g., '$30-50' or '2000-4000 ₽'", serialization_alias="estimatedRange")
+    budget_warning: Optional[str] = Field(None, description="Warning if expensive for user's budget", serialization_alias="budgetWarning")
+
+
 class AskAIMetadata(BaseModel):
     """
     Metadata for the Ask AI feature.
@@ -310,6 +322,9 @@ class FlowerCardPayload(BaseModel):
     meaning: MeaningTab
     gifting: GiftingTab
     context: ContextTab
+
+    # Pricing information
+    pricing: Optional[PricingInfo] = Field(None, description="Price tier and budget guidance")
 
     # Alternative recommendations
     alternatives: list[AlternativeFlower] = Field(

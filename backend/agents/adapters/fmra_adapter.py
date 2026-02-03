@@ -149,6 +149,15 @@ class FMRAAdapter(BaseAgent):
         # Generate flower_id from name
         flower_id = flower_name.lower().replace(" ", "_").replace("-", "_")
 
+        # Try to get price_tier from database first
+        price_tier = "mid"
+        if DATABASE_AVAILABLE:
+            flower_data = get_flower_by_id(flower_id)
+            if flower_data:
+                price_tier = flower_data.get("price_tier", "mid")
+            else:
+                price_tier = self._estimate_price_tier(flower_name)
+
         # Generate meanings using AI for the identified flower
         client = get_ai_client_fast()
         meanings_prompt = f"""For the flower "{flower_name}", provide 4-6 symbolic meanings.
@@ -170,6 +179,7 @@ Return JSON: {{"meanings": ["meaning1", "meaning2", "meaning3", "meaning4"]}}"""
             match_score=vision_flower.confidence,
             match_reasons=["Identified from user image", "Vision analysis"],
             meanings=meanings,
+            price_tier=price_tier,
         )
 
     def _get_database_matches(self, ctx: PipelineContext, top_n: int = 10) -> list[dict]:
@@ -211,6 +221,7 @@ Return JSON: {{"meanings": ["meaning1", "meaning2", "meaning3", "meaning4"]}}"""
                     "name": flower_data["name"],
                     "meanings": match["meaning_en"],
                     "match_score": match["match_score"],
+                    "price_tier": flower_data.get("price_tier", "mid"),
                 })
 
         if not flower_options:
@@ -255,6 +266,7 @@ Select the top 5 matches, ranked from best to good. Return JSON:
                     match_score=float(item.get("match_score", selected["match_score"])),
                     match_reasons=[item.get("match_reason", "database_match"), "ai_ranked"],
                     meanings=meanings[:6],
+                    price_tier=selected.get("price_tier", "mid"),
                 ))
 
         # If AI didn't return enough, fill from database matches
@@ -271,6 +283,7 @@ Select the top 5 matches, ranked from best to good. Return JSON:
                         match_score=float(opt["match_score"]),
                         match_reasons=["database_match"],
                         meanings=meanings[:6],
+                        price_tier=opt.get("price_tier", "mid"),
                     ))
                     if len(candidates) >= 5:
                         break
@@ -290,27 +303,60 @@ Select the top 5 matches, ranked from best to good. Return JSON:
 
         candidates = []
         for item in response.get("candidates", [])[:5]:
+            # Estimate price tier from flower name if not in database
+            flower_name = item.get("flower_name", "Unknown Flower")
+            price_tier = self._estimate_price_tier(flower_name)
+
             candidates.append(FlowerCandidate(
                 flower_id=item.get("flower_id", "unknown_flower"),
-                name=item.get("flower_name", "Unknown Flower"),
+                name=flower_name,
                 match_score=float(item.get("match_score", 0.85)),
                 match_reasons=[item.get("match_reason", "AI recommendation")],
                 meanings=item.get("meanings", ["Beauty", "Emotion"])[:6],
+                price_tier=price_tier,
             ))
 
         return candidates if candidates else [self._fallback_candidate(ctx)]
+
+    def _estimate_price_tier(self, flower_name: str) -> str:
+        """Estimate price tier for flowers not in database."""
+        flower_lower = flower_name.lower()
+
+        # Premium flowers
+        premium_flowers = [
+            "peony", "orchid", "protea", "king protea", "bird of paradise",
+            "calla lily", "ranunculus", "anemone", "garden rose", "david austin",
+            "hellebore", "stephanotis", "gardenia"
+        ]
+
+        # Budget-friendly flowers
+        budget_flowers = [
+            "carnation", "chrysanthemum", "daisy", "alstroemeria", "spray rose",
+            "baby's breath", "statice", "aster", "mum"
+        ]
+
+        for premium in premium_flowers:
+            if premium in flower_lower:
+                return "premium"
+
+        for budget in budget_flowers:
+            if budget in flower_lower:
+                return "budget"
+
+        return "mid"
 
     def _fallback_candidate(self, ctx: PipelineContext = None) -> FlowerCandidate:
         """Create a context-aware fallback flower candidate."""
         import random
 
         # Diverse neutral fallbacks instead of always red_rose
+        # Format: (flower_id, name, meanings, price_tier)
         NEUTRAL_FALLBACKS = [
-            ("white_lily", "White Lily", ["Purity", "Elegance", "Devotion", "Renewal"]),
-            ("pink_carnation", "Pink Carnation", ["Gratitude", "Admiration", "Warmth", "Affection"]),
-            ("blue_hydrangea", "Blue Hydrangea", ["Understanding", "Gratitude", "Heartfelt emotions", "Apology"]),
-            ("yellow_tulip", "Yellow Tulip", ["Hope", "Cheerfulness", "Friendship", "New beginnings"]),
-            ("lavender", "Lavender", ["Serenity", "Grace", "Calmness", "Devotion"]),
+            ("white_lily", "White Lily", ["Purity", "Elegance", "Devotion", "Renewal"], "mid"),
+            ("pink_carnation", "Pink Carnation", ["Gratitude", "Admiration", "Warmth", "Affection"], "budget"),
+            ("blue_hydrangea", "Blue Hydrangea", ["Understanding", "Gratitude", "Heartfelt emotions", "Apology"], "mid"),
+            ("yellow_tulip", "Yellow Tulip", ["Hope", "Cheerfulness", "Friendship", "New beginnings"], "budget"),
+            ("lavender", "Lavender", ["Serenity", "Grace", "Calmness", "Devotion"], "budget"),
         ]
 
         # Pick random neutral fallback as default
@@ -318,6 +364,7 @@ Select the top 5 matches, ranked from best to good. Return JSON:
         fallback_flower = default_choice[0]
         fallback_name = default_choice[1]
         fallback_meanings = default_choice[2]
+        fallback_price_tier = default_choice[3]
         fallback_reason = "Thoughtful and versatile choice"
 
         # Use context to pick appropriate fallback
@@ -336,32 +383,38 @@ Select the top 5 matches, ranked from best to good. Return JSON:
                     fallback_flower = "white_tulip"
                     fallback_name = "White Tulip"
                     fallback_meanings = ["Forgiveness", "New beginnings", "Sincerity", "Purity"]
+                    fallback_price_tier = "budget"
                     fallback_reason = "Symbolizes forgiveness and fresh starts"
                 elif emotion in ["gratitude", "appreciation", "thankfulness", "recognition"]:
                     fallback_flower = "pink_rose"
                     fallback_name = "Pink Rose"
                     fallback_meanings = ["Gratitude", "Appreciation", "Grace", "Admiration"]
+                    fallback_price_tier = "mid"
                     fallback_reason = "Classic expression of gratitude"
                 elif emotion in ["happiness", "joy", "excitement", "elation", "celebration"]:
                     fallback_flower = "gerbera_daisy"
                     fallback_name = "Gerbera Daisy"
                     fallback_meanings = ["Joy", "Cheerfulness", "Innocence", "Happiness"]
+                    fallback_price_tier = "budget"
                     fallback_reason = "Bright and cheerful choice"
                 elif emotion in ["sympathy", "compassion", "empathy", "grief", "comfort"]:
                     fallback_flower = "white_lily"
                     fallback_name = "White Lily"
                     fallback_meanings = ["Sympathy", "Peace", "Comfort", "Purity"]
+                    fallback_price_tier = "mid"
                     fallback_reason = "Traditional sympathy flower"
                 elif emotion in ["encouragement", "hope", "optimism", "support"]:
                     fallback_flower = "yellow_tulip"
                     fallback_name = "Yellow Tulip"
                     fallback_meanings = ["Hope", "Cheerfulness", "Friendship", "Encouragement"]
+                    fallback_price_tier = "budget"
                     fallback_reason = "Uplifting and hopeful"
                 elif not romantic_ok:
                     # Non-romantic default
                     fallback_flower = "pink_carnation"
                     fallback_name = "Pink Carnation"
                     fallback_meanings = ["Gratitude", "Admiration", "Remembrance", "Warmth"]
+                    fallback_price_tier = "budget"
                     fallback_reason = "Appropriate for non-romantic relationships"
 
         return FlowerCandidate(
@@ -370,6 +423,7 @@ Select the top 5 matches, ranked from best to good. Return JSON:
             match_score=0.70,
             match_reasons=[fallback_reason, "Context-based fallback"],
             meanings=fallback_meanings,
+            price_tier=fallback_price_tier,
         )
 
     def _build_prompt(self, ctx: PipelineContext) -> str:

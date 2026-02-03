@@ -43,6 +43,7 @@ class FlowerSearchService:
         region: str = "US",
         max_results: int = 10,
         skip_cache: bool = False,
+        max_price: Optional[float] = None,
     ) -> FlowerSearchResponse:
         """
         Search for flower products.
@@ -53,6 +54,7 @@ class FlowerSearchService:
             region: Geographic region (US, CA, RU)
             max_results: Maximum products to return
             skip_cache: If True, bypass cache and force fresh search
+            max_price: If set, filter products by maximum price
 
         Returns:
             FlowerSearchResponse with products from appropriate provider
@@ -67,6 +69,15 @@ class FlowerSearchService:
             if cached_products:
                 logger.info(f"Cache HIT for '{flower_name}' in '{city}' ({region})")
 
+                # Apply price filter to cached products
+                filtered_products = cached_products
+                if max_price is not None:
+                    filtered_products = [
+                        p for p in cached_products
+                        if p.price_value is not None and p.price_value <= max_price
+                    ]
+                    logger.info(f"Price filter: {len(cached_products)} -> {len(filtered_products)} products (max: {max_price})")
+
                 # Broadcast cache hit to logs
                 if is_yandex:
                     broadcast_log({
@@ -74,14 +85,14 @@ class FlowerSearchService:
                         "source": "yandex",
                         "query": flower_name,
                         "city": city,
-                        "count": len(cached_products),
+                        "count": len(filtered_products),
                     })
 
                 return FlowerSearchResponse(
                     success=True,
                     query=query,
                     provider="cache",
-                    products=cached_products[:max_results],
+                    products=filtered_products[:max_results],
                     cached_at=cached_at,
                 )
 
@@ -110,6 +121,15 @@ class FlowerSearchService:
                 f"Provider '{provider.name}' returned {len(products)} products "
                 f"for '{flower_name}' in '{city}' ({region})"
             )
+
+            # Apply price filter to fresh products
+            if max_price is not None:
+                original_count = len(products)
+                products = [
+                    p for p in products
+                    if p.price_value is not None and p.price_value <= max_price
+                ]
+                logger.info(f"Price filter: {original_count} -> {len(products)} products (max: {max_price})")
 
             # Broadcast each product for Yandex
             if is_yandex:
