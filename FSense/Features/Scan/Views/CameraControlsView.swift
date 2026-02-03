@@ -55,6 +55,7 @@ struct CameraControlsView: View {
                                 in: .circle
                             )
                     }
+                    .contentShape(Circle())
                     .buttonStyle(.plain)
 
                     Spacer()
@@ -69,6 +70,7 @@ struct CameraControlsView: View {
                                 in: .circle
                             )
                     }
+                    .contentShape(Circle())
                     .buttonStyle(.plain)
                 }
             }
@@ -81,6 +83,7 @@ struct CameraControlsView: View {
                         .frame(width: topButtonSize, height: topButtonSize)
                         .background(.ultraThinMaterial, in: Circle())
                 }
+                .contentShape(Circle())
                 .buttonStyle(.plain)
 
                 Spacer()
@@ -92,6 +95,7 @@ struct CameraControlsView: View {
                         .frame(width: topButtonSize, height: topButtonSize)
                         .background(.ultraThinMaterial, in: Circle())
                 }
+                .contentShape(Circle())
                 .buttonStyle(.plain)
             }
         }
@@ -261,6 +265,7 @@ struct GlassCircleButton: View {
                         in: .circle
                     )
             }
+            .contentShape(Circle())
             .buttonStyle(.plain)
         } else {
             Button(action: action) {
@@ -270,6 +275,7 @@ struct GlassCircleButton: View {
                     .frame(width: size, height: size)
                     .background(.ultraThinMaterial, in: Circle())
             }
+            .contentShape(Circle())
             .buttonStyle(.plain)
         }
     }
