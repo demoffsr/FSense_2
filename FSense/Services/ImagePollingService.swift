@@ -65,6 +65,8 @@ actor ImagePollingService {
 
         // Create new polling task
         let task = Task<String?, Never> {
+            var currentInterval = intervalSeconds
+
             for attempt in 1...maxAttempts {
                 do {
                     let status = try await fetchImageStatus(cacheKey: cacheKey)
@@ -87,21 +89,42 @@ actor ImagePollingService {
                         print("[ImagePoll] Generation failed: \(status.error ?? "unknown")")
                         return nil
                     case .pending, .generating:
-                        print("[ImagePoll] Attempt \(attempt)/\(maxAttempts): \(status.status.rawValue)")
+                        // Only log every 5th attempt to reduce noise
+                        if attempt % 5 == 1 {
+                            print("[ImagePoll] Polling \(cacheKey.prefix(8))... (\(attempt)/\(maxAttempts))")
+                        }
                         // Continue polling
                     }
 
+                    // Reset interval on success
+                    currentInterval = intervalSeconds
+
+                } catch let error as ImagePollingError {
+                    switch error {
+                    case .httpError(404):
+                        // Cache entry doesn't exist - stop polling immediately
+                        print("[ImagePoll] Cache entry not found for \(cacheKey.prefix(8))... - stopping poll")
+                        return nil
+
+                    case .httpError(429):
+                        // Rate limited - back off exponentially
+                        currentInterval = min(currentInterval * 2, 30.0)
+                        print("[ImagePoll] Rate limited, backing off to \(currentInterval)s")
+
+                    default:
+                        print("[ImagePoll] Error: \(error.localizedDescription)")
+                    }
                 } catch {
-                    print("[ImagePoll] Poll error: \(error.localizedDescription)")
+                    print("[ImagePoll] Unexpected error: \(error.localizedDescription)")
                 }
 
                 // Wait before next poll
                 if attempt < maxAttempts {
-                    try? await Task.sleep(nanoseconds: UInt64(intervalSeconds * 1_000_000_000))
+                    try? await Task.sleep(nanoseconds: UInt64(currentInterval * 1_000_000_000))
                 }
             }
 
-            print("[ImagePoll] Timeout after \(maxAttempts) attempts")
+            print("[ImagePoll] Timeout after \(maxAttempts) attempts for \(cacheKey.prefix(8))...")
             return nil
         }
 

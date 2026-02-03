@@ -14,6 +14,18 @@ struct FlowerProduct: Identifiable, Codable, Equatable {
 
     var id: String { productId }
 
+    enum CodingKeys: String, CodingKey {
+        case productId = "product_id"
+        case name
+        case price
+        case priceValue = "price_value"
+        case currency
+        case imageUrl = "image_url"
+        case vendor
+        case buyUrl = "buy_url"
+        case city
+    }
+
     var imageURL: URL? {
         guard let imageUrl else { return nil }
         return URL(string: imageUrl)
@@ -42,6 +54,15 @@ struct FlowerSearchResponse: Codable {
     let products: [FlowerProduct]
     let error: String?
     let cachedAt: String?  // ISO timestamp when results were cached
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case query
+        case provider
+        case products
+        case error
+        case cachedAt = "cached_at"
+    }
 }
 
 // MARK: - Mock Data

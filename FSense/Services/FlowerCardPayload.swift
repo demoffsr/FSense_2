@@ -199,7 +199,8 @@ extension FlowerCardPayload {
             priceTier: pricing?.priceTier,
             priceTierLabel: pricing?.priceTierLabel,
             estimatedRange: pricing?.estimatedRange,
-            budgetWarning: pricing?.budgetWarning
+            budgetWarning: pricing?.budgetWarning,
+            suggestedQuestions: askAi.suggestedQuestions.isEmpty ? nil : askAi.suggestedQuestions
         )
     }
 

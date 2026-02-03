@@ -11,7 +11,7 @@ Features:
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import hashlib
 import time
 import threading
@@ -296,8 +296,8 @@ POPULAR_EMOTIONS = [
 
 
 def pre_warm_cache(
-    flowers: list[str] | None = None,
-    emotions: list[str] | None = None,
+    flowers: Optional[List[str]] = None,
+    emotions: Optional[List[str]] = None,
     max_generations: int = 10,
 ) -> dict:
     """

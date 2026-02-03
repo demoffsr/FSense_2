@@ -138,16 +138,18 @@ struct AsyncFlowerImageView: View {
         // 3. Not already polling
         guard imageUrl == nil,
               let key = cacheKey,
+              !key.isEmpty,
               !isPolling else {
-            print("[AsyncImage] Skipping poll - imageUrl: \(imageUrl != nil ? "present" : "nil"), cacheKey: \(cacheKey != nil ? "present" : "nil"), isPolling: \(isPolling)")
             return
         }
 
         isPolling = true
         generationStatus = .pending
 
-        print("[AsyncImage] Starting poll for cache key: \(key)")
-        print("[AsyncImage] Cache key length: \(key.count) characters")
+        print("[AsyncImage] Starting poll for \(key.prefix(8))...")
+
+        // Small delay to let backend create cache entry
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
 
         // Register status callback to receive updates
         await ImagePollingService.shared.registerStatusCallback(cacheKey: key) { status, attempt, max in
