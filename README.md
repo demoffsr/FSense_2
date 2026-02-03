@@ -1,532 +1,415 @@
-# 🌸 FSense
+# FSense v0.16 - AI-Powered Flower Recommendation System
 
-> AI-powered flower recommendation system that understands context, emotion, and meaning
+FSense — это умная система рекомендаций цветов, использующая конвейер из 10 AI-агентов для подбора идеального цветка на основе эмоционального контекста пользователя.
 
-**Version 0.16** • Built with SwiftUI + Python
-An intelligent assistant that helps you find the perfect flower for any occasion—now with real product links.
+## 🆕 Что нового в v0.16
 
----
+### Улучшения агентов
+Все 10 агентов получили значительные апгрейды:
+- **FIA v4**: context_flags, региональные подсказки, умный fallback
+- **EIA v4**: расширенная таксономия эмоций (50+ emotions), маркеры сложности
+- **RIL v3**: gift_appropriateness, динамические расчеты
+- **FMRA**: обогащённые промпты, context-aware fallback
+- **CIA**: поддержка 17 культурных регионов (вместо 3)
+- **AITB**: исправлен dead code - heuristic методы теперь используются
+- **RFFA**: исправлен баг с hardcoded confidence, 4 категории рисков
+- **CRI**: обогащённый AI контекст (occasion/recipient/relationship)
+- **SRFL v3**: 50+ эмоций, word boundary matching
+- **VIA**: детальный промпт, валидация цветов
+- **SFA**: integration guidelines, context-aware fallback
 
-## ✨ What's New in v0.16
+### Система разнообразия
+- ✅ Уравнены top scores цветов (1.0 → 0.95) - теперь нет монополистов
+- ✅ Добавлен `RANDOM()` в SQL запросы для разных результатов
+- ✅ Усилен diversity penalty (0.05 → 0.15, max 0.7)
+- ✅ Убран hardcoded red_rose fallback
+- ✅ Автогенерация alternatives из базы данных
 
-### 🛒 Find Flowers — Real Product Links
-Turn AI recommendations into real purchases with integrated product search:
-
-```
-┌─────────────────────────────────────┐
-│  🌹 Red Roses                       │
-│  Updated 2 min ago            🔄    │  ← 32px refresh button
-├─────────────────────────────────────┤
-│  ┌─────────┐  ┌─────────┐          │
-│  │  📷     │  │  📷     │          │  ← Product cards
-│  │ $29.99  │  │ $34.50  │          │     with images
-│  │ Florist │  │ Shop    │          │
-│  └─────────┘  └─────────┘          │
-└─────────────────────────────────────┘
-```
-
-**Features:**
-- **One-tap search** — "Find Flowers" button on every FlowerCard
-- **Smart caching** — Results cached 24h, instant reload
-- **"Show links"** — Skip API when products already loaded
-- **Refresh on demand** — Pull fresh results anytime
-- **Product cards** — Image, price, merchant, direct link
-- **Time ago display** — "Updated 2 min ago" with live refresh
-
-### 🔍 Yandex Search Integration
-Powerful backend search with intelligent parsing:
-
-- **Multi-region support** — Adapts to user locale
-- **Price extraction** — Parses prices from merchant pages
-- **Image thumbnails** — High-quality product images
-- **Merchant detection** — Shows store name for trust
-- **Rate limiting** — Respectful API usage with backoff
-- **Error recovery** — Graceful fallbacks on failures
-
-### 💾 Search Caching System
-Efficient caching reduces API calls and speeds up UX:
-
-- **SQLite backend** — Persistent across app launches
-- **24-hour TTL** — Fresh results without constant fetching
-- **Skip cache option** — Force refresh when needed
-- **Automatic cleanup** — Expired entries purged on access
-- **Query normalization** — Case-insensitive matching
-
-### 🎨 FlowerProducts Sheet UI
-Beautiful bottom sheet with Liquid Glass design:
-
-- **Compact header** — Title + "Updated" with 2px spacing
-- **32x32 refresh button** — Vertically centered, glass effect
-- **LazyVGrid layout** — Responsive 2-column product grid
-- **Loading states** — Skeleton cards during search
-- **Empty states** — Helpful message when no products found
-- **Safari integration** — Tap product to open in browser
-
-### 🔧 Technical Implementation
-
-**iOS Components:**
-```
-FSense/Features/FlowerCard/
-├── Views/
-│   ├── FlowerCardView.swift          # CTA integration
-│   ├── FlowerProductsSheet.swift     # Product grid UI
-│   └── Components/
-│       ├── FlowerCardCTAView.swift   # Find/Show links button
-│       └── FlowerProductCard.swift   # Individual product
-├── Models/
-│   └── FlowerProduct.swift           # Product data model
-└── FlowerCardViewModel.swift         # Search orchestration
-```
-
-**Backend Services:**
-```
-backend/services/
-├── flower_search_service.py          # Search orchestrator
-├── search_cache.py                   # SQLite caching
-└── providers/
-    └── yandex_provider.py            # Yandex API integration
-```
-
-**Key Patterns:**
-- **Cached-first strategy** — Check cache before API call
-- **Skip redundant calls** — "Show links" opens sheet directly
-- **Async image loading** — AsyncImage with placeholders
-- **Price formatting** — Locale-aware currency display
-- **Deep linking** — Direct merchant URLs in Safari
+### iOS альтернативы
+- **AlternativesSection** - горизонтальный scroll с рекомендациями
+- **AlternativeFlowerCell** - карточка с изображением, названием, confidence %
+- Интеграция в таб **Meaning** (секция "Также подходят:")
 
 ---
 
-## 📦 Previous Release: v0.15
+## 🏗️ Архитектура
 
-<details>
-<summary><strong>👥 Loved Ones Profiles & @Mentions</strong></summary>
+### Agent Pipeline (10 агентов)
 
-FSense remembers the people you care about with personalized profiles:
-
-- **Loved Ones Management** — Create profiles with photos, relationships, and preferences
-- **@Mention Autocomplete** — Type `@` in chat to tag people with Liquid Glass picker
-- **Taste Profiles** — Track flower style, budget, mood preferences, and allergies
-- **Important Dates** — Birthdays, anniversaries, custom dates with countdown
-- **Hierarchical Relationships** — Family, Romance, Friends, Professional categories
-- **Users Screen** — Accessible from toolbar, organized by relationship type
-
-**Components:**
 ```
-FSense/Features/LovedOnes/
-├── Models/
-│   ├── LovedOneProfile.swift
-│   ├── RelationshipModels.swift
-│   └── TasteProfile.swift
-├── Views/
-│   ├── LovedOnesListView.swift
-│   ├── LovedOneDetailView.swift
-│   └── LovedOneEditView.swift
-└── Services/
-    └── LovedOnesService.swift
-```
-</details>
-
----
-
-## 🎯 Features
-
-### 🛒 Find Flowers (NEW!)
-- **Real Product Links** — Search actual flower products for purchase
-- **Yandex Integration** — Powerful search with price extraction
-- **Smart Caching** — 24-hour cache, instant reload on repeat
-- **Product Cards** — Image, price, merchant with direct links
-- **One-tap Purchase** — Open merchant page in Safari
-- **Refresh Anytime** — Pull fresh results on demand
-
-### 👥 Loved Ones Profiles
-- **Profile Management** — CRUD operations with photo support
-- **Relationship Hierarchy** — Family, Romance, Friends, Professional
-- **Taste Profiles** — Remember preferences for personalized recommendations
-- **Important Dates** — Never miss birthdays or anniversaries
-- **@Mention System** — Quick access in chat with autocomplete
-- **Search & Filter** — Find profiles by name or nickname
-- **Glass Autocomplete** — Beautiful iOS 26 Liquid Glass UI
-
-### 📸 Flower Scanner
-- **Single Flower Mode** — Point and identify any flower
-- **Bouquet Mode** — Analyze multiple flowers in one shot
-- **Gallery Import** — Scan photos from your library
-- **Glass UI** — Premium iOS 26 Liquid Glass design
-- **Confidence Scoring** — See identification accuracy
-- **Quick Results** — Fast preview before full details
-
-### 🤖 AI Chat Assistant
-- Natural conversation flow with context awareness
-- Real-time thinking visualization (10-agent pipeline)
-- Personalized flower recommendations
-- **@Mention integration** — Reference loved ones in context
-- Follow-up suggestions
-- **Persistent sessions** that survive app restarts
-
-### 🔍 Search & Archive
-- **In-chat full-text search** with live highlighting
-- **Archive management** to organize conversations
-- Quick access to recent and archived chats
-- Session metadata (timestamp, message count)
-
-### 📷 Visual Recognition
-- Attach photos from library or camera
-- Analyze existing bouquets with **GPT-4 Vision**
-- Visual context for better recommendations
-
-### 💬 Chat Experience
-- **Instant keyboard response** (pre-warmed on launch)
-- **@Mention autocomplete** with Liquid Glass
-- Typewriter animation for AI messages
-- Smart scroll behavior with floating bottom button
-- Smooth glass morphism effects throughout
-
-### 💾 Session Management
-- **Auto-save** every conversation
-- Rename and organize chats
-- Archive completed conversations
-- Delete individual sessions
-
-### 🎨 Native iOS Experience
-- SwiftUI with iOS 26+ optimizations
-- **Liquid Glass design language**
-- Haptic feedback
-- Dark mode ready
-- Native sheet presentations
-
----
-
-## 🏗️ Architecture
-
-### iOS App (SwiftUI)
-```
-FSense/
-├── App/                      # Entry point, environment
-├── Features/
-│   ├── Home/                 # Collapsed chat bar with glass UI
-│   ├── Chat/                 # Full-screen chat with @mentions
-│   │   ├── Views/
-│   │   │   ├── ChatView.swift
-│   │   │   └── Components/
-│   │   │       ├── MentionAutocompleteView.swift
-│   │   │       └── MentionInputField.swift
-│   │   ├── UsersView.swift
-│   │   └── ChatViewModel.swift
-│   ├── LovedOnes/            # Profile management
-│   │   ├── Models/
-│   │   ├── Views/
-│   │   └── Components/
-│   ├── FlowerCard/           # Recommendation details
-│   │   ├── Views/
-│   │   │   ├── FlowerCardView.swift
-│   │   │   ├── FlowerProductsSheet.swift    # 🆕 Product grid
-│   │   │   └── Components/
-│   │   │       ├── FlowerCardCTAView.swift  # 🆕 Find/Show links
-│   │   │       └── FlowerProductCard.swift  # 🆕 Product card
-│   │   └── Models/
-│   │       └── FlowerProduct.swift          # 🆕 Product model
-│   ├── Scan/                 # 📸 Camera & Liquid Glass UI
-│   └── Profile/              # History, archive, settings
-├── Services/
-│   ├── LovedOnesService      # Profile persistence
-│   ├── ChatHistoryManager    # Session persistence
-│   ├── ChatArchiveService    # Archive management
-│   ├── APIService            # Backend communication
-│   └── KeyboardWarmer        # Pre-warm keyboard
-└── Shared/                   # Components, utilities
+User Input → Context → Agents → FlowerCardPayload → iOS
 ```
 
-### Python Backend (Agent Pipeline + Search)
-```
-backend/
-├── pipeline/                 # Orchestrator, context, runner
-├── agents/adapters/          # 10 specialized agents
-│   ├── fia.py               # Flower Intent Agent
-│   ├── eia.py               # Emotion Intelligence Agent
-│   ├── ril.py               # Relationship Intelligence Layer
-│   ├── fmra.py              # Flower Matching & Ranking
-│   ├── cia.py               # Context Intensity Agent
-│   ├── aitb.py              # Adaptive Intelligence & Tone
-│   ├── rffa.py              # Risk & Fit Assessment
-│   ├── cri.py               # Cultural & Regional Intelligence
-│   ├── srfl.py              # Self-Reflection Layer
-│   └── sfa.py               # Symbolic Flower Agent (final)
-├── services/                 # 🆕 External integrations
-│   ├── flower_search_service.py    # Search orchestrator
-│   ├── search_cache.py             # SQLite caching (24h TTL)
-│   └── providers/
-│       └── yandex_provider.py      # Yandex search API
-├── schemas/                  # Pydantic models
-│   ├── flower_card_payload.py
-│   ├── flower_product.py           # 🆕 Product schema
-│   └── pipeline_enums.py
-└── core/                     # Settings, AI client
-```
+**Порядок выполнения:**
+1. **VIA** - Vision Image Analyzer (если есть фото)
+2. **FIA** - Flower Intent Agent (парсинг намерений)
+3. **EIA** - Emotion Intelligence Agent (детекция эмоций)
+4. **RIL** - Relationship Intelligence Layer (анализ отношений)
+5. **FMRA** - Flower Matching & Ranking Agent (выбор 5 кандидатов)
+6. **CIA** - Context Intensity Agent (расчёт интенсивности)
+7. **AITB** - Adaptive Intelligence & Tone Builder (адаптация тона)
+8. **RFFA** - Risk & Fit Assessment Agent (оценка рисков)
+9. **CRI** - Cultural & Regional Intelligence (культурный контекст)
+10. **SRFL** - Self-Reflection Layer (валидация когерентности)
+11. **SFA** - Symbolic Flower Agent (сборка финального payload)
 
-### Agent Flow
-```
-User Input → PipelineContext → FIA → EIA → RIL → FMRA → CIA →
-             AITB → RFFA → CRI → SRFL → SFA → FlowerCardPayload
-```
+### Diversity System
 
-**Design Principles:**
-- **Single Source of Truth:** All data flows through `PipelineContext`
-- **Final Assembler:** Only SFA writes the iOS payload (`ui_payload`)
-- **Stateless Agents:** No direct agent-to-agent communication
-- **Idempotent Operations:** Safe to retry any step
+```python
+# 1. Database scores equalized
+pink_rose|gratitude|0.95  # было 1.0
+crocus|joy|0.95           # было 1.0
+red_rose|love|0.95        # было 1.0
+
+# 2. Random ordering for ties
+ORDER BY match_score DESC, RANDOM()
+
+# 3. Diversity penalty
+penalty = count * 0.15  # было 0.05
+max_penalty = 0.7       # было 0.5
+
+# 4. Smart fallback
+NEUTRAL_FALLBACKS = ["white_lily", "pink_carnation",
+                     "blue_hydrangea", "yellow_tulip", "lavender"]
+```
 
 ---
 
 ## 🚀 Quick Start
 
-### iOS Development
-1. Open `FSense_2.xcodeproj` in Xcode
-2. Select your device/simulator (iOS 26+ for full Liquid Glass)
-3. Build & Run (`Cmd+R`)
+### Backend
 
-**Instant Features:**
-- Keyboard pre-warmed on launch
-- Chat opens in <50ms
-- Session auto-loads if returning to conversation
-- Scanner with beautiful glass UI
-- **@Mention profiles** accessible from toolbar
-
-### Backend Development
 ```bash
+# Установка
 cd backend
 pip install -r requirements.txt
 
-# Configure
-cp .env.example .env
-# Set OPENAI_API_KEY in .env
+# Инициализация базы (обязательно после изменений в flower_database.py)
+python -m backend.database.init_db
+
+# Запуск сервера
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+# Тесты
+PYTHONPATH=. pytest backend/tests/ -v
+```
+
+### iOS
+
+```bash
+# Открыть в Xcode
+open FSense_2.xcodeproj
+
+# Build Server (если используется)
+xcode-build-server config -scheme FSense_2 -workspace .
+```
+
+**Base URL:**
+- Simulator: `http://localhost:8000`
+- Device: `http://192.168.1.16:8000` (замените на IP вашего Mac)
+
+---
+
+## 📊 Примеры использования
+
+### Python CLI
+
+```bash
+# Простая рекомендация
+python -m backend.pipeline.runner "I love my girlfriend" --pretty
+
+# С регионом
+python -m backend.pipeline.runner "Хочу извиниться" --region RU --pretty
+```
+
+### API
+
+```bash
+# POST /api/recommend
+curl -X POST http://localhost:8000/api/recommend \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "I want to apologize to my wife",
+    "region": "US"
+  }'
+```
+
+**Response:**
+```json
+{
+  "header": {
+    "name": "White Tulip",
+    "imageUrl": null,
+    "imageCacheKey": "white_tulip_apology_remorse"
+  },
+  "meaning": {
+    "meanings": ["Forgiveness", "Sincerity", "New beginnings"],
+    "moodIntensity": { "value": 0.65, "label": "High" }
+  },
+  "alternatives": [
+    {
+      "flowerId": "blue_hydrangea",
+      "name": "Blue Hydrangea",
+      "confidence": 0.87,
+      "briefReason": "Also expresses apology"
+    }
+  ]
+}
+```
+
+---
+
+## 🎯 Key Features
+
+### Emotional Intelligence
+- 50+ распознаваемых эмоций
+- Интенсивность эмоций (0.0-1.0)
+- Контекстные флаги (is_making_amends, is_celebration, etc.)
+
+### Relationship Context
+- Анализ типа отношений (romantic, professional, familial, friendship)
+- Стадия отношений (new, early, established, long_term)
+- Уровень близости (intimacy_level)
+
+### Cultural Awareness
+- 17 регионов: US, RU, JP, CN, KR, UK, DE, FR, IT, ES, BR, MX, IN, EU, FI, SE, GR
+- Культурные табу (белые цветы в Азии, жёлтые в России)
+- Региональные правила для количества цветов
+
+### Risk Assessment
+- 4 категории рисков: intensity_mismatch, relationship_inappropriate, emotional_alignment, cultural_concern
+- Severity levels: low, medium, high
+- Mitigation suggestions
+
+---
+
+## 📁 Structure
+
+```
+FSense_2/
+├── backend/
+│   ├── agents/adapters/       # 10 AI агентов
+│   ├── database/              # SQLite базы (flowers.db, fsense.db)
+│   ├── pipeline/              # Orchestrator, Context, Runner
+│   ├── schemas/               # Pydantic models (FlowerCardPayload)
+│   ├── services/              # ImageService, RecommendationHistory
+│   └── tests/                 # Smoke tests
+│
+└── FSense/                    # iOS SwiftUI app
+    ├── Features/
+    │   ├── FlowerCard/        # Карточка цветка
+    │   │   ├── Models/        # Flower, AlternativeFlower
+    │   │   └── Views/
+    │   │       └── Components/  # AlternativesSection, AlternativeFlowerCell
+    │   ├── Chat/              # Чат интерфейс
+    │   ├── Scan/              # Сканер цветов (камера)
+    │   └── Profile/           # Профиль
+    └── Services/              # APIService, FlowerCardPayload
+```
+
+---
+
+## 🧪 Testing
+
+### Backend Tests
+
+```bash
+# Все тесты
+PYTHONPATH=. pytest backend/tests/test_pipeline_smoke.py -v
+
+# Один тест
+PYTHONPATH=. pytest backend/tests/test_pipeline_smoke.py::test_flower_chat_success -v
+
+# С coverage
+PYTHONPATH=. pytest backend/tests/ --cov=backend --cov-report=html
+```
+
+**18 тестов:**
+- ✅ FlowerChat API (7 tests)
+- ✅ PipelineContext (3 tests)
+- ✅ Orchestrator (2 tests)
+- ✅ Schemas (1 test)
+- ✅ BaseAgent (1 test)
+
+---
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# backend/.env
+OPENAI_API_KEY=sk-...        # Required for AI agents
+OPENAI_MODEL=gpt-4o          # Default model
+FSENSE_ENV=local             # local/staging/production
+```
+
+### iOS Configuration
+
+```swift
+// FSense/Services/APIService.swift
+var baseURL: String {
+    #if DEBUG
+        return "http://192.168.1.16:8000"  // Ваш Mac IP
+    #else
+        return "http://localhost:8000"     // Production URL
+    #endif
+}
+```
+
+---
+
+## 📝 Database
+
+### Flower Database (flowers.db)
+
+**Tables:**
+- `flowers` (155 цветов)
+- `flower_meanings` (148 emotion-flower mappings)
+- `flower_cultural_contexts` (49 культурных контекстов)
+- `region_number_rules` (8 региональных правил)
+- `flower_color_meanings` (14 цветовых значений)
+
+**Reseed after changes:**
+```bash
+python -m backend.database.init_db
+```
+
+### App Database (fsense.db)
+
+**Tables:**
+- `image_cache` - кэш сгенерированных изображений
+- `sessions` - пользовательские сессии
+- `conversation_history` - история чатов
+
+---
+
+## 🎨 iOS UI
+
+### FlowerCard
+
+**3 таба:**
+1. **Meaning** - символизм, mood intensity, alternatives
+2. **Gifting** - пригодность, риски, when to gift/avoid
+3. **Context** - культурный контекст, отношения, timing
+
+### Alternatives Section
+
+```swift
+if !flower.alternatives.isEmpty {
+    AlternativesSection(
+        alternatives: flower.alternatives,
+        onTap: { alternative in
+            // Navigate to alternative flower card
+        }
+    )
+}
+```
+
+**Отображение:**
+- Горизонтальный ScrollView
+- До 4 альтернатив
+- Изображение 80x80pt
+- Название (2 lines)
+- Confidence badge (87%)
+
+---
+
+## 🐛 Troubleshooting
+
+### Backend не запускается
+
+```bash
+# Check database
+ls -la backend/database/*.db
+
+# Reinit if needed
+python -m backend.database.init_db
+
+# Check dependencies
+pip install -r backend/requirements.txt
+```
+
+### Alternatives не показываются
+
+1. Проверьте что backend отдаёт alternatives:
+```bash
+curl -X POST http://localhost:8000/api/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "I love my girlfriend", "region": "US"}' | jq '.alternatives'
+```
+
+2. Clean Build в Xcode (Cmd+Shift+K)
+
+3. Проверьте что база пересоздана с новыми scores
+
+### Всегда одинаковые цветы
+
+```bash
+# Проверьте scores в базе
+sqlite3 backend/database/flowers.db \
+  "SELECT flower_id, emotion, match_score
+   FROM flower_meanings
+   WHERE emotion IN ('love', 'joy', 'gratitude')
+   ORDER BY emotion, match_score DESC"
+
+# Должно быть несколько цветов с 0.95 для каждой эмоции
+```
+
+---
+
+## 📈 Roadmap
+
+### v0.17
+- [ ] Тап на alternative открывает детальную карточку
+- [ ] API endpoint `/api/flower/{id}` для получения цветка по ID
+- [ ] Recommendation history persistence per user
+- [ ] A/B тестирование diversity penalty значений
+
+### v0.18
+- [ ] Vision analysis для распознавания цветов с камеры
+- [ ] Персонализация на основе истории
+- [ ] Экспорт рекомендаций в PDF/Share
+
+---
+
+## 👥 Contributing
+
+```bash
+# Create feature branch
+git checkout -b feature/your-feature
+
+# Make changes
+# ...
 
 # Run tests
 PYTHONPATH=. pytest backend/tests/ -v
 
-# Test pipeline CLI
-python -m backend.pipeline.runner "I want to apologize to my wife" --pretty
+# Commit
+git commit -m "feat: your feature description
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
+
+# Push
+git push origin feature/your-feature
 ```
-
----
-
-## 📊 Performance Metrics
-
-| Metric | v0.15 | v0.16 | Status |
-|--------|-------|-------|--------|
-| Chat Open Delay | <50ms | <50ms | ✅ Maintained |
-| Product Search | — | <2s | 🎉 New |
-| Cache Hit | — | <50ms | 🎉 New |
-| @Mention Trigger | <100ms | <100ms | ✅ Maintained |
-| Glass Components | 12+ | 15+ | 📈 Expanded |
-| Cache TTL | — | 24h | ✅ Optimized |
-
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-- **SwiftUI** — Declarative UI framework (iOS 26+)
-- **Combine** — Reactive state management
-- **Swift Concurrency** — Async/await, actors
-- **PhotosUI** — PhotosPicker integration
-- **AVFoundation** — Camera capture
-- **UIKit** — Keyboard pre-warming, camera integration
-
-### Backend
-- **Python 3.11+** — Core runtime
-- **OpenAI GPT-4** — LLM for agent pipeline
-- **GPT-4 Vision** — Image analysis
-- **Pydantic** — Schema validation & type safety
-- **pytest** — Testing framework
-
-### Design System
-- **Liquid Glass** — iOS 26 `.glassEffect()` API
-- **Glass Morphism** — `.ultraThinMaterial` fallback
-- **SF Symbols** — Native iOS icons
-- **Dynamic Type** — Accessibility-ready typography
-- **Haptics** — Tactile feedback for interactions
-
----
-
-## 📝 Development Commands
-
-### iOS
-```bash
-# Build
-xcodebuild -project FSense_2.xcodeproj -scheme FSense_2 -configuration Debug
-
-# Clean build folder
-rm -rf ~/Library/Developer/Xcode/DerivedData
-```
-
-### Backend
-```bash
-# Run all tests
-PYTHONPATH=. pytest backend/tests/ -v
-
-# Run single test
-PYTHONPATH=. pytest backend/tests/test_pipeline_smoke.py::test_run_flower_chat_success -v
-
-# Test pipeline interactively
-python -m backend.pipeline.runner "Your message here" --pretty
-
-# Check test coverage
-PYTHONPATH=. pytest backend/tests/ --cov=backend --cov-report=html
-```
-
----
-
-## 🎨 Design Philosophy
-
-1. **Liquid Glass First** — Premium iOS 26 effects with graceful degradation
-2. **Instant Feedback** — No loading spinners, progressive enhancement
-3. **Unified Design Language** — Consistent frosted UI across all controls
-4. **Context Preservation** — Sessions persist, search highlights, archive organizes
-5. **Native Feel** — Respect iOS patterns (sheets, toolbars, haptics)
-6. **Accessibility First** — Dynamic Type, VoiceOver, reduce motion
-7. **Personalization** — Remember people and their preferences
-
----
-
-## 🔍 Feature Deep Dive
-
-### @Mention Autocomplete System
-
-**Trigger Detection:**
-```swift
-// MentionParser extracts query from text
-static func extractMentionQuery(from text: String) -> String? {
-    guard let atIndex = text.lastIndex(of: "@") else { return nil }
-    let afterAt = text[text.index(after: atIndex)...]
-    if afterAt.contains(" ") { return nil }
-    return String(afterAt)
-}
-```
-
-**VStack Positioning:**
-```swift
-VStack(alignment: .leading, spacing: 8) {
-    // Mentions list - appears ABOVE input
-    if showMentionAutocomplete, let query = mentionQuery {
-        mentionsListView(query: query)
-            .padding(.leading, 62)  // Align with text field
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-
-    // Input bar - always at bottom
-    GlassEffectContainer { ... }
-}
-.animation(.spring(response: 0.3), value: showMentionAutocomplete)
-```
-
-**Glass Effect:**
-```swift
-if #available(iOS 26, *) {
-    content
-        .glassEffect(
-            .regular.tint(.white.opacity(0.2)),
-            in: .rect(cornerRadius: 20)
-        )
-} else {
-    content
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-}
-```
-
-### Loved Ones Service
-
-**Persistence:**
-```swift
-@MainActor
-class LovedOnesService: ObservableObject {
-    static let shared = LovedOnesService()
-    @Published private(set) var profiles: [LovedOneProfile] = []
-
-    func addProfile(_ profile: LovedOneProfile) async {
-        profiles.append(profile)
-        await saveProfiles()
-    }
-
-    private func saveProfiles() async {
-        // Async UserDefaults save
-    }
-}
-```
-
-### Chat Session Persistence
-```swift
-// Auto-save on every message
-ChatHistoryManager.shared.saveSession(session)
-
-// Load session when reopening chat
-if let session = controller.sessionToLoad {
-    viewModel.loadSession(session)
-}
-```
-
-### In-Chat Search
-- **Trigger:** Tap search icon in toolbar
-- **Focus:** Auto-focus search field with keyboard
-- **Highlight:** Yellow background on matching messages
-- **Scroll:** Smooth animation to first match
-- **Exit:** Clear highlights and return to input
-
----
-
-## 🔮 Roadmap
-
-### ✅ v0.16 (Current)
-- [x] Find Flowers with real product links
-- [x] Yandex search integration
-- [x] 24-hour search caching
-- [x] FlowerProducts sheet with product cards
-- [x] "Show links" smart button state
-
-### v0.17 (Next Sprint)
-- [ ] AI recommendations using Loved Ones profiles
-- [ ] Mention context in agent pipeline (RIL integration)
-- [ ] Birthday reminders with flower suggestions
-- [ ] Multiple search providers (Google, Bing)
-- [ ] Price comparison across merchants
-
-### v0.2.0
-- [ ] Scan history with thumbnails
-- [ ] Flower detail cards from scan results
-- [ ] Share scan results
-- [ ] Multi-language support (localization)
-- [ ] Flower dictionary with visual search
-- [ ] Favorites & wishlist
-
-### v0.3.0
-- [ ] Voice input for chat (Whisper API)
-- [ ] AR flower visualization (ARKit)
-- [ ] Local florist integration (Maps)
-- [ ] Offline mode with cached recommendations
-- [ ] Home screen widget with upcoming dates
 
 ---
 
 ## 📄 License
 
-Proprietary — All rights reserved
-
----
-
-## 🤝 Contributing
-
-This is a private project. For questions or collaboration inquiries, please contact the maintainers.
+MIT License - see LICENSE file
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **OpenAI GPT-4** — Powering the agent pipeline
-- **SwiftUI** — Making native iOS development delightful
-- **iOS 26 Liquid Glass** — Apple's beautiful new design system
+- OpenAI GPT-4 для AI agents
+- SwiftUI для iOS UI
+- FastAPI для backend API
+- SQLite для database
 
----
+**Built with ❤️ by FSense Team**
 
-**Made with ❤️ and 🌸**
-*Helping you say it with flowers, one person at a time*
-
-> "The earth laughs in flowers." — Ralph Waldo Emerson
+Version: **0.16.0**
+Last Updated: **February 3, 2026**
