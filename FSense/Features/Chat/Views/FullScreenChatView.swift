@@ -105,6 +105,7 @@ struct FullScreenChatView: View {
                             }
                             navigateToFlowerDetail = true
                         },
+                        onBudgetSelected: { viewModel.send(.budgetSelected($0)) },
                         shouldAnimate: viewModel.shouldAnimateMessage(message.id)
                     )
                     .id(message.id)

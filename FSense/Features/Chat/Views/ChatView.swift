@@ -85,7 +85,8 @@ struct ChatView: View {
                         hideCompletedThinking: data.hideCompletedThinking,
                         shouldAnimate: viewModel.shouldAnimateMessage(message.id),
                         onThinkingToggle: viewModel.send,
-                        onExploreFlower: handleExploreFlower
+                        onExploreFlower: handleExploreFlower,
+                        onBudgetSelected: { viewModel.send(.budgetSelected($0)) }
                     )
                     .id(message.id)
                 }
@@ -129,6 +130,7 @@ struct ChatView: View {
         let shouldAnimate: Bool
         let onThinkingToggle: (ChatAction) -> Void
         var onExploreFlower: ((FlowerRecommendation) -> Void)?
+        var onBudgetSelected: ((BudgetOption) -> Void)?
 
         var body: some View {
             MessageBubbleView(
@@ -137,6 +139,7 @@ struct ChatView: View {
                 isThinkingExpanded: isThinkingExpanded,
                 onThinkingToggle: { onThinkingToggle(.toggleThinkingCard(thinkingId)) },
                 onExploreFlower: onExploreFlower,
+                onBudgetSelected: onBudgetSelected,
                 hideCompletedThinking: hideCompletedThinking,
                 shouldAnimate: shouldAnimate
             )

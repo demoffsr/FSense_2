@@ -139,7 +139,8 @@ actor APIService {
             prompt: prompt,
             region: context?.region ?? "US",
             imageBase64: nil,
-            context: context
+            context: context,
+            budgetRange: nil
         )
         request.httpBody = try JSONEncoder().encode(body)
 
@@ -174,12 +175,14 @@ actor APIService {
     ///   - context: Extended context with conversation history
     ///   - region: Geographic region
     ///   - image: Optional image
+    ///   - budgetRange: Optional budget preference ("budget", "mid", "premium", "any")
     /// - Returns: ChatResponse which can be either recommendation or text
     func sendMessage(
         prompt: String,
         context: ChatContextV2? = nil,
         region: String = "US",
-        image: UIImage? = nil
+        image: UIImage? = nil,
+        budgetRange: String? = nil
     ) async throws -> ChatResponse {
         let endpoint = "\(baseURL)/api/chat"
 
@@ -201,7 +204,8 @@ actor APIService {
             prompt: prompt,
             region: region,
             imageBase64: imageBase64,
-            context: context
+            context: context,
+            budgetRange: budgetRange
         )
         request.httpBody = try JSONEncoder().encode(body)
 
@@ -428,12 +432,14 @@ private struct ChatRequestV2Extended: Encodable {
     let region: String
     let imageBase64: String?
     let context: ChatContextV2?
+    let budgetRange: String?
 
     enum CodingKeys: String, CodingKey {
         case prompt
         case region
         case imageBase64 = "image_base64"
         case context
+        case budgetRange = "budget_range"
     }
 }
 

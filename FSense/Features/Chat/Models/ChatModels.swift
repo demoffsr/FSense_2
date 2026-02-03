@@ -184,6 +184,34 @@ struct ChatSession: Identifiable, Codable, Equatable {
     }
 }
 
+// MARK: - Budget Options
+
+/// Budget options for flower recommendations
+enum BudgetOption: String, CaseIterable, Codable, Equatable {
+    case budget = "budget"      // Up to $40 / До 3000₽
+    case mid = "mid"            // $40-80 / 3000-6000₽
+    case premium = "premium"    // $80+ / 6000₽+
+    case any = "any"            // Any budget
+
+    var displayName: String {
+        switch self {
+        case .budget: return "Budget"
+        case .mid: return "Mid-range"
+        case .premium: return "Premium"
+        case .any: return "Any budget"
+        }
+    }
+
+    var priceHint: String {
+        switch self {
+        case .budget: return "~$20-40"
+        case .mid: return "~$40-80"
+        case .premium: return "$80+"
+        case .any: return ""
+        }
+    }
+}
+
 // MARK: - Chat Mode
 
 /// Chat interaction mode - determines how messages are processed
@@ -287,6 +315,7 @@ enum MessageContent: Equatable, Codable {
     case recommendation(FlowerRecommendation)
     case followUp([String])
     case typing
+    case budgetQuestion // Shows budget selection chips before pipeline runs
 }
 
 // MARK: - Thinking Content
@@ -320,6 +349,8 @@ struct FlowerRecommendation: Equatable, Codable {
     let priceTierLabel: String?     // "Budget-friendly", "Mid-range", "Premium"
     let estimatedRange: String?     // "$40-80"
     let budgetWarning: String?      // Optional warning message
+    // Suggested follow-up questions (e.g., budget clarification)
+    let suggestedQuestions: [String]?
 
     static let mock = FlowerRecommendation(
         flowerName: "Red Rose",
@@ -332,7 +363,8 @@ struct FlowerRecommendation: Equatable, Codable {
         priceTier: "mid",
         priceTierLabel: "Mid-range",
         estimatedRange: "$40-80",
-        budgetWarning: nil
+        budgetWarning: nil,
+        suggestedQuestions: nil
     )
 }
 
@@ -350,6 +382,10 @@ struct ChatState: Equatable {
     // Expand/collapse state for thinking cards (by message ID)
     var expandedThinkingCards: Set<UUID> = []
 
+    // Budget flow state
+    var pendingBudgetQuery: String? = nil  // User's query waiting for budget selection
+    var selectedBudget: BudgetOption? = nil
+
     // Custom Equatable implementation to handle UIImage
     static func == (lhs: ChatState, rhs: ChatState) -> Bool {
         lhs.phase == rhs.phase &&
@@ -358,7 +394,9 @@ struct ChatState: Equatable {
         lhs.isInputEnabled == rhs.isInputEnabled &&
         lhs.currentThinkingContent == rhs.currentThinkingContent &&
         lhs.attachedImage === rhs.attachedImage &&
-        lhs.expandedThinkingCards == rhs.expandedThinkingCards
+        lhs.expandedThinkingCards == rhs.expandedThinkingCards &&
+        lhs.pendingBudgetQuery == rhs.pendingBudgetQuery &&
+        lhs.selectedBudget == rhs.selectedBudget
     }
 }
 
@@ -383,6 +421,8 @@ enum ChatAction {
     case toggleMode(ChatMode)  // Toggles mode on/off (nil = general mode)
     case showModeSheet
     case hideModeSheet
+    // Budget actions
+    case budgetSelected(BudgetOption)
 }
 
 // MARK: - Mock Data

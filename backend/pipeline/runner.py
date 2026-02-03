@@ -84,6 +84,7 @@ def run_flower_chat(
     prompt: str,
     region: str = "US",
     image_base64: Optional[str] = None,
+    budget_range: Optional[str] = None,
 ) -> PipelineResponse:
     """
     Run the flower recommendation pipeline for a chat message.
@@ -143,11 +144,11 @@ def run_flower_chat(
         has_image = image_base64 is not None
         logger.info(f"Starting flower chat: region={region}, prompt_len={len(prompt)}, has_image={has_image}")
 
-        # Build context
+        # Build context with budget priors
         ctx = PipelineContext(
             user_input=prompt,  # Already sanitized
             region=region.lower(),  # Context expects lowercase
-            priors=UserPriors(),
+            priors=UserPriors(budget_range=budget_range),
             image_base64=image_base64,  # Pass image for vision analysis
         )
         
@@ -203,6 +204,7 @@ def run_flower_chat_v2(
     image_base64: Optional[str] = None,
     context: Optional[Dict[str, Any]] = None,
     conversation_summary: Optional[str] = None,
+    budget_range: Optional[str] = None,
 ) -> PipelineResponse:
     """
     Run the flower chat with clarification support (v2 API).
@@ -277,8 +279,8 @@ def run_flower_chat_v2(
 
         # Step 2: Route based on intent
         if classification.intent == IntentType.FLOWER_REQUEST:
-            # Full pipeline
-            result = run_flower_chat(prompt, region, image_base64)
+            # Full pipeline with budget
+            result = run_flower_chat(prompt, region, image_base64, budget_range)
 
             # Wrap in v2 format
             if result["success"]:

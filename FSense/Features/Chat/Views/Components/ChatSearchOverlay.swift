@@ -78,7 +78,7 @@ extension ChatMessage {
                    rec.meaning.lowercased().contains(lowercasedQuery) ||
                    rec.explanation.lowercased().contains(lowercasedQuery)
 
-        case .thinking, .followUp, .typing:
+        case .thinking, .followUp, .typing, .budgetQuestion:
             return false
         }
     }

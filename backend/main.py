@@ -182,6 +182,7 @@ class ChatRequestV2Extended(BaseModel):
     region: str = Field(default="US", description="Geographic region")
     image_base64: Optional[str] = Field(default=None, description="Base64-encoded image")
     context: Optional[ChatContextV2Request] = Field(default=None, description="Extended context with history")
+    budget_range: Optional[str] = Field(default=None, description="Budget preference: 'budget', 'mid', 'premium', or 'any'")
 
 
 class IntentClassificationResponse(BaseModel):
@@ -497,6 +498,7 @@ async def chat_v2(request: ChatRequestV2Extended):
             image_base64=request.image_base64,
             context=context_dict,
             conversation_summary=conversation_summary,
+            budget_range=request.budget_range,
         )
     )
 

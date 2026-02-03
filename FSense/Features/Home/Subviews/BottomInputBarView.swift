@@ -416,6 +416,9 @@ struct ExpandedChatSheet: View {
                                     viewModel?.send(.toggleThinkingCard(data.thinkingId))
                                 },
                                 onExploreFlower: handleExploreFlower,
+                                onBudgetSelected: { [weak viewModel] option in
+                                    viewModel?.send(.budgetSelected(option))
+                                },
                                 hideCompletedThinking: data.hideCompletedThinking,
                                 shouldAnimate: viewModel.shouldAnimateMessage(message.id)
                             )

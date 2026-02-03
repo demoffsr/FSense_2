@@ -67,19 +67,10 @@ struct RecommendationCardView: View {
 
     private var contentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Flower name + price badge
-            HStack {
-                Text(recommendation.flowerName)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.black)
-
-                Spacer()
-
-                // Price tier badge
-                if let tier = recommendation.priceTier {
-                    priceTierBadge(tier)
-                }
-            }
+            // Flower name
+            Text(recommendation.flowerName)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.black)
 
             Text(recommendation.meaning)
                 .font(.system(size: 16, weight: .medium))
@@ -112,34 +103,6 @@ struct RecommendationCardView: View {
             .padding(.top, 4)
         }
         .padding(18)
-    }
-
-    // MARK: - Price Tier Badge
-
-    @ViewBuilder
-    private func priceTierBadge(_ tier: String) -> some View {
-        let (icon, color) = tierStyle(tier)
-        HStack(spacing: 2) {
-            Text(icon)
-                .font(.system(size: 12))
-            if let range = recommendation.estimatedRange {
-                Text(range)
-                    .font(.system(size: 11, weight: .medium))
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(color.opacity(0.15))
-        .foregroundColor(color)
-        .clipShape(Capsule())
-    }
-
-    private func tierStyle(_ tier: String) -> (String, Color) {
-        switch tier {
-        case "budget": return ("💰", .green)
-        case "premium": return ("💎", .purple)
-        default: return ("💰💰", .orange)
-        }
     }
 
     // MARK: - Budget Warning

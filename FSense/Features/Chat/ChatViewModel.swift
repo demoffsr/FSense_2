@@ -56,6 +56,17 @@ final class ChatViewModel: ObservableObject {
     /// Current chat title (defaults to "Chat" for new sessions)
     @Published private(set) var chatTitle: String = "Chat"
 
+    // MARK: - Budget Flow State
+
+    /// User's query waiting for budget selection (stored while budget question is shown)
+    private var pendingBudgetQuery: String?
+
+    /// Pending image waiting for budget selection
+    private var pendingBudgetImage: UIImage?
+
+    /// Selected budget for current flower request
+    private var selectedBudget: BudgetOption?
+
     // MARK: - Cached Precomputed Data
 
     /// Cached message row data - automatically invalidated via didSet on messages
@@ -335,6 +346,9 @@ final class ChatViewModel: ObservableObject {
 
         case .hideModeSheet:
             showModeSheet = false
+
+        case .budgetSelected(let option):
+            handleBudgetSelected(option)
         }
     }
 
@@ -395,6 +409,20 @@ final class ChatViewModel: ObservableObject {
 
         let currentMode = chatMode
 
+        // FAST PATH: Check budget immediately for Find mode (synchronous, no API call)
+        if currentMode == .find {
+            if !containsBudgetHint(userQuery) && selectedBudget == nil {
+                // Store pending query and show budget question IMMEDIATELY
+                pendingBudgetQuery = userQuery
+                pendingBudgetImage = image
+
+                let budgetMessage = ChatMessage(content: .budgetQuestion, sender: .ai)
+                messages.append(budgetMessage)
+                // Keep input disabled until budget selected
+                return
+            }
+        }
+
         thinkingTask = Task {
             await withTaskCancellationHandler {
                 let context = buildChatContextV2()
@@ -406,8 +434,8 @@ final class ChatViewModel: ObservableObject {
                     await handleAskModeQuery(userQuery, image: image, context: context)
 
                 case .find:
-                    // Find mode: skip intent classification, go straight to flower pipeline
-                    await handleFlowerRequest(userQuery, image: image, context: context)
+                    // Find mode: budget already checked above, go straight to flower pipeline
+                    await handleFlowerRequestWithBudget(userQuery, image: image, context: context, budget: selectedBudget ?? .any)
 
                 case nil:
                     // General mode: show typing indicator during classification
@@ -521,6 +549,22 @@ final class ChatViewModel: ObservableObject {
 
     /// Handle flower recommendation requests (show acknowledgement + thinking + pipeline)
     private func handleFlowerRequest(_ query: String, image: UIImage?, context: ChatContextV2) async {
+        // Check if budget is needed and not yet specified
+        if !containsBudgetHint(query) && selectedBudget == nil {
+            // Store pending query and show budget question
+            pendingBudgetQuery = query
+            pendingBudgetImage = image
+
+            // Show budget question message
+            let budgetMessage = ChatMessage(content: .budgetQuestion, sender: .ai)
+            messages.append(budgetMessage)
+            isInputEnabled = false  // Keep input disabled until budget selected
+            return
+        }
+
+        // Continue with normal flow (budget either specified in text or already selected)
+        let budget = selectedBudget
+
         // Show acknowledgement
         try? await Task.sleep(nanoseconds: acknowledgementDelay)
         guard !Task.isCancelled else { return }
@@ -533,7 +577,7 @@ final class ChatViewModel: ObservableObject {
         saveToHistory()
 
         // Continue with thinking + API call
-        await startThinkingProcessWithAPI(for: query, image: image, context: context)
+        await startThinkingProcessWithAPI(for: query, image: image, context: context, budget: budget)
     }
 
     private func cleanupPartialState() {
@@ -545,17 +589,99 @@ final class ChatViewModel: ObservableObject {
                 return true
             case .typing:
                 return true
+            case .budgetQuestion:
+                return true
             default:
                 return false
             }
         }
+
+        // Clear budget flow state
+        pendingBudgetQuery = nil
+        pendingBudgetImage = nil
 
         isInputEnabled = true
         phase = .idle
         eventService.stop()
     }
 
-    private func startThinkingProcessWithAPI(for userQuery: String, image: UIImage? = nil, context: ChatContextV2? = nil) async {
+    // MARK: - Budget Flow
+
+    /// Check if the user's message contains budget hints
+    private func containsBudgetHint(_ text: String) -> Bool {
+        let budgetKeywords = [
+            // English keywords
+            "budget", "cheap", "expensive", "affordable", "luxury", "premium",
+            "under $", "over $", "less than", "more than", "around $", "about $",
+            "inexpensive", "pricey", "cost", "price",
+            // Russian keywords
+            "бюджет", "недорог", "дорог", "дешев", "роскош", "премиум",
+            "до рублей", "рублей", "долларов", "цена", "стоимость"
+        ]
+        let lowercased = text.lowercased()
+        return budgetKeywords.contains { lowercased.contains($0) }
+    }
+
+    /// Handle budget selection from budget question
+    private func handleBudgetSelected(_ option: BudgetOption) {
+        selectedBudget = option
+
+        // Remove budget question message
+        messages.removeAll { message in
+            if case .budgetQuestion = message.content { return true }
+            return false
+        }
+
+        // Continue with stored query
+        if let query = pendingBudgetQuery {
+            let image = pendingBudgetImage
+            pendingBudgetQuery = nil
+            pendingBudgetImage = nil
+
+            // Start the flower request flow with budget
+            startAIResponseFlowWithBudget(for: query, image: image, budget: option)
+        }
+    }
+
+    /// Start AI response flow with a known budget
+    private func startAIResponseFlowWithBudget(for userQuery: String, image: UIImage?, budget: BudgetOption) {
+        if let existingTask = thinkingTask {
+            existingTask.cancel()
+            eventService.stop()
+        }
+
+        thinkingTask = Task {
+            await withTaskCancellationHandler {
+                let context = buildChatContextV2()
+
+                // Go straight to flower request with budget
+                await handleFlowerRequestWithBudget(userQuery, image: image, context: context, budget: budget)
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    self?.cleanupPartialState()
+                }
+            }
+        }
+    }
+
+    /// Handle flower request with a specific budget
+    private func handleFlowerRequestWithBudget(_ query: String, image: UIImage?, context: ChatContextV2, budget: BudgetOption) async {
+        // Show acknowledgement
+        try? await Task.sleep(nanoseconds: acknowledgementDelay)
+        guard !Task.isCancelled else { return }
+
+        let acknowledgement = generateAcknowledgement(for: query, hasImage: image != nil)
+        let ackMessage = ChatMessage(content: .acknowledgement(acknowledgement), sender: .ai)
+        animatingMessageIds.insert(ackMessage.id)
+        messages.append(ackMessage)
+        phase = .acknowledgement
+        saveToHistory()
+
+        // Continue with thinking + API call with budget
+        await startThinkingProcessWithAPI(for: query, image: image, context: context, budget: budget)
+    }
+
+    private func startThinkingProcessWithAPI(for userQuery: String, image: UIImage? = nil, context: ChatContextV2? = nil, budget: BudgetOption? = nil) async {
         // Use provided context or build new one
         let chatContext = context ?? buildChatContextV2()
 
@@ -572,13 +698,14 @@ final class ChatViewModel: ObservableObject {
         phase = .thinking
         eventService.start()
 
-        // Main API call
+        // Main API call with budget
         var response: ChatResponse?
         do {
             response = try await APIService.shared.sendMessage(
                 prompt: userQuery,
                 context: chatContext,
-                image: image
+                image: image,
+                budgetRange: budget?.rawValue
             )
         } catch {
             print("[ChatViewModel] API Error: \(error.localizedDescription)")
@@ -648,7 +775,7 @@ final class ChatViewModel: ObservableObject {
                     flowerName: rec.flowerName
                 ))
 
-            case .acknowledgement, .thinking, .followUp, .typing:
+            case .acknowledgement, .thinking, .followUp, .typing, .budgetQuestion:
                 // Skip transient messages
                 break
             }
@@ -748,6 +875,11 @@ final class ChatViewModel: ObservableObject {
         attachedImage = nil
         chatTitle = "Chat"
         messages = [.welcomeMessage]
+
+        // Clear budget flow state
+        pendingBudgetQuery = nil
+        pendingBudgetImage = nil
+        selectedBudget = nil
 
         // Clear active session state
         stateManager.clearActiveState()

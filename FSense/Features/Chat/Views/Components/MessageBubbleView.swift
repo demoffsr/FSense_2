@@ -11,6 +11,7 @@ struct MessageBubbleView: View {
     let onThinkingToggle: () -> Void
 
     var onExploreFlower: ((FlowerRecommendation) -> Void)? = nil
+    var onBudgetSelected: ((BudgetOption) -> Void)? = nil
     var hideCompletedThinking: Bool = false
     var shouldAnimate: Bool = false
 
@@ -68,6 +69,11 @@ struct MessageBubbleView: View {
 
         case .typing:
             typingIndicator
+
+        case .budgetQuestion:
+            BudgetSelectionView { option in
+                onBudgetSelected?(option)
+            }
         }
     }
 
