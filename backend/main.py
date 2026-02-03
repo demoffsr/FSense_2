@@ -71,6 +71,25 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to cleanup stale entries: {e}")
 
+    # Pre-warm image cache for popular combinations (in background)
+    try:
+        import threading
+        from backend.services.image_service import pre_warm_cache
+
+        def run_pre_warm():
+            try:
+                stats = pre_warm_cache(max_generations=5)
+                logger.info(f"Pre-warm cache stats: {stats}")
+            except Exception as e:
+                logger.warning(f"Pre-warm cache failed: {e}")
+
+        # Run in background thread to not block startup
+        thread = threading.Thread(target=run_pre_warm, daemon=True)
+        thread.start()
+        logger.info("Started background image cache pre-warming")
+    except Exception as e:
+        logger.warning(f"Failed to start pre-warm: {e}")
+
 
 # Global background tasks list for image generation
 _background_tasks_list = []

@@ -1,5 +1,9 @@
 import Foundation
 
+/// Callback for receiving image generation status updates during polling
+/// Parameters: (status, currentAttempt, maxAttempts)
+typealias ImageStatusCallback = @Sendable (ImageGenerationStatus.GenerationStatus, Int, Int) -> Void
+
 /// Service for polling image generation status
 actor ImagePollingService {
 
@@ -12,6 +16,9 @@ actor ImagePollingService {
     // Active polling tasks
     private var pollingTasks: [String: Task<String?, Never>] = [:]
 
+    // Status callbacks for active polls
+    private var statusCallbacks: [String: ImageStatusCallback] = [:]
+
     private init() {
         // Use centralized base URL from APIService
         self.baseURL = APIService.baseURL
@@ -22,6 +29,19 @@ actor ImagePollingService {
 
         self.decoder = JSONDecoder()
         self.decoder.keyDecodingStrategy = .convertFromSnakeCase
+    }
+
+    /// Register a callback to receive status updates during polling
+    /// - Parameters:
+    ///   - cacheKey: Cache key for the image
+    ///   - callback: Callback receiving (status, currentAttempt, maxAttempts)
+    func registerStatusCallback(cacheKey: String, callback: @escaping ImageStatusCallback) {
+        statusCallbacks[cacheKey] = callback
+    }
+
+    /// Remove status callback for a cache key
+    func removeStatusCallback(cacheKey: String) {
+        statusCallbacks.removeValue(forKey: cacheKey)
     }
 
     /// Start polling for image generation
@@ -40,11 +60,22 @@ actor ImagePollingService {
             return await existingTask.value
         }
 
+        // Capture callback reference (sendable)
+        let callback: ImageStatusCallback? = statusCallbacks[cacheKey]
+
         // Create new polling task
         let task = Task<String?, Never> {
             for attempt in 1...maxAttempts {
                 do {
                     let status = try await fetchImageStatus(cacheKey: cacheKey)
+
+                    // Notify callback on main thread
+                    if let callback = callback {
+                        let currentStatus = status.status
+                        await MainActor.run {
+                            callback(currentStatus, attempt, maxAttempts)
+                        }
+                    }
 
                     switch status.status {
                     case .completed:
@@ -78,6 +109,7 @@ actor ImagePollingService {
 
         let result = await task.value
         pollingTasks.removeValue(forKey: cacheKey)
+        statusCallbacks.removeValue(forKey: cacheKey)
 
         return result
     }

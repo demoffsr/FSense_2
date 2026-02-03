@@ -250,3 +250,116 @@ class ImageService:
                 "max_concurrent": MAX_CONCURRENT_GENERATIONS,
                 "available_slots": MAX_CONCURRENT_GENERATIONS - _active_generations,
             }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRE-WARMING CACHE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Popular flowers for pre-caching
+POPULAR_FLOWERS = [
+    "Rose",
+    "Red Rose",
+    "White Rose",
+    "Pink Rose",
+    "Tulip",
+    "Lily",
+    "White Lily",
+    "Orchid",
+    "Sunflower",
+    "Peony",
+    "Carnation",
+    "Chrysanthemum",
+    "Lavender",
+    "Daisy",
+    "Hydrangea",
+]
+
+# Popular emotional contexts for pre-caching
+POPULAR_EMOTIONS = [
+    "love",
+    "romantic love",
+    "apology",
+    "gratitude",
+    "thank you",
+    "celebration",
+    "congratulations",
+    "sympathy",
+    "condolence",
+    "friendship",
+    "birthday",
+    "anniversary",
+    "wedding",
+    "get well",
+    "new baby",
+]
+
+
+def pre_warm_cache(
+    flowers: list[str] | None = None,
+    emotions: list[str] | None = None,
+    max_generations: int = 10,
+) -> dict:
+    """
+    Pre-generate images for popular flower/emotion combinations.
+
+    This function creates cache entries for common combinations
+    and schedules background generation. Useful for reducing
+    latency for the most common use cases.
+
+    Args:
+        flowers: List of flower names (defaults to POPULAR_FLOWERS)
+        emotions: List of emotion contexts (defaults to POPULAR_EMOTIONS)
+        max_generations: Maximum number of new generations to trigger
+
+    Returns:
+        Dict with counts: {"checked": int, "cached": int, "scheduled": int}
+    """
+    flowers = flowers or POPULAR_FLOWERS[:7]  # Top 7 flowers
+    emotions = emotions or POPULAR_EMOTIONS[:5]  # Top 5 emotions
+
+    service = ImageService()
+    stats = {
+        "checked": 0,
+        "cached": 0,
+        "scheduled": 0,
+    }
+
+    # Import here to avoid circular dependency
+    from backend.main import add_background_task
+
+    for flower in flowers:
+        for emotion in emotions:
+            stats["checked"] += 1
+
+            cache_key, image_url, status = service.get_or_create_entry(flower, emotion)
+
+            if status == "completed":
+                stats["cached"] += 1
+                logger.debug(f"Pre-warm cache HIT: {flower} ({emotion})")
+
+            elif status == "pending" and stats["scheduled"] < max_generations:
+                # Schedule background generation
+                add_background_task(
+                    service.generate_image_sync,
+                    flower,
+                    emotion,
+                    cache_key,
+                )
+                stats["scheduled"] += 1
+                logger.info(f"Pre-warm scheduled: {flower} ({emotion})")
+
+            # Stop if we've scheduled enough
+            if stats["scheduled"] >= max_generations:
+                logger.info(f"Pre-warm limit reached: {max_generations} generations scheduled")
+                break
+
+        if stats["scheduled"] >= max_generations:
+            break
+
+    logger.info(
+        f"Pre-warm complete: checked={stats['checked']}, "
+        f"cached={stats['cached']}, scheduled={stats['scheduled']}"
+    )
+
+    return stats
