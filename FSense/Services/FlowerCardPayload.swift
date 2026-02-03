@@ -9,9 +9,27 @@ struct FlowerCardPayload: Decodable, Equatable {
     let meaning: MeaningTab
     let gifting: GiftingTabPayload
     let context: ContextTabPayload
+    let alternatives: [AlternativeFlower]
     let askAi: AskAIMetadata
     let pipelineVersion: String
     let requestId: String
+
+    // Default alternatives to empty array for backwards compatibility
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        header = try container.decode(FlowerHeader.self, forKey: .header)
+        meaning = try container.decode(MeaningTab.self, forKey: .meaning)
+        gifting = try container.decode(GiftingTabPayload.self, forKey: .gifting)
+        context = try container.decode(ContextTabPayload.self, forKey: .context)
+        alternatives = try container.decodeIfPresent([AlternativeFlower].self, forKey: .alternatives) ?? []
+        askAi = try container.decode(AskAIMetadata.self, forKey: .askAi)
+        pipelineVersion = try container.decode(String.self, forKey: .pipelineVersion)
+        requestId = try container.decode(String.self, forKey: .requestId)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case header, meaning, gifting, context, alternatives, askAi, pipelineVersion, requestId
+    }
 }
 
 // MARK: - Header
@@ -140,6 +158,7 @@ extension FlowerCardPayload {
         print("[toFlower] giftingInfo.suitability: \(giftingData.overallSuitability)")
         print("[toFlower] giftingInfo.whenToGift: \(giftingData.whenToGiftItems)")
         print("[toFlower] contextInfo.culturalCount: \(contextData.culturalInterpretations.count)")
+        print("[toFlower] alternatives count: \(alternatives.count)")
 
         return Flower(
             name: header.name,
@@ -151,7 +170,8 @@ extension FlowerCardPayload {
             whyThisFlowerText: meaning.whyThisFlower.text,
             moodIntensityValue: meaning.moodIntensity.value,
             giftingInfo: giftingData,
-            contextInfo: contextData
+            contextInfo: contextData,
+            alternatives: alternatives
         )
     }
 

@@ -108,6 +108,9 @@ final class FlowerCardViewModel: ObservableObject {
         case .openProductLink(let url):
             UIApplication.shared.open(url)
 
+        case .alternativeFlowerTapped(let alternative):
+            handleAlternativeFlowerTap(alternative)
+
         case .loadFlowerDetails(let id):
             handleLoadFlowerDetails(id: id)
 
@@ -231,13 +234,22 @@ final class FlowerCardViewModel: ObservableObject {
     
     private func handleLoadFlowerDetails(id: UUID) {
         state.isLoading = true
-        
+
         // Future: Load from repository/API
         // For now, use mock data
         Task {
             try? await Task.sleep(nanoseconds: 500_000_000)
             send(.flowerDetailsLoaded(.mock))
         }
+    }
+
+    private func handleAlternativeFlowerTap(_ alternative: AlternativeFlower) {
+        // Log the tap for now
+        print("[FlowerCardViewModel] Alternative tapped: \(alternative.name) (\(alternative.confidenceText))")
+
+        // Future: Could navigate to a new FlowerCard with the alternative
+        // This would require making an API call to get full flower details
+        // For MVP, we just log it - navigation can be added in a follow-up
     }
 }
 

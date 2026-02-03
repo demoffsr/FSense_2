@@ -1,11 +1,11 @@
 """
-FIA Adapter - Flower Intent Agent - v3 (Adapted)
+FIA Adapter - Flower Intent Agent - v4 (Enhanced)
 
 Purpose:
 Analyzes user input to extract intent, occasion, tone, emotion,
-relationship level, and keywords.
+relationship level, context flags, and keywords with cultural awareness.
 
-Based on: flower_intent_agent_v3.py
+Version: v4 - Added context_flags, regional awareness, smarter fallback
 """
 
 import logging
@@ -18,28 +18,69 @@ from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
-INTENT_ANALYSIS_PROMPT = """You are Flower Intent Agent v3 for FSense.
-Extract user intent from their message and output STRICT JSON only.
+INTENT_ANALYSIS_PROMPT = """You are Flower Intent Agent v4 for FSense.
+Analyze the user's message to understand their flower gifting intent.
+Output STRICT JSON only.
 
-Analyze these dimensions:
-- recipient: who is the gift for (girlfriend, mother, friend, coworker, etc.)
-- occasion: what's the event (birthday, apology, thank you, anniversary, general, etc.)
-- tone: emotional tone (subtle, neutral, passionate, tender, etc.)
-- emotion: primary emotion (affection, gratitude, excitement, joy, calm, etc.)
-- relationship_level: stage of relationship (new, growing, established, unspecified)
-- keywords: key words from the message (array of 3-5 words)
+Extract these dimensions with NUANCE:
 
-Return JSON with this structure:
+1. RECIPIENT - Who is the gift for:
+   - Specific role: girlfriend, wife, mother, boss, friend, colleague, teacher
+   - If ambiguous, infer from context clues
+
+2. OCCASION - What's the event:
+   - Specific events: birthday, anniversary, apology, thank_you, get_well, congratulations
+   - Life events: graduation, new_job, new_baby, wedding, sympathy
+   - No occasion: just_because, appreciation, thinking_of_you
+
+3. TONE - Emotional register:
+   - subtle: understated, modest, refined
+   - neutral: standard, balanced
+   - warm: affectionate, caring
+   - passionate: intense, ardent, fervent
+   - playful: fun, lighthearted, whimsical
+
+4. EMOTION - Primary emotional goal:
+   - Love spectrum: romantic_love, tender_affection, deep_devotion
+   - Gratitude spectrum: appreciation, thankfulness, indebtedness
+   - Apology spectrum: remorse, regret, seeking_forgiveness
+   - Joy spectrum: happiness, celebration, excitement
+   - Support spectrum: encouragement, comfort, sympathy
+
+5. RELATIONSHIP LEVEL:
+   - new: early dating, new friendship, recent acquaintance
+   - growing: developing relationship, building trust
+   - established: stable relationship, known well
+   - longterm: years together, deep history
+
+6. CONTEXT FLAGS:
+   - is_first_gift: boolean - Is this possibly their first flower gift to this person?
+   - is_making_amends: boolean - Are they trying to repair a relationship?
+   - is_special_milestone: boolean - Is this a significant life event?
+   - budget_hint: luxury | standard | modest | unspecified
+
+7. KEYWORDS: 3-5 significant words from the message
+
+8. INFERRED_DETAILS: Brief note about what you inferred from context
+
+Return JSON:
 {
   "recipient": "girlfriend",
-  "occasion": "apology",
-  "tone": "subtle",
-  "emotion": "affection",
+  "occasion": "anniversary",
+  "tone": "passionate",
+  "emotion": "romantic_love",
   "relationship_level": "established",
-  "keywords": ["sorry", "forgive", "love"]
+  "context_flags": {
+    "is_first_gift": false,
+    "is_making_amends": false,
+    "is_special_milestone": true,
+    "budget_hint": "luxury"
+  },
+  "keywords": ["anniversary", "love", "special"],
+  "inferred_details": "3-year anniversary, wants to impress"
 }
 
-Values should be lowercase and concise."""
+Values should be lowercase and use underscores for multi-word terms."""
 
 
 class FIAAdapter(BaseAgent):
@@ -69,15 +110,19 @@ The user wants to learn about this flower. Set:
 - tone: "curious"
 - emotion: "interest"
 - relationship_level: "unspecified"
+- context_flags: all false, budget_hint: "unspecified"
 - keywords: include the flower name
 
 Analyze and extract intent dimensions."""
             else:
-                # Normal text-based intent analysis
+                # Normal text-based intent analysis with regional context
+                regional_hint = self._get_regional_hint(ctx.region)
                 prompt = f"""User message: "{ctx.user_input}"
 Region: {ctx.region.upper()}
 
-Analyze this message and extract intent dimensions."""
+{regional_hint}
+
+Analyze this message and extract intent dimensions with cultural awareness."""
 
             response = client.complete_json(
                 prompt=prompt,
@@ -102,6 +147,7 @@ Analyze this message and extract intent dimensions."""
 
             # Console output
             console = get_console_logger()
+            context_flags = response.get("context_flags", {})
             console.agent_result("FIA", {
                 "Primary Intent": primary,
                 "Recipient": response.get("recipient", "unspecified"),
@@ -109,6 +155,7 @@ Analyze this message and extract intent dimensions."""
                 "Tone": response.get("tone", "neutral"),
                 "Emotion": response.get("emotion", "calm"),
                 "Relationship Level": response.get("relationship_level", "unspecified"),
+                "Context Flags": context_flags if context_flags else "None",
                 "Keywords": response.get("keywords", []),
             })
 
@@ -157,11 +204,99 @@ Analyze this message and extract intent dimensions."""
 
         return sub_intents[:5]
 
+    def _get_regional_hint(self, region: str) -> str:
+        """Get cultural hint based on region."""
+        region_lower = region.lower()
+        hints = {
+            "us": "REGIONAL NOTE: US culture - direct emotional expression is common and appreciated.",
+            "eu": "REGIONAL NOTE: European culture - may prefer classic, understated elegant choices.",
+            "asia": "REGIONAL NOTE: Asian culture - color symbolism is important (avoid white for celebrations, red is lucky).",
+            "ru": "REGIONAL NOTE: Russian culture - odd number of flowers for celebrations, even for funerals.",
+        }
+        return hints.get(region_lower, "")
+
     def _fallback_intent(self, ctx: PipelineContext) -> None:
-        """Provide fallback intent when AI fails."""
+        """Smarter fallback using available context from user input."""
+        user_input_lower = ctx.user_input.lower() if ctx.user_input else ""
+
+        # Detect occasion from keywords
+        occasion = "general"
+        is_making_amends = False
+        is_special_milestone = False
+
+        if any(w in user_input_lower for w in ["sorry", "apologize", "forgive", "apolog"]):
+            occasion = "apology"
+            is_making_amends = True
+        elif any(w in user_input_lower for w in ["birthday", "bday"]):
+            occasion = "birthday"
+            is_special_milestone = True
+        elif any(w in user_input_lower for w in ["thank", "grateful", "appreciate"]):
+            occasion = "thank_you"
+        elif any(w in user_input_lower for w in ["anniversary"]):
+            occasion = "anniversary"
+            is_special_milestone = True
+        elif any(w in user_input_lower for w in ["wedding", "married", "engagement"]):
+            occasion = "wedding"
+            is_special_milestone = True
+        elif any(w in user_input_lower for w in ["sympathy", "condolence", "funeral", "passed", "died"]):
+            occasion = "sympathy"
+        elif any(w in user_input_lower for w in ["get well", "sick", "hospital", "recover"]):
+            occasion = "get_well"
+        elif any(w in user_input_lower for w in ["graduation", "graduate"]):
+            occasion = "graduation"
+            is_special_milestone = True
+        elif any(w in user_input_lower for w in ["new job", "promotion"]):
+            occasion = "congratulations"
+            is_special_milestone = True
+
+        # Detect recipient
+        recipient = "unspecified"
+        if any(w in user_input_lower for w in ["girlfriend", "gf"]):
+            recipient = "girlfriend"
+        elif any(w in user_input_lower for w in ["wife"]):
+            recipient = "wife"
+        elif any(w in user_input_lower for w in ["boyfriend", "bf"]):
+            recipient = "boyfriend"
+        elif any(w in user_input_lower for w in ["husband"]):
+            recipient = "husband"
+        elif any(w in user_input_lower for w in ["mom", "mother", "mum", "mama"]):
+            recipient = "mother"
+        elif any(w in user_input_lower for w in ["dad", "father", "papa"]):
+            recipient = "father"
+        elif any(w in user_input_lower for w in ["friend"]):
+            recipient = "friend"
+        elif any(w in user_input_lower for w in ["boss", "manager"]):
+            recipient = "boss"
+        elif any(w in user_input_lower for w in ["colleague", "coworker"]):
+            recipient = "colleague"
+
+        # Build primary intent
+        if recipient != "unspecified" and occasion != "general":
+            primary = f"{occasion} for {recipient}".replace("_", " ").title()
+        elif recipient != "unspecified":
+            primary = f"Flowers for {recipient}"
+        elif occasion != "general":
+            primary = occasion.replace("_", " ").title()
+        else:
+            primary = "General flower gift"
+
         ctx.intent = IntentData(
-            primary_intent="General flower gift",
-            confidence=0.5,
-            sub_intents=[],
-            raw_output={"fallback": True},
+            primary_intent=primary,
+            confidence=0.6,  # Higher than before since we did keyword matching
+            sub_intents=[f"fallback_extracted:{occasion}"],
+            raw_output={
+                "fallback": True,
+                "recipient": recipient,
+                "occasion": occasion,
+                "tone": "neutral",
+                "emotion": "affection",
+                "relationship_level": "unspecified",
+                "context_flags": {
+                    "is_first_gift": False,
+                    "is_making_amends": is_making_amends,
+                    "is_special_milestone": is_special_milestone,
+                    "budget_hint": "unspecified",
+                },
+                "keywords": [],
+            },
         )

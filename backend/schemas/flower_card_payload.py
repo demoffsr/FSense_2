@@ -1,5 +1,5 @@
 """
-FlowerCardPayload Schema - v0.0.1
+FlowerCardPayload Schema - v0.0.2
 
 THE FINAL UI CONTRACT for iOS.
 
@@ -34,6 +34,21 @@ class FlowerHeader(BaseModel):
     image_url: Optional[str] = Field(None, description="Remote image URL", serialization_alias="imageUrl")
     image_asset: Optional[str] = Field(None, description="Local asset name (iOS)", serialization_alias="imageAsset")
     image_cache_key: Optional[str] = Field(None, description="Cache key for polling image status", serialization_alias="imageCacheKey")
+
+
+class AlternativeFlower(BaseModel):
+    """
+    Lightweight alternative flower recommendation.
+    Displayed in "Также подходят:" section.
+
+    Maps to: iOS AlternativeFlower model
+    """
+    flower_id: str = Field(..., description="Unique flower identifier", serialization_alias="flowerId")
+    name: str = Field(..., description="Display name of the flower")
+    image_asset: Optional[str] = Field(None, description="Local asset name (iOS)", serialization_alias="imageAsset")
+    image_url: Optional[str] = Field(None, description="Remote image URL", serialization_alias="imageUrl")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Match confidence 0.0-1.0")
+    brief_reason: str = Field(..., description="One-line reason for match", serialization_alias="briefReason")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -275,29 +290,37 @@ class AskAIMetadata(BaseModel):
 class FlowerCardPayload(BaseModel):
     """
     THE ROOT PAYLOAD for iOS FlowerCardView.
-    
+
     This is the FINAL OUTPUT of the pipeline.
     Only SFA (Symbolic Flower Agent) should produce this.
-    
+
     Structure:
     - header: Flower identification
     - meaning: Meaning tab content
     - gifting: Gifting tab content
     - context: Context tab content
+    - alternatives: Alternative flower recommendations (2-4)
     - ask_ai: Ask AI feature metadata
     - pipeline_version: Backend version for debugging
     - request_id: Request tracking ID
     """
-    
+
     # Main content sections
     header: FlowerHeader
     meaning: MeaningTab
     gifting: GiftingTab
     context: ContextTab
-    
+
+    # Alternative recommendations
+    alternatives: list[AlternativeFlower] = Field(
+        default_factory=list,
+        max_length=4,
+        description="Alternative flower recommendations (0-4 items)"
+    )
+
     # Metadata
     ask_ai: AskAIMetadata = Field(default_factory=AskAIMetadata)
-    pipeline_version: str = Field(default="0.0.1", description="Backend version")
+    pipeline_version: str = Field(default="0.0.2", description="Backend version")
     request_id: str = Field(..., description="Request tracking ID")
     
     model_config = ConfigDict(

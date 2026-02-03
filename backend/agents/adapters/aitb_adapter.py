@@ -155,61 +155,144 @@ Harmonize the tone and communication style for this context."""
             }
 
     def _adjust_tone_heuristic(self, emotion_tone: str, intensity: str, stage: str) -> str:
-        """Adjust tone based on heuristics (deprecated - now using AI)."""
-        tone_map = {
-            "passionate": "warm" if stage in ("new", "early") else "passionate",
+        """Adjust tone based on relationship stage and intensity."""
+        # Soften tone for new relationships
+        tone_adjustments = {
+            "passionate": "warm" if stage in ("new", "early", "developing") else "passionate",
             "romantic": "tender" if stage in ("new", "early") else "romantic",
+            "intense": "warm" if stage in ("new", "early") else "warm",
             "warm": "warm",
+            "tender": "tender",
             "neutral": "warm",
             "formal": "professional",
+            "professional": "professional",
+            "apologetic": "apologetic",
+            "supportive": "supportive",
+            "celebratory": "celebratory" if stage != "new" else "warm",
         }
-        return tone_map.get(emotion_tone.lower(), emotion_tone)
+        return tone_adjustments.get(emotion_tone.lower(), emotion_tone)
 
-    def _determine_voice_style(self, emotion_tone: str, stage: str) -> str:
-        """Determine voice style."""
+    def _determine_voice_style(self, ctx: PipelineContext) -> str:
+        """Determine voice style based on context."""
+        emotion_tone = ctx.emotions.emotional_tone if ctx.emotions else "neutral"
+        stage = "established"
+        r_type = "neutral"
+
+        if ctx.relationship:
+            r_type = ctx.relationship.relationship_type
+            stage = ctx.relationship.raw_output.get("relationship_stage", "established") if ctx.relationship.raw_output else "established"
+
+        # Professional relationships
+        if r_type == "professional":
+            return "professional"
+
+        # Romantic contexts
         if emotion_tone.lower() in ("passionate", "romantic"):
             return "romantic" if stage not in ("new", "early") else "conversational"
-        elif emotion_tone.lower() in ("formal", "professional"):
+
+        # Formal tone
+        if emotion_tone.lower() in ("formal", "professional"):
             return "professional"
+
+        # Apologetic contexts
+        if emotion_tone.lower() in ("apologetic", "remorseful"):
+            return "sincere"
+
+        # Celebratory occasions
+        if emotion_tone.lower() in ("celebratory", "joyful", "excited"):
+            return "playful"
+
+        # Default
         return "conversational"
 
     def _determine_formality(self, ctx: PipelineContext) -> str:
-        """Determine formality level."""
+        """Determine formality level based on relationship."""
         if ctx.relationship:
-            if ctx.relationship.formality_level > 0.7:
+            r_type = ctx.relationship.relationship_type
+            formality_level = ctx.relationship.formality_level
+
+            # Professional always formal
+            if r_type == "professional":
                 return "formal"
-            elif ctx.relationship.formality_level < 0.3:
+
+            # Use formality level
+            if formality_level > 0.7:
+                return "formal"
+            elif formality_level > 0.5:
+                return "balanced"
+            elif formality_level > 0.3:
+                return "casual"
+            else:
                 return "very_casual"
+
         return "casual"
 
-    def _generate_hints(self, emotion_tone: str, intensity: str, stage: str) -> List[str]:
-        """Generate personalization hints."""
+    def _generate_hints(self, ctx: PipelineContext) -> List[str]:
+        """Generate personalization hints based on full context."""
         hints = []
+
+        # Get context data
+        emotion_tone = ctx.emotions.emotional_tone if ctx.emotions else "neutral"
+        intensity_label = ctx.intensity.intensity_label if ctx.intensity else "balanced"
+        stage = "established"
+        r_type = "neutral"
+
+        if ctx.relationship and ctx.relationship.raw_output:
+            stage = ctx.relationship.raw_output.get("relationship_stage", "established")
+            r_type = ctx.relationship.relationship_type
+
+        # Stage-based hints
         if stage in ("new", "early"):
             hints.append("keep_tone_gentle")
             hints.append("avoid_overly_romantic")
-        if intensity in ("high", "very_high"):
+
+        # Intensity-based hints
+        if intensity_label in ("high", "very_high"):
             hints.append("emphasize_emotion")
+        elif intensity_label in ("low", "very_low"):
+            hints.append("keep_subtle")
+
+        # Tone-based hints
         if emotion_tone.lower() in ("warm", "tender"):
             hints.append("emphasize_warmth")
-        return hints[:3]
+        elif emotion_tone.lower() in ("apologetic", "remorseful"):
+            hints.append("emphasize_sincerity")
+        elif emotion_tone.lower() in ("celebratory", "joyful"):
+            hints.append("emphasize_joy")
+
+        # Relationship type hints
+        if r_type == "professional":
+            hints.append("maintain_professional_boundaries")
+        elif r_type == "familial":
+            hints.append("respectful_but_warm")
+
+        return hints[:4]  # Return max 4 hints
 
     def _fallback_adaptive(self, ctx: PipelineContext) -> None:
-        """Provide fallback adaptive data when AI fails."""
-        # Use simple heuristics
-        tone = ctx.emotions.emotional_tone if ctx.emotions else "warm"
-        formality = "casual"
+        """Use heuristic methods for fallback when AI fails."""
+        # Extract context data
+        emotion_tone = ctx.emotions.emotional_tone if ctx.emotions else "warm"
+        intensity_label = ctx.intensity.intensity_label if ctx.intensity else "balanced"
+        stage = "established"
 
-        if ctx.relationship:
-            if ctx.relationship.formality_level > 0.7:
-                formality = "formal"
-            elif ctx.relationship.formality_level < 0.3:
-                formality = "very_casual"
+        if ctx.relationship and ctx.relationship.raw_output:
+            stage = ctx.relationship.raw_output.get("relationship_stage", "established")
+
+        # Use heuristic methods
+        adjusted_tone = self._adjust_tone_heuristic(emotion_tone, intensity_label, stage)
+        voice_style = self._determine_voice_style(ctx)
+        formality = self._determine_formality(ctx)
+        hints = self._generate_hints(ctx)
 
         ctx.adaptive = AdaptiveData(
-            tone=tone,
-            voice_style="conversational",
+            tone=adjusted_tone,
+            voice_style=voice_style,
             formality=formality,
-            personalization_hints=[],
-            raw_output={"fallback": True},
+            personalization_hints=hints,
+            raw_output={
+                "fallback": True,
+                "method": "heuristic",
+                "original_tone": emotion_tone,
+                "adjusted_tone": adjusted_tone,
+            },
         )

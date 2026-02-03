@@ -1,15 +1,16 @@
 """
-SRFL Adapter - Self-Reflection Layer - v2 (Adapted)
+SRFL Adapter - Self-Reflection Layer - v3 (Enhanced)
 
 Purpose:
 Performs consistency checks and quality assessment on all preceding agent outputs.
 Validates that the pipeline outputs make sense together and identifies gaps.
 
-Based on: self_reflection_feedback_layer_v2_2.py
+Version: v3 - Expanded emotion vocabulary, improved string matching
 """
 
 import logging
-from typing import List
+import re
+from typing import List, Set
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, ReflectionData
@@ -17,15 +18,66 @@ from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
-# Emotion-to-meaning mappings for consistency checking
+# Emotion-to-meaning mappings for consistency checking (expanded vocabulary)
 EMOTION_TO_MEANING_TONES = {
-    "affection": {"gentle", "warm", "admiration", "care", "love"},
-    "joy": {"joy", "happiness", "celebration", "bright", "cheerful"},
-    "gratitude": {"gratitude", "appreciation", "respect", "thanks"},
-    "sadness": {"sympathy", "comfort", "solace", "support"},
-    "excitement": {"excitement", "enthusiasm", "energy", "vibrant"},
-    "calm": {"serenity", "peace", "balance", "tranquil"},
-    "hope": {"hope", "new beginnings", "optimism", "renewal"},
+    # Love spectrum
+    "love": {"love", "passion", "romance", "affection", "devotion", "desire"},
+    "romantic_love": {"love", "passion", "romance", "desire", "devotion", "ardor"},
+    "tender_affection": {"affection", "care", "warmth", "tenderness", "gentle"},
+    "deep_devotion": {"devotion", "commitment", "loyalty", "dedication", "forever"},
+    "affection": {"gentle", "warm", "admiration", "care", "love", "affection"},
+
+    # Gratitude spectrum
+    "gratitude": {"gratitude", "appreciation", "respect", "thanks", "thankful"},
+    "appreciation": {"appreciation", "recognition", "acknowledgment", "respect"},
+    "thankfulness": {"thanks", "grateful", "blessed", "appreciation"},
+
+    # Joy spectrum
+    "joy": {"joy", "happiness", "celebration", "bright", "cheerful", "delight"},
+    "happiness": {"joy", "happiness", "cheer", "delight", "bright"},
+    "excitement": {"excitement", "enthusiasm", "energy", "vibrant", "thrill"},
+    "elation": {"joy", "elation", "ecstasy", "thrill", "euphoria"},
+    "contentment": {"peace", "contentment", "serenity", "satisfaction"},
+    "pride": {"pride", "achievement", "accomplishment", "success"},
+    "celebration": {"celebration", "festive", "congratulations", "joy"},
+
+    # Apology/Guilt spectrum
+    "remorse": {"forgiveness", "sincerity", "purity", "new beginnings", "peace"},
+    "regret": {"apology", "reconciliation", "peace", "forgiveness"},
+    "contrition": {"humility", "sincerity", "purity", "forgiveness"},
+    "guilt": {"forgiveness", "redemption", "peace", "sincerity"},
+    "shame": {"forgiveness", "humility", "redemption"},
+
+    # Sadness/Support spectrum
+    "sadness": {"sympathy", "comfort", "solace", "support", "peace"},
+    "grief": {"sympathy", "peace", "comfort", "solace", "remembrance"},
+    "melancholy": {"comfort", "solace", "peace", "gentle"},
+    "longing": {"memory", "remembrance", "nostalgia", "tenderness"},
+    "nostalgia": {"memory", "remembrance", "sentimental", "past"},
+
+    # Hope/Support spectrum
+    "hope": {"hope", "new beginnings", "optimism", "renewal", "bright"},
+    "optimism": {"hope", "optimism", "bright", "future", "positive"},
+    "encouragement": {"hope", "strength", "courage", "support", "uplift"},
+    "anticipation": {"excitement", "hope", "future", "anticipation"},
+
+    # Compassion/Support spectrum
+    "sympathy": {"sympathy", "comfort", "peace", "solace", "support"},
+    "compassion": {"care", "support", "healing", "comfort", "empathy"},
+    "empathy": {"understanding", "support", "care", "comfort"},
+    "care": {"care", "support", "comfort", "nurturing", "warmth"},
+    "concern": {"care", "support", "worry", "comfort"},
+
+    # Admiration spectrum
+    "admiration": {"respect", "admiration", "esteem", "honor"},
+    "respect": {"respect", "honor", "admiration", "dignity"},
+    "awe": {"awe", "wonder", "admiration", "amazement"},
+    "inspiration": {"inspiration", "motivation", "hope", "uplift"},
+
+    # Calm/Serenity spectrum
+    "calm": {"serenity", "peace", "balance", "tranquil", "harmony"},
+    "serenity": {"peace", "serenity", "tranquil", "calm"},
+    "peace": {"peace", "harmony", "tranquil", "serenity"},
 }
 
 RISK_TO_SCORE = {"low": 1.0, "medium": 0.6, "high": 0.2}
@@ -102,7 +154,7 @@ class SRFLAdapter(BaseAgent):
         if not ctx.candidates or not ctx.candidates.candidates:
             gaps.append("No flower candidates selected")
 
-        if not ctx.intensity or ctx.intensity.mood_intensity == 0.0:
+        if not ctx.intensity or ctx.intensity.mood_intensity is None:
             gaps.append("Intensity not calculated")
 
         if not ctx.adaptive or not ctx.adaptive.tone:
@@ -118,16 +170,25 @@ class SRFLAdapter(BaseAgent):
         # Get primary emotion
         dominant_emotion = ctx.emotions.primary_emotion.lower()
 
-        # Get flower meanings
+        # Get flower meanings and extract individual words
         candidate = ctx.candidates.candidates[0]
-        meanings = " ".join(candidate.meanings).lower() if candidate.meanings else ""
+        meanings_text = " ".join(candidate.meanings).lower() if candidate.meanings else ""
+        # Use word boundaries to avoid false positives (e.g., "care" in "careful")
+        meanings_words = set(re.findall(r'\b\w+\b', meanings_text))
 
         # Check if emotion matches meanings
         targets = EMOTION_TO_MEANING_TONES.get(dominant_emotion, set())
         if not targets:
-            return 0.6  # Unknown emotion, assume neutral
+            # Unknown emotion - try to find partial match in all emotions
+            for emotion_key, emotion_targets in EMOTION_TO_MEANING_TONES.items():
+                if dominant_emotion in emotion_key or emotion_key in dominant_emotion:
+                    targets = emotion_targets
+                    break
+            if not targets:
+                return 0.6  # Unknown emotion, assume neutral
 
-        hits = sum(1 for target in targets if target in meanings)
+        # Count hits using word matching
+        hits = sum(1 for target in targets if target in meanings_words)
         base_score = hits / max(1, len(targets))
 
         # Adjust for relationship stage

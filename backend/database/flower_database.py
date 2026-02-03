@@ -1874,7 +1874,7 @@ FLOWERS_DATA = [
 
 FLOWER_MEANINGS_DATA = [
     # LOVE
-    {"flower_id": "red_rose", "emotion": "love", "match_score": 1.0, "meaning_en": "I love you", "meaning_ru": "Я тебя люблю", "phrases": ["I love you", "Be mine"]},
+    {"flower_id": "red_rose", "emotion": "love", "match_score": 0.95, "meaning_en": "I love you", "meaning_ru": "Я тебя люблю", "phrases": ["I love you", "Be mine"]},
     {"flower_id": "red_tulip", "emotion": "love", "match_score": 0.9, "meaning_en": "Declaration of love", "meaning_ru": "Признание в любви", "phrases": ["Believe me", "I declare my love"]},
     {"flower_id": "red_carnation", "emotion": "love", "match_score": 0.85, "meaning_en": "My heart aches for you", "meaning_ru": "Моё сердце болит по тебе", "phrases": ["Deep love", "Admiration"]},
     {"flower_id": "red_chrysanthemum", "emotion": "love", "match_score": 0.8, "meaning_en": "I love you", "meaning_ru": "Я тебя люблю"},
@@ -1882,35 +1882,35 @@ FLOWER_MEANINGS_DATA = [
     {"flower_id": "red_peony", "emotion": "love", "match_score": 0.85, "meaning_en": "Passionate love", "meaning_ru": "Страстная любовь"},
 
     # APOLOGY
-    {"flower_id": "hyacinth_purple", "emotion": "apology", "match_score": 1.0, "meaning_en": "Please forgive me", "meaning_ru": "Пожалуйста, прости меня", "phrases": ["I'm sorry", "Forgive me"]},
+    {"flower_id": "hyacinth_purple", "emotion": "apology", "match_score": 0.95, "meaning_en": "Please forgive me", "meaning_ru": "Пожалуйста, прости меня", "phrases": ["I'm sorry", "Forgive me"]},
     {"flower_id": "white_tulip", "emotion": "apology", "match_score": 0.9, "meaning_en": "Forgiveness", "meaning_ru": "Прощение", "phrases": ["I ask for forgiveness"]},
     {"flower_id": "blue_hydrangea", "emotion": "apology", "match_score": 0.85, "meaning_en": "Sincere apology", "meaning_ru": "Искреннее извинение", "phrases": ["Please understand", "I'm sorry"]},
     {"flower_id": "white_rose", "emotion": "apology", "match_score": 0.75, "meaning_en": "I am worthy of you", "meaning_ru": "Я достоин тебя"},
     {"flower_id": "white_peony", "emotion": "apology", "match_score": 0.8, "meaning_en": "Bashfulness and regret", "meaning_ru": "Застенчивость и сожаление"},
 
     # GRATITUDE
-    {"flower_id": "pink_rose", "emotion": "gratitude", "match_score": 1.0, "meaning_en": "Thank you, with grace", "meaning_ru": "Благодарю с изяществом", "phrases": ["Thank you", "I appreciate you"]},
+    {"flower_id": "pink_rose", "emotion": "gratitude", "match_score": 0.95, "meaning_en": "Thank you, with grace", "meaning_ru": "Благодарю с изяществом", "phrases": ["Thank you", "I appreciate you"]},
     {"flower_id": "pink_carnation", "emotion": "gratitude", "match_score": 0.95, "meaning_en": "I'll never forget you", "meaning_ru": "Я никогда тебя не забуду", "phrases": ["Gratitude", "Remembrance"]},
     {"flower_id": "blue_hydrangea", "emotion": "gratitude", "match_score": 0.9, "meaning_en": "Thank you for understanding", "meaning_ru": "Спасибо за понимание"},
     {"flower_id": "sweet_pea", "emotion": "gratitude", "match_score": 0.85, "meaning_en": "Thank you for a lovely time", "meaning_ru": "Спасибо за прекрасное время"},
     {"flower_id": "camellia", "emotion": "gratitude", "match_score": 0.85, "meaning_en": "Gratitude and admiration", "meaning_ru": "Благодарность и восхищение"},
 
     # SYMPATHY
-    {"flower_id": "white_lily", "emotion": "sympathy", "match_score": 1.0, "meaning_en": "Sympathy and condolence", "meaning_ru": "Сочувствие и соболезнование"},
+    {"flower_id": "white_lily", "emotion": "sympathy", "match_score": 0.95, "meaning_en": "Sympathy and condolence", "meaning_ru": "Сочувствие и соболезнование"},
     {"flower_id": "white_rose", "emotion": "sympathy", "match_score": 0.9, "meaning_en": "Reverence and remembrance", "meaning_ru": "Почтение и память"},
     {"flower_id": "stargazer_lily", "emotion": "sympathy", "match_score": 0.85, "meaning_en": "Sympathy and encouragement", "meaning_ru": "Сочувствие и поддержка"},
     {"flower_id": "gladiolus", "emotion": "sympathy", "match_score": 0.8, "meaning_en": "Remembrance", "meaning_ru": "Память"},
     {"flower_id": "poppy_white", "emotion": "sympathy", "match_score": 0.85, "meaning_en": "Consolation and peace", "meaning_ru": "Утешение и покой"},
 
     # FRIENDSHIP
-    {"flower_id": "yellow_rose", "emotion": "friendship", "match_score": 1.0, "meaning_en": "Friendship and joy", "meaning_ru": "Дружба и радость", "phrases": ["You're a wonderful friend"]},
+    {"flower_id": "yellow_rose", "emotion": "friendship", "match_score": 0.95, "meaning_en": "Friendship and joy", "meaning_ru": "Дружба и радость", "phrases": ["You're a wonderful friend"]},
     {"flower_id": "alstroemeria", "emotion": "friendship", "match_score": 0.95, "meaning_en": "Devoted friendship", "meaning_ru": "Преданная дружба"},
     {"flower_id": "iris", "emotion": "friendship", "match_score": 0.9, "meaning_en": "Your friendship means so much", "meaning_ru": "Твоя дружба так много значит"},
     {"flower_id": "white_chrysanthemum", "emotion": "friendship", "match_score": 0.85, "meaning_en": "You're a wonderful friend", "meaning_ru": "Ты замечательный друг"},
     {"flower_id": "gerbera_daisy", "emotion": "friendship", "match_score": 0.85, "meaning_en": "Cheerful friendship", "meaning_ru": "Жизнерадостная дружба"},
 
     # ROMANCE
-    {"flower_id": "red_rose", "emotion": "romance", "match_score": 1.0, "meaning_en": "Romantic passion", "meaning_ru": "Романтическая страсть"},
+    {"flower_id": "red_rose", "emotion": "romance", "match_score": 0.95, "meaning_en": "Romantic passion", "meaning_ru": "Романтическая страсть"},
     {"flower_id": "pink_peony", "emotion": "romance", "match_score": 0.95, "meaning_en": "Romance and prosperity", "meaning_ru": "Романтика и процветание"},
     {"flower_id": "lavender_rose", "emotion": "romance", "match_score": 0.9, "meaning_en": "Love at first sight", "meaning_ru": "Любовь с первого взгляда"},
     {"flower_id": "pink_hydrangea", "emotion": "romance", "match_score": 0.85, "meaning_en": "Heartfelt romance", "meaning_ru": "Искренняя романтика"},
@@ -1930,7 +1930,7 @@ FLOWER_MEANINGS_DATA = [
 
     # NEW BEGINNINGS
     {"flower_id": "white_rose", "emotion": "new_beginnings", "match_score": 0.95, "meaning_en": "Fresh start", "meaning_ru": "Новое начало"},
-    {"flower_id": "daffodil", "emotion": "new_beginnings", "match_score": 1.0, "meaning_en": "New beginnings and rebirth", "meaning_ru": "Новое начало и возрождение"},
+    {"flower_id": "daffodil", "emotion": "new_beginnings", "match_score": 0.95, "meaning_en": "New beginnings and rebirth", "meaning_ru": "Новое начало и возрождение"},
     {"flower_id": "daisy", "emotion": "new_beginnings", "match_score": 0.9, "meaning_en": "Innocence and new starts", "meaning_ru": "Невинность и новое начало"},
     {"flower_id": "lotus", "emotion": "new_beginnings", "match_score": 0.95, "meaning_en": "Rebirth and spiritual awakening", "meaning_ru": "Возрождение и духовное пробуждение"},
 
@@ -1947,18 +1947,18 @@ FLOWER_MEANINGS_DATA = [
     {"flower_id": "ranunculus", "emotion": "admiration", "match_score": 0.85, "meaning_en": "I am dazzled by your charms", "meaning_ru": "Я очарован тобой"},
 
     # REMEMBRANCE
-    {"flower_id": "forget_me_not", "emotion": "remembrance", "match_score": 1.0, "meaning_en": "True love and memories", "meaning_ru": "Настоящая любовь и память"},
+    {"flower_id": "forget_me_not", "emotion": "remembrance", "match_score": 0.95, "meaning_en": "True love and memories", "meaning_ru": "Настоящая любовь и память"},
     {"flower_id": "poppy_red", "emotion": "remembrance", "match_score": 0.95, "meaning_en": "Remembrance and consolation", "meaning_ru": "Память и утешение"},
     {"flower_id": "zinnia", "emotion": "remembrance", "match_score": 0.9, "meaning_en": "Thinking of absent friends", "meaning_ru": "Думая о далёких друзьях"},
     {"flower_id": "gladiolus", "emotion": "remembrance", "match_score": 0.85, "meaning_en": "Remembrance with strength", "meaning_ru": "Память с силой"},
 
     # MOTHERS DAY
-    {"flower_id": "pink_carnation", "emotion": "mothers_day", "match_score": 1.0, "meaning_en": "A mother's undying love", "meaning_ru": "Вечная материнская любовь"},
+    {"flower_id": "pink_carnation", "emotion": "mothers_day", "match_score": 0.95, "meaning_en": "A mother's undying love", "meaning_ru": "Вечная материнская любовь"},
     {"flower_id": "pink_rose", "emotion": "mothers_day", "match_score": 0.9, "meaning_en": "Grace and gratitude for mom", "meaning_ru": "Благодарность маме"},
     {"flower_id": "pink_peony", "emotion": "mothers_day", "match_score": 0.85, "meaning_en": "Happy life for mom", "meaning_ru": "Счастливой жизни маме"},
 
     # WEDDING
-    {"flower_id": "white_rose", "emotion": "wedding", "match_score": 1.0, "meaning_en": "Purity and new love", "meaning_ru": "Чистота и новая любовь"},
+    {"flower_id": "white_rose", "emotion": "wedding", "match_score": 0.95, "meaning_en": "Purity and new love", "meaning_ru": "Чистота и новая любовь"},
     {"flower_id": "white_lily", "emotion": "wedding", "match_score": 0.95, "meaning_en": "Majesty and purity", "meaning_ru": "Величие и чистота"},
     {"flower_id": "pink_peony", "emotion": "wedding", "match_score": 0.9, "meaning_en": "Happy marriage", "meaning_ru": "Счастливый брак"},
     {"flower_id": "calla_lily", "emotion": "wedding", "match_score": 0.9, "meaning_en": "Magnificent beauty", "meaning_ru": "Великолепная красота"},
@@ -1975,136 +1975,136 @@ FLOWER_MEANINGS_DATA = [
     # =========================================================================
 
     # LOVE AT FIRST SIGHT
-    {"flower_id": "lavender_rose", "emotion": "love_at_first_sight", "match_score": 1.0, "meaning_en": "Enchantment and mystery", "meaning_ru": "Очарование и тайна"},
+    {"flower_id": "lavender_rose", "emotion": "love_at_first_sight", "match_score": 0.95, "meaning_en": "Enchantment and mystery", "meaning_ru": "Очарование и тайна"},
     {"flower_id": "gloxinia", "emotion": "love_at_first_sight", "match_score": 0.95, "meaning_en": "Love at first sight", "meaning_ru": "Любовь с первого взгляда"},
     {"flower_id": "thornless_rose", "emotion": "love_at_first_sight", "match_score": 0.9, "meaning_en": "Early attachment", "meaning_ru": "Раннее увлечение"},
     {"flower_id": "coreopsis", "emotion": "love_at_first_sight", "match_score": 0.85, "meaning_en": "Love at first sight", "meaning_ru": "Любовь с первого взгляда"},
 
     # FIRST LOVE
-    {"flower_id": "lilac", "emotion": "first_love", "match_score": 1.0, "meaning_en": "First emotions of love", "meaning_ru": "Первые чувства любви"},
+    {"flower_id": "lilac", "emotion": "first_love", "match_score": 0.95, "meaning_en": "First emotions of love", "meaning_ru": "Первые чувства любви"},
     {"flower_id": "primrose", "emotion": "first_love", "match_score": 0.95, "meaning_en": "Young love, I can't live without you", "meaning_ru": "Юная любовь"},
     {"flower_id": "larkspur_purple", "emotion": "first_love", "match_score": 0.9, "meaning_en": "First love", "meaning_ru": "Первая любовь"},
 
     # FAREWELL / GOODBYE
-    {"flower_id": "sweet_pea", "emotion": "farewell", "match_score": 1.0, "meaning_en": "Goodbye, departure", "meaning_ru": "Прощание, расставание"},
+    {"flower_id": "sweet_pea", "emotion": "farewell", "match_score": 0.95, "meaning_en": "Goodbye, departure", "meaning_ru": "Прощание, расставание"},
     {"flower_id": "cyclamen", "emotion": "farewell", "match_score": 0.9, "meaning_en": "Resignation and goodbye", "meaning_ru": "Смирение и прощание"},
     {"flower_id": "morning_glory", "emotion": "farewell", "match_score": 0.85, "meaning_en": "Fleeting beauty, mortality", "meaning_ru": "Мимолётная красота"},
 
     # GOOD LUCK
-    {"flower_id": "bells_of_ireland", "emotion": "good_luck", "match_score": 1.0, "meaning_en": "Good luck and fortune", "meaning_ru": "Удача и благополучие"},
+    {"flower_id": "bells_of_ireland", "emotion": "good_luck", "match_score": 0.95, "meaning_en": "Good luck and fortune", "meaning_ru": "Удача и благополучие"},
     {"flower_id": "heather_white", "emotion": "good_luck", "match_score": 0.95, "meaning_en": "Protection, wishes will come true", "meaning_ru": "Защита, желания сбудутся"},
     {"flower_id": "white_carnation", "emotion": "good_luck", "match_score": 0.85, "meaning_en": "Good luck", "meaning_ru": "Удача"},
 
     # PROTECTION / SHELTER
-    {"flower_id": "fern", "emotion": "protection", "match_score": 1.0, "meaning_en": "Confidence and shelter", "meaning_ru": "Уверенность и защита"},
+    {"flower_id": "fern", "emotion": "protection", "match_score": 0.95, "meaning_en": "Confidence and shelter", "meaning_ru": "Уверенность и защита"},
     {"flower_id": "holly", "emotion": "protection", "match_score": 0.9, "meaning_en": "Defense and domestic happiness", "meaning_ru": "Защита и домашнее счастье"},
     {"flower_id": "heather_white", "emotion": "protection", "match_score": 0.85, "meaning_en": "Protection", "meaning_ru": "Защита"},
     {"flower_id": "garlic", "emotion": "protection", "match_score": 0.8, "meaning_en": "Courage, strength, protection", "meaning_ru": "Мужество, сила, защита"},
 
     # ETERNAL LOVE / IMMORTAL LOVE
-    {"flower_id": "amaranth", "emotion": "eternal_love", "match_score": 1.0, "meaning_en": "Immortality, unfading love", "meaning_ru": "Бессмертие, неугасающая любовь"},
+    {"flower_id": "amaranth", "emotion": "eternal_love", "match_score": 0.95, "meaning_en": "Immortality, unfading love", "meaning_ru": "Бессмертие, неугасающая любовь"},
     {"flower_id": "orange_blossom", "emotion": "eternal_love", "match_score": 0.95, "meaning_en": "Eternal love", "meaning_ru": "Вечная любовь"},
     {"flower_id": "forget_me_not", "emotion": "eternal_love", "match_score": 0.9, "meaning_en": "True love, constancy", "meaning_ru": "Истинная любовь, постоянство"},
 
     # MARRIAGE / WEDDING (expanded)
-    {"flower_id": "orange_blossom", "emotion": "wedding", "match_score": 1.0, "meaning_en": "Marriage and fruitfulness", "meaning_ru": "Брак и плодородие"},
+    {"flower_id": "orange_blossom", "emotion": "wedding", "match_score": 0.95, "meaning_en": "Marriage and fruitfulness", "meaning_ru": "Брак и плодородие"},
     {"flower_id": "stephanotis", "emotion": "wedding", "match_score": 0.95, "meaning_en": "Happiness in marriage", "meaning_ru": "Счастье в браке"},
     {"flower_id": "myrtle", "emotion": "wedding", "match_score": 0.9, "meaning_en": "Love, emblem of marriage", "meaning_ru": "Любовь, символ брака"},
     {"flower_id": "ivy", "emotion": "wedding", "match_score": 0.85, "meaning_en": "Wedded love, fidelity", "meaning_ru": "Супружеская любовь, верность"},
     {"flower_id": "lily_of_the_valley", "emotion": "wedding", "match_score": 0.9, "meaning_en": "Return to happiness, purity", "meaning_ru": "Возвращение к счастью, чистота"},
 
     # FIDELITY / FAITHFULNESS
-    {"flower_id": "ivy", "emotion": "fidelity", "match_score": 1.0, "meaning_en": "Fidelity and affection", "meaning_ru": "Верность и привязанность"},
+    {"flower_id": "ivy", "emotion": "fidelity", "match_score": 0.95, "meaning_en": "Fidelity and affection", "meaning_ru": "Верность и привязанность"},
     {"flower_id": "violet_blue", "emotion": "fidelity", "match_score": 0.95, "meaning_en": "Faithfulness, I'll always be true", "meaning_ru": "Верность, я всегда буду верен"},
     {"flower_id": "honeysuckle_coral", "emotion": "fidelity", "match_score": 0.9, "meaning_en": "Fidelity, devoted love", "meaning_ru": "Верность, преданная любовь"},
 
     # HOPE
-    {"flower_id": "iris", "emotion": "hope", "match_score": 1.0, "meaning_en": "Faith, hope, wisdom", "meaning_ru": "Вера, надежда, мудрость"},
+    {"flower_id": "iris", "emotion": "hope", "match_score": 0.95, "meaning_en": "Faith, hope, wisdom", "meaning_ru": "Вера, надежда, мудрость"},
     {"flower_id": "pine", "emotion": "hope", "match_score": 0.9, "meaning_en": "Hope and pity", "meaning_ru": "Надежда и сострадание"},
     {"flower_id": "crocus", "emotion": "hope", "match_score": 0.85, "meaning_en": "Cheerfulness and rebirth", "meaning_ru": "Бодрость и возрождение"},
 
     # INNOCENCE
-    {"flower_id": "daisy", "emotion": "innocence", "match_score": 1.0, "meaning_en": "Innocence and purity", "meaning_ru": "Невинность и чистота"},
+    {"flower_id": "daisy", "emotion": "innocence", "match_score": 0.95, "meaning_en": "Innocence and purity", "meaning_ru": "Невинность и чистота"},
     {"flower_id": "lilac_white", "emotion": "innocence", "match_score": 0.95, "meaning_en": "Youthful innocence", "meaning_ru": "Юношеская невинность"},
     {"flower_id": "rosebud_white", "emotion": "innocence", "match_score": 0.9, "meaning_en": "Girlhood, too young for love", "meaning_ru": "Девичество"},
     {"flower_id": "orange_blossom", "emotion": "innocence", "match_score": 0.85, "meaning_en": "Innocence", "meaning_ru": "Невинность"},
 
     # SECRET LOVE
-    {"flower_id": "gardenia", "emotion": "secret_love", "match_score": 1.0, "meaning_en": "Secret love, you're lovely", "meaning_ru": "Тайная любовь"},
+    {"flower_id": "gardenia", "emotion": "secret_love", "match_score": 0.95, "meaning_en": "Secret love, you're lovely", "meaning_ru": "Тайная любовь"},
     {"flower_id": "maidenhair_fern", "emotion": "secret_love", "match_score": 0.95, "meaning_en": "Secret bond of love", "meaning_ru": "Тайные узы любви"},
     {"flower_id": "violet", "emotion": "secret_love", "match_score": 0.85, "meaning_en": "Modesty, secret love", "meaning_ru": "Скромность, тайная любовь"},
 
     # CONSOLATION / COMFORT
-    {"flower_id": "poppy_white", "emotion": "consolation", "match_score": 1.0, "meaning_en": "Consolation and peace", "meaning_ru": "Утешение и покой"},
+    {"flower_id": "poppy_white", "emotion": "consolation", "match_score": 0.95, "meaning_en": "Consolation and peace", "meaning_ru": "Утешение и покой"},
     {"flower_id": "geranium_scarlet", "emotion": "consolation", "match_score": 0.9, "meaning_en": "Comforting, consolation", "meaning_ru": "Утешение"},
     {"flower_id": "snowdrop", "emotion": "consolation", "match_score": 0.85, "meaning_en": "Consolation, friendship in trouble", "meaning_ru": "Утешение, дружба в беде"},
 
     # PATIENCE / ENDURANCE
-    {"flower_id": "cactus_flower", "emotion": "patience", "match_score": 1.0, "meaning_en": "Endurance, warmth", "meaning_ru": "Выносливость, тепло"},
+    {"flower_id": "cactus_flower", "emotion": "patience", "match_score": 0.95, "meaning_en": "Endurance, warmth", "meaning_ru": "Выносливость, тепло"},
     {"flower_id": "aster", "emotion": "patience", "match_score": 0.9, "meaning_en": "Patience, love", "meaning_ru": "Терпение, любовь"},
     {"flower_id": "chamomile", "emotion": "patience", "match_score": 0.85, "meaning_en": "Energy in adversity, patience", "meaning_ru": "Энергия в невзгодах, терпение"},
 
     # THINKING OF YOU
-    {"flower_id": "pansy", "emotion": "thinking_of_you", "match_score": 1.0, "meaning_en": "Think of me, pleasant thoughts", "meaning_ru": "Думай обо мне"},
+    {"flower_id": "pansy", "emotion": "thinking_of_you", "match_score": 0.95, "meaning_en": "Think of me, pleasant thoughts", "meaning_ru": "Думай обо мне"},
     {"flower_id": "zinnia", "emotion": "thinking_of_you", "match_score": 0.95, "meaning_en": "Thinking of absent friends", "meaning_ru": "Думая об отсутствующих друзьях"},
     {"flower_id": "forget_me_not", "emotion": "thinking_of_you", "match_score": 0.9, "meaning_en": "True love and memories", "meaning_ru": "Истинная любовь и память"},
 
     # DESIRE / LONGING
-    {"flower_id": "jonquil", "emotion": "desire", "match_score": 1.0, "meaning_en": "Love me, desire", "meaning_ru": "Люби меня, желание"},
+    {"flower_id": "jonquil", "emotion": "desire", "match_score": 0.95, "meaning_en": "Love me, desire", "meaning_ru": "Люби меня, желание"},
     {"flower_id": "orange_rose", "emotion": "desire", "match_score": 0.95, "meaning_en": "Desire and enthusiasm", "meaning_ru": "Желание и энтузиазм"},
     {"flower_id": "camellia", "emotion": "desire", "match_score": 0.85, "meaning_en": "Longing", "meaning_ru": "Тоска"},
 
     # CHEERFULNESS / JOY
-    {"flower_id": "crocus", "emotion": "joy", "match_score": 1.0, "meaning_en": "Cheerfulness, youthful gladness", "meaning_ru": "Бодрость, юношеская радость"},
+    {"flower_id": "crocus", "emotion": "joy", "match_score": 0.95, "meaning_en": "Cheerfulness, youthful gladness", "meaning_ru": "Бодрость, юношеская радость"},
     {"flower_id": "coreopsis", "emotion": "joy", "match_score": 0.95, "meaning_en": "Always cheerful", "meaning_ru": "Всегда весёлый"},
     {"flower_id": "gerbera_daisy", "emotion": "joy", "match_score": 0.9, "meaning_en": "Cheerfulness and innocence", "meaning_ru": "Бодрость и невинность"},
     {"flower_id": "sunflower", "emotion": "joy", "match_score": 0.9, "meaning_en": "Happiness and adoration", "meaning_ru": "Счастье и обожание"},
     {"flower_id": "dandelion", "emotion": "joy", "match_score": 0.8, "meaning_en": "Happiness", "meaning_ru": "Счастье"},
 
     # WELCOME
-    {"flower_id": "wisteria", "emotion": "welcome", "match_score": 1.0, "meaning_en": "Welcome, steadfast", "meaning_ru": "Добро пожаловать"},
+    {"flower_id": "wisteria", "emotion": "welcome", "match_score": 0.95, "meaning_en": "Welcome, steadfast", "meaning_ru": "Добро пожаловать"},
 
     # PRIDE / ACHIEVEMENT
-    {"flower_id": "amaryllis", "emotion": "pride", "match_score": 1.0, "meaning_en": "Pride, determination", "meaning_ru": "Гордость, решимость"},
+    {"flower_id": "amaryllis", "emotion": "pride", "match_score": 0.95, "meaning_en": "Pride, determination", "meaning_ru": "Гордость, решимость"},
     {"flower_id": "tiger_lily", "emotion": "pride", "match_score": 0.9, "meaning_en": "Wealth and pride", "meaning_ru": "Богатство и гордость"},
     {"flower_id": "gladiolus", "emotion": "pride", "match_score": 0.85, "meaning_en": "Strength, integrity", "meaning_ru": "Сила, честность"},
 
     # CONFESSION / DECLARATION
-    {"flower_id": "rosebud_moss", "emotion": "confession", "match_score": 1.0, "meaning_en": "Confessions of love", "meaning_ru": "Признание в любви"},
+    {"flower_id": "rosebud_moss", "emotion": "confession", "match_score": 0.95, "meaning_en": "Confessions of love", "meaning_ru": "Признание в любви"},
     {"flower_id": "red_tulip", "emotion": "confession", "match_score": 0.95, "meaning_en": "Declaration of love", "meaning_ru": "Признание в любви"},
 
     # MATERNAL LOVE / MOTHER
-    {"flower_id": "pink_carnation", "emotion": "maternal_love", "match_score": 1.0, "meaning_en": "Mother's undying love", "meaning_ru": "Вечная материнская любовь"},
+    {"flower_id": "pink_carnation", "emotion": "maternal_love", "match_score": 0.95, "meaning_en": "Mother's undying love", "meaning_ru": "Вечная материнская любовь"},
     {"flower_id": "moss", "emotion": "maternal_love", "match_score": 0.9, "meaning_en": "Maternal love, charity", "meaning_ru": "Материнская любовь"},
     {"flower_id": "daylily", "emotion": "maternal_love", "match_score": 0.85, "meaning_en": "Chinese emblem for mother", "meaning_ru": "Китайский символ матери"},
     {"flower_id": "cactus_flower", "emotion": "maternal_love", "match_score": 0.8, "meaning_en": "Maternal love", "meaning_ru": "Материнская любовь"},
 
     # PROSPERITY / WEALTH
-    {"flower_id": "pink_peony", "emotion": "prosperity", "match_score": 1.0, "meaning_en": "Prosperity and good fortune", "meaning_ru": "Процветание и удача"},
+    {"flower_id": "pink_peony", "emotion": "prosperity", "match_score": 0.95, "meaning_en": "Prosperity and good fortune", "meaning_ru": "Процветание и удача"},
     {"flower_id": "poppy_yellow", "emotion": "prosperity", "match_score": 0.95, "meaning_en": "Wealth and success", "meaning_ru": "Богатство и успех"},
     {"flower_id": "cattail", "emotion": "prosperity", "match_score": 0.85, "meaning_en": "Peace and prosperity", "meaning_ru": "Мир и процветание"},
     {"flower_id": "tiger_lily", "emotion": "prosperity", "match_score": 0.85, "meaning_en": "Wealth", "meaning_ru": "Богатство"},
 
     # VICTORY / CONQUEST
-    {"flower_id": "nasturtium", "emotion": "victory", "match_score": 1.0, "meaning_en": "Conquest, victory in battle", "meaning_ru": "Победа в битве"},
+    {"flower_id": "nasturtium", "emotion": "victory", "match_score": 0.95, "meaning_en": "Conquest, victory in battle", "meaning_ru": "Победа в битве"},
     {"flower_id": "gladiolus", "emotion": "victory", "match_score": 0.9, "meaning_en": "Flower of the gladiators", "meaning_ru": "Цветок гладиаторов"},
 
     # PEACE / TRANQUILITY
-    {"flower_id": "hellebore", "emotion": "peace", "match_score": 1.0, "meaning_en": "Tranquilize my anxiety", "meaning_ru": "Успокой мою тревогу"},
+    {"flower_id": "hellebore", "emotion": "peace", "match_score": 0.95, "meaning_en": "Tranquilize my anxiety", "meaning_ru": "Успокой мою тревогу"},
     {"flower_id": "cattail", "emotion": "peace", "match_score": 0.9, "meaning_en": "Peace and prosperity", "meaning_ru": "Мир и процветание"},
     {"flower_id": "lavender", "emotion": "peace", "match_score": 0.9, "meaning_en": "Serenity, calm", "meaning_ru": "Спокойствие"},
     {"flower_id": "poppy_white", "emotion": "peace", "match_score": 0.85, "meaning_en": "Peace, sleep, rest", "meaning_ru": "Покой, сон, отдых"},
 
     # ELEGANCE / REFINEMENT
-    {"flower_id": "orchid", "emotion": "elegance", "match_score": 1.0, "meaning_en": "Luxury, beauty, refinement", "meaning_ru": "Роскошь, красота, утончённость"},
+    {"flower_id": "orchid", "emotion": "elegance", "match_score": 0.95, "meaning_en": "Luxury, beauty, refinement", "meaning_ru": "Роскошь, красота, утончённость"},
     {"flower_id": "calla_lily", "emotion": "elegance", "match_score": 0.95, "meaning_en": "Magnificent beauty", "meaning_ru": "Великолепная красота"},
     {"flower_id": "dahlia", "emotion": "elegance", "match_score": 0.9, "meaning_en": "Elegance and dignity", "meaning_ru": "Элегантность и достоинство"},
 
     # UNITY
-    {"flower_id": "unity_rose", "emotion": "unity", "match_score": 1.0, "meaning_en": "Unity", "meaning_ru": "Единство"},
+    {"flower_id": "unity_rose", "emotion": "unity", "match_score": 0.95, "meaning_en": "Unity", "meaning_ru": "Единство"},
 
     # WARNING / CAUTION (negative flowers)
-    {"flower_id": "begonia", "emotion": "warning", "match_score": 1.0, "meaning_en": "Beware, caution", "meaning_ru": "Остерегайся"},
+    {"flower_id": "begonia", "emotion": "warning", "match_score": 0.95, "meaning_en": "Beware, caution", "meaning_ru": "Остерегайся"},
     {"flower_id": "monkshood", "emotion": "warning", "match_score": 0.95, "meaning_en": "Beware, a deadly foe is near", "meaning_ru": "Остерегайся, враг рядом"},
 ]
 
@@ -2401,7 +2401,7 @@ def get_flowers_by_emotion(emotion: str, top_n: int = 5) -> tuple:
             SELECT flower_id, emotion, occasion, match_score, meaning_en, meaning_ru, phrases
             FROM flower_meanings
             WHERE emotion = ?
-            ORDER BY match_score DESC
+            ORDER BY match_score DESC, RANDOM()
             LIMIT ?
         """, (emotion, top_n))
         return tuple(_row_to_meaning_dict(row) for row in cursor.fetchall())

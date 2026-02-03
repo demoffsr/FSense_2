@@ -1,10 +1,12 @@
 """
-SFA Adapter - Symbolic Flower Agent (FINAL ASSEMBLER) - v3 (Enhanced)
+SFA Adapter - Symbolic Flower Agent (FINAL ASSEMBLER) - v4 (Multi-Candidate)
 
 Purpose:
 THE ONLY COMPONENT that assembles the final UI payload.
 Uses comprehensive AI prompt with full pipeline context from all 10 agents:
 FIA, EIA, RIL, FMRA, CIA, AITB, RFFA, CRI, SRFL → SFA
+
+Now supports alternative flower recommendations from FMRA.
 
 Based on: symbolic_flower_agent_v3.py
 """
@@ -20,6 +22,7 @@ from backend.services.image_service import ImageService
 from backend.schemas.flower_card_payload import (
     FlowerCardPayload,
     FlowerHeader,
+    AlternativeFlower,
     MeaningTab,
     SymbolismCard,
     WhyThisFlowerCard,
@@ -80,6 +83,15 @@ Rules:
 - Avoid generic filler text
 - Content must feel appropriate for a flower recommendation app
 - Output must be deterministic and UI-ready
+
+Integration Guidelines (IMPORTANT - incorporate these signals):
+- If risk_level = "high" → suitability_status MUST be "Caution" or "Not recommended", explain risk
+- If cultural_warnings present → include them in "when_to_avoid" and cultural interpretations
+- If is_making_amends = true → emphasize reconciliation, sincerity, healing in tone
+- If relationship_type = "professional" → keep formal, avoid romantic language
+- If adaptive_tone = "apologetic" → use softer, more sincere language throughout
+- If intensity_label = "very_low" or "low" → keep descriptions gentle and understated
+- If intensity_label = "high" or "very_high" → allow more expressive, passionate language
 
 Return JSON with this exact structure:
 {
@@ -153,6 +165,7 @@ class SFAAdapter(BaseAgent):
             "Mood Intensity": f"{payload.meaning.mood_intensity.value:.2f} ({payload.meaning.mood_intensity.label})",
             "Suitability": payload.gifting.suitability.level,
             "Risk Level": payload.gifting.emotional_risk.level,
+            "Alternatives": [f"{a.name} ({a.confidence:.0%})" for a in payload.alternatives],
             "Pipeline Version": payload.pipeline_version,
         })
 
@@ -210,13 +223,17 @@ class SFAAdapter(BaseAgent):
             ])[:3],
         )
 
+        # Build alternatives from remaining candidates (skip primary)
+        alternatives = self._build_alternatives(ctx, flower.flower_id)
+
         return FlowerCardPayload(
             header=header,
             meaning=meaning_tab,
             gifting=gifting_tab,
             context=context_tab,
+            alternatives=alternatives,
             ask_ai=ask_ai,
-            pipeline_version="0.3.0",
+            pipeline_version="0.4.0",
             request_id=ctx.request_id,
         )
 
@@ -225,6 +242,110 @@ class SFAAdapter(BaseAgent):
         # 15-40 range → 0.0-1.0
         clamped = max(15, min(40, value))
         return (clamped - 15) / 25.0
+
+    def _build_alternatives(self, ctx: PipelineContext, primary_flower_id: str) -> list[AlternativeFlower]:
+        """
+        Build list of alternative flower recommendations.
+
+        Takes remaining candidates from FMRA (after primary) and converts
+        them to AlternativeFlower objects for the UI.
+
+        Args:
+            ctx: Pipeline context with candidates
+            primary_flower_id: ID of primary flower to exclude
+
+        Returns:
+            List of 0-4 AlternativeFlower objects
+        """
+        alternatives = []
+
+        # No candidates at all
+        if not ctx.candidates or not ctx.candidates.candidates:
+            logger.debug("No candidates at all")
+            return alternatives
+
+        # Only 1 candidate - generate fallback alternatives from database
+        if len(ctx.candidates.candidates) == 1:
+            logger.debug("Only 1 candidate - generating fallback alternatives")
+            return self._generate_fallback_alternatives(ctx, primary_flower_id)
+
+        # Skip the primary flower, take up to 4 alternatives
+        for candidate in ctx.candidates.candidates[1:5]:
+            if candidate.flower_id == primary_flower_id:
+                continue
+
+            # Skip low-quality alternatives
+            if candidate.match_score < 0.4:
+                logger.debug(f"Skipping low-score alternative: {candidate.name} ({candidate.match_score:.2f})")
+                continue
+
+            # Get brief reason (first reason or default)
+            brief_reason = "Good alternative"
+            if candidate.match_reasons:
+                # Filter out diversity penalty notes
+                reasons = [r for r in candidate.match_reasons if not r.startswith("diversity_adjusted")]
+                if reasons:
+                    brief_reason = reasons[0]
+
+            alternatives.append(AlternativeFlower(
+                flower_id=candidate.flower_id,
+                name=candidate.name,
+                image_asset=candidate.name.replace(" ", ""),
+                image_url=None,  # iOS will use local asset
+                confidence=candidate.match_score,
+                brief_reason=brief_reason,
+            ))
+
+            logger.debug(f"Added alternative: {candidate.name} ({candidate.match_score:.2f})")
+
+        logger.info(f"Built {len(alternatives)} alternative flowers")
+        return alternatives
+
+    def _generate_fallback_alternatives(self, ctx: PipelineContext, primary_id: str) -> list[AlternativeFlower]:
+        """
+        Generate alternatives when FMRA provided only 1 candidate.
+
+        Queries the flower database for flowers matching the detected emotion.
+
+        Args:
+            ctx: Pipeline context
+            primary_id: ID of primary flower to exclude
+
+        Returns:
+            List of 0-4 AlternativeFlower objects
+        """
+        from backend.database.flower_database import get_flowers_by_emotion
+
+        alternatives = []
+        emotion = ctx.emotions.primary_emotion.lower() if ctx.emotions and ctx.emotions.primary_emotion else "love"
+
+        try:
+            # Get 6 flowers for this emotion (to have buffer after excluding primary)
+            flowers = get_flowers_by_emotion(emotion, top_n=6)
+
+            for flower in flowers:
+                if flower["flower_id"] == primary_id:
+                    continue
+                if len(alternatives) >= 4:
+                    break
+
+                flower_name = flower.get("name", flower["flower_id"].replace("_", " ").title())
+
+                alternatives.append(AlternativeFlower(
+                    flower_id=flower["flower_id"],
+                    name=flower_name,
+                    image_asset=flower_name.replace(" ", ""),
+                    image_url=None,
+                    confidence=flower.get("match_score", 0.8),
+                    brief_reason=f"Also expresses {emotion}",
+                ))
+
+            logger.info(f"Generated {len(alternatives)} fallback alternatives for emotion '{emotion}'")
+
+        except Exception as e:
+            logger.warning(f"Failed to generate fallback alternatives: {e}")
+
+        return alternatives
 
     def _extract_emotion_context(self, ctx: PipelineContext) -> str:
         """
@@ -402,8 +523,8 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
             response = client.complete_json(
                 prompt=user_prompt,
                 system_prompt=CONTENT_GENERATION_PROMPT,
-                temperature=0.6,
-                max_tokens=1500,  # Reduced for faster response
+                temperature=0.4,  # Lower for consistency
+                max_tokens=1500,
             )
 
             # Apply calculated intensity from CIA if available
@@ -423,11 +544,11 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
 
         except AIClientError as e:
             logger.error(f"SFA AI content generation failed: {e}")
-            return self._get_fallback_content(flower.name)
+            return self._get_fallback_content(flower.name, flower, ctx)
 
         except Exception as e:
             logger.error(f"SFA error: {e}", exc_info=True)
-            return self._get_fallback_content(flower.name)
+            return self._get_fallback_content(flower.name, flower, ctx)
 
     def _get_intensity_label(self, value: int) -> str:
         """Get intensity label for 15-40 scale."""
@@ -442,21 +563,62 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
         else:
             return "Very High"
 
-    def _get_fallback_content(self, flower_name: str) -> dict:
-        """Fallback content when AI fails."""
+    def _get_fallback_content(self, flower_name: str, flower: Any = None, ctx: PipelineContext = None) -> dict:
+        """Context-aware fallback content when AI fails."""
+        # Use flower's database meanings if available
+        meanings = ["Beauty", "Emotion", "Care", "Thoughtfulness"]
+        if flower and hasattr(flower, 'meanings') and flower.meanings:
+            meanings = flower.meanings[:4]
+
+        # Contextual why_this_flower
+        why_text = f"{flower_name} is a thoughtful choice for this occasion."
+        if ctx and ctx.intent and ctx.intent.raw_output:
+            occasion = ctx.intent.raw_output.get("occasion", "")
+            if occasion == "apology":
+                why_text = f"{flower_name} symbolizes sincerity and the desire for reconciliation."
+            elif occasion == "anniversary":
+                why_text = f"{flower_name} celebrates your special bond and lasting love."
+            elif occasion == "sympathy":
+                why_text = f"{flower_name} offers comfort and expresses heartfelt condolences."
+            elif occasion == "birthday":
+                why_text = f"{flower_name} adds joy and warmth to birthday celebrations."
+            elif occasion == "thank you":
+                why_text = f"{flower_name} beautifully conveys gratitude and appreciation."
+
+        # Calculate mood intensity from CIA if available
+        mood_intensity = 25
+        mood_label = "Balanced"
+        if ctx and ctx.intensity:
+            mood_intensity = int(15 + (ctx.intensity.mood_intensity * 25))
+            mood_label = self._get_intensity_label(mood_intensity)
+
+        # Adjust suitability based on RFFA
+        suitability_status = "Safe choice"
+        risk_level = "Low"
+        risk_explanation = "Generally well-received."
+        if ctx and ctx.risks:
+            if ctx.risks.overall_risk_level == "high":
+                suitability_status = "Caution"
+                risk_level = "High"
+                risk_explanation = ctx.risks.fit_assessment or "Review context before gifting."
+            elif ctx.risks.overall_risk_level == "medium":
+                suitability_status = "Safe choice"
+                risk_level = "Medium"
+                risk_explanation = ctx.risks.fit_assessment or "Generally appropriate with some considerations."
+
         return {
             "meaning": {
-                "why_this_flower": f"{flower_name} is a thoughtful choice for this occasion.",
+                "why_this_flower": why_text,
                 "symbolism": f"{flower_name} carries meaningful symbolism and emotional depth.",
-                "meanings": ["Beauty", "Emotion", "Care", "Thoughtfulness"],
-                "mood_intensity": 25,
-                "mood_label": "Balanced",
+                "meanings": meanings,
+                "mood_intensity": mood_intensity,
+                "mood_label": mood_label,
             },
             "gifting": {
-                "suitability": f"{flower_name} is appropriate for most occasions.",
-                "suitability_status": "Safe choice",
-                "risk_level": "Low",
-                "risk_explanation": "Generally well-received.",
+                "suitability": f"{flower_name} is appropriate for this context.",
+                "suitability_status": suitability_status,
+                "risk_level": risk_level,
+                "risk_explanation": risk_explanation,
                 "when_to_gift": ["Special occasions", "Celebrations", "Appreciation gestures"],
                 "when_to_avoid": ["Formal business", "Very casual settings", "Unknown preferences"],
                 "recipient_fit": [
@@ -630,5 +792,5 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
         return {
             "error": True,
             "message": message,
-            "pipeline_version": "0.3.0",
+            "pipeline_version": "0.4.0",
         }

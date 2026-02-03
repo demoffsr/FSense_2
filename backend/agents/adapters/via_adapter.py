@@ -23,6 +23,14 @@ from backend.core.console_logger import get_console_logger
 
 logger = logging.getLogger(__name__)
 
+# Valid flower colors for validation
+VALID_FLOWER_COLORS = {
+    "red", "pink", "white", "yellow", "orange", "purple", "blue",
+    "lavender", "peach", "coral", "burgundy", "cream", "salmon",
+    "magenta", "violet", "crimson", "rose", "blush", "ivory",
+    "champagne", "apricot", "fuchsia", "lilac", "mauve", "green",
+}
+
 VISION_ANALYSIS_PROMPT = """You are an expert florist analyzing a flower bouquet image.
 
 Your task:
@@ -92,12 +100,25 @@ class VIAAdapter(BaseAgent):
         if not name:
             return None
 
-        color = data.get("color")
+        color = self._validate_color(data.get("color"))
         return DetectedFlower(
             name=name,
-            color=color if isinstance(color, str) else None,
+            color=color,
             confidence=self._safe_parse_confidence(data.get("confidence", 0.0)),
         )
+
+    def _validate_color(self, color: Any) -> Optional[str]:
+        """Validate and normalize flower color."""
+        if not color or not isinstance(color, str):
+            return None
+        color_lower = color.lower().strip()
+        if color_lower in VALID_FLOWER_COLORS:
+            return color_lower
+        # Try to find partial match (e.g., "light pink" -> "pink")
+        for valid_color in VALID_FLOWER_COLORS:
+            if valid_color in color_lower:
+                return valid_color
+        return None
 
     def run(self, ctx: PipelineContext) -> None:
         """Analyze bouquet image and extract flower information."""
@@ -109,10 +130,27 @@ class VIAAdapter(BaseAgent):
         try:
             client = get_ai_client()
 
-            # Build prompt for image analysis
-            prompt = """Analyze this flower bouquet image.
-Identify the main flower, any secondary flowers, and describe the composition.
-If you cannot clearly identify a single main flower, indicate that clarification is needed."""
+            # Build prompt for image analysis with user context
+            user_context = ""
+            if ctx.user_input:
+                user_context = f"\nUser's message: \"{ctx.user_input}\""
+
+            prompt = f"""Analyze this flower bouquet image carefully.{user_context}
+
+For the MAIN FLOWER:
+1. Identify the species (e.g., "Red Rose", "White Lily", "Pink Tulip")
+2. Note the color if clearly visible
+3. Provide confidence (0.0-1.0) - use < 0.7 if uncertain
+
+For SECONDARY FLOWERS (up to 5):
+1. List each distinct flower type
+2. Note colors and estimated count
+
+COMPOSITION:
+- Describe arrangement style (compact, cascading, round, etc.)
+- Note any greenery or fillers (eucalyptus, baby's breath, ferns)
+
+If you cannot clearly identify a single main flower, set needs_clarification: true and suggest which flowers the user might want information about."""
 
             response = client.analyze_image(
                 image_base64=ctx.image_base64,

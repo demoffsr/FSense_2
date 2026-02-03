@@ -59,9 +59,28 @@ RECIPIENT_SHIFT = {
 }
 
 CULTURE_SHIFT = {
-    "RU": -0.05,  # Slightly more reserved
-    "US": 0.02,   # Slightly more expressive
-    "JP": -0.10,  # More reserved
+    # Reserved cultures (lower intensity)
+    "RU": -0.05,  # Russian - slightly reserved
+    "JP": -0.10,  # Japanese - very reserved
+    "CN": -0.08,  # Chinese - reserved
+    "KR": -0.05,  # Korean - reserved
+    "UK": -0.02,  # British - understated
+    "DE": -0.03,  # German - reserved
+    "FI": -0.08,  # Finnish - very reserved
+    "SE": -0.05,  # Swedish - reserved
+
+    # Balanced cultures
+    "FR": 0.00,   # French - balanced/romantic
+    "EU": -0.03,  # Generic Europe - classic, understated
+
+    # Expressive cultures (higher intensity)
+    "US": 0.02,   # American - direct expression
+    "IT": 0.05,   # Italian - expressive
+    "ES": 0.05,   # Spanish - warm, expressive
+    "BR": 0.05,   # Brazilian - warm, expressive
+    "MX": 0.03,   # Mexican - warm
+    "IN": 0.03,   # Indian - warm
+    "GR": 0.03,   # Greek - expressive
 }
 
 INTENSITY_ANALYSIS_PROMPT = """You are Context Intensity Agent v3 for FSense.

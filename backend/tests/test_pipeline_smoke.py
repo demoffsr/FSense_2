@@ -47,15 +47,39 @@ class TestFlowerChat:
     def test_flower_chat_has_header(self):
         """Test that response contains valid header."""
         from backend.pipeline.runner import run_flower_chat
-        
+
         result = run_flower_chat("I want to express my love")
-        
+
         assert result["success"] is True
         header = result["data"]["header"]
-        
-        assert "flower_id" in header
+
+        # Uses camelCase serialization (serialization_alias)
+        assert "flowerId" in header
         assert "name" in header
         assert header["name"]  # Not empty
+
+    def test_flower_chat_has_alternatives(self):
+        """Test that response contains alternatives array."""
+        from backend.pipeline.runner import run_flower_chat
+
+        result = run_flower_chat("I want to apologize")
+
+        assert result["success"] is True
+        assert "alternatives" in result["data"]
+        alternatives = result["data"]["alternatives"]
+
+        assert isinstance(alternatives, list)
+        # May be empty or have up to 4 items
+        assert len(alternatives) <= 4
+
+        # If alternatives exist, verify structure
+        if alternatives:
+            alt = alternatives[0]
+            assert "flowerId" in alt
+            assert "name" in alt
+            assert "confidence" in alt
+            assert "briefReason" in alt
+            assert 0.0 <= alt["confidence"] <= 1.0
     
     def test_flower_chat_has_meanings(self):
         """Test that response contains meanings."""
@@ -73,12 +97,13 @@ class TestFlowerChat:
     def test_flower_chat_has_gifting_info(self):
         """Test that response contains gifting information."""
         from backend.pipeline.runner import run_flower_chat
-        
+
         result = run_flower_chat("Anniversary gift")
-        
+
         assert result["success"] is True
         gifting = result["data"]["gifting"]
-        
+
+        # GiftingTab uses snake_case (no serialization_alias)
         assert "suitability" in gifting
         assert "emotional_risk" in gifting
         assert "recipient_fits" in gifting
@@ -93,7 +118,8 @@ class TestFlowerChat:
         
         assert result["success"] is True
         context = result["data"]["context"]
-        
+
+        # ContextTab uses snake_case (no serialization_alias)
         assert "summary" in context
         assert "cultural_interpretations" in context
         assert "relationship_contexts" in context
@@ -141,12 +167,14 @@ class TestFlowerChat:
     def test_flower_chat_returns_pipeline_version(self):
         """Test that response contains pipeline version."""
         from backend.pipeline.runner import run_flower_chat
-        
+
         result = run_flower_chat("Get well flowers")
-        
+
         assert result["success"] is True
+        # pipeline_version uses snake_case (no serialization_alias)
         assert "pipeline_version" in result["data"]
-        assert result["data"]["pipeline_version"] == "0.0.1"
+        # Version 0.4.0 - multi-candidate + diversity support
+        assert result["data"]["pipeline_version"] == "0.4.0"
 
 
 class TestPipelineContext:
@@ -193,14 +221,15 @@ class TestOrchestrator:
     def test_orchestrator_agent_order(self):
         """Test that orchestrator has correct agent order."""
         from backend.pipeline.orchestrator import PipelineOrchestrator
-        
+
         orchestrator = PipelineOrchestrator()
-        
+
+        # VIA added in v0.3.0 for vision/image analysis
         expected_order = [
-            "FIA", "EIA", "RIL", "FMRA", "CIA",
+            "VIA", "FIA", "EIA", "RIL", "FMRA", "CIA",
             "AITB", "RFFA", "CRI", "SRFL", "SFA"
         ]
-        
+
         assert orchestrator.agent_names == expected_order
     
     def test_orchestrator_runs_all_agents(self):
@@ -300,10 +329,14 @@ class TestSchemas:
         )
         
         # Should serialize without error
-        json_data = payload.model_dump(mode="json")
-        
+        json_data = payload.model_dump(mode="json", by_alias=True)
+
         assert json_data["header"]["name"] == "Test Flower"
-        assert json_data["pipeline_version"] == "0.0.1"
+        # pipeline_version doesn't have serialization_alias
+        assert json_data["pipeline_version"] == "0.0.2"
+
+        # Alternatives should be empty by default
+        assert json_data["alternatives"] == []
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

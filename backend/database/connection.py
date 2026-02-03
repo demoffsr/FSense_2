@@ -127,3 +127,32 @@ def get_db() -> Generator[DbSession, None, None]:
 def get_app_db_path() -> Path:
     """Get the app database file path."""
     return APP_DB_PATH
+
+
+# Backward compatibility alias for main.py
+def init_database() -> None:
+    """Alias for init_app_db (backward compatibility)."""
+    init_app_db()
+
+
+def get_db_info() -> dict:
+    """
+    Get database connection information for health checks.
+
+    Returns:
+        Dict with connection status and database paths
+    """
+    flower_db_exists = check_flower_db_exists()
+    app_db_exists = APP_DB_PATH.exists()
+
+    return {
+        "connected": flower_db_exists and app_db_exists,
+        "flower_db": {
+            "path": str(FLOWER_DB_PATH),
+            "exists": flower_db_exists,
+        },
+        "app_db": {
+            "path": str(APP_DB_PATH),
+            "exists": app_db_exists,
+        },
+    }

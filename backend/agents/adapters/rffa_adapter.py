@@ -111,7 +111,7 @@ class RFFAAdapter(BaseAgent):
                 "Fit Assessment": fit_assessment,
                 "Risks Identified": len(risks_list),
                 "Risk Details": risk_details if risk_details else "None",
-                "Confidence": "0.75",
+                "Confidence": f"{confidence:.2f}",
             })
 
         except AIClientError as e:
@@ -178,29 +178,85 @@ Assess potential risks and fit for this flower recommendation."""
             }
 
     def _fallback_risks(self, ctx: PipelineContext) -> None:
-        """Provide fallback risk assessment when AI fails."""
-        # Simple heuristic: check for obvious mismatches
+        """Comprehensive heuristic risk assessment when AI fails."""
         risks_list = []
 
+        # 1. Intensity mismatch with relationship stage
         if ctx.relationship and ctx.intensity:
-            # Check for intensity mismatch with relationship stage
-            rel_data = ctx.relationship.raw_output
+            rel_data = ctx.relationship.raw_output or {}
             stage = rel_data.get("relationship_stage", "established")
             intensity = ctx.intensity.mood_intensity
 
-            if stage in ("new", "early") and intensity > 0.7:
+            if stage in ("new", "early", "developing") and intensity > 0.7:
                 risks_list.append(RiskItem(
                     risk_type="intensity_mismatch",
                     severity="medium",
-                    description="High intensity may be too bold for early relationship stage",
+                    description="High emotional intensity may be too bold for early relationship stage",
                     mitigation="Consider softer colors or more subtle varieties",
                 ))
 
-        overall_risk = "medium" if risks_list else "low"
+        # 2. Relationship inappropriateness (romantic flowers for professional)
+        if ctx.relationship and ctx.candidates and ctx.candidates.candidates:
+            r_type = ctx.relationship.relationship_type
+            flower_name = ctx.candidates.candidates[0].name.lower()
+
+            if r_type == "professional":
+                # Check for romantic flowers
+                romantic_flowers = ["red rose", "red roses", "passion"]
+                if any(rf in flower_name for rf in romantic_flowers):
+                    risks_list.append(RiskItem(
+                        risk_type="relationship_inappropriate",
+                        severity="high",
+                        description="Red roses are inappropriate for professional relationships",
+                        mitigation="Choose neutral flowers like orchids, lilies, or mixed arrangements",
+                    ))
+
+        # 3. Emotional alignment (flower meanings vs emotion)
+        if ctx.emotions and ctx.candidates and ctx.candidates.candidates:
+            emotion = ctx.emotions.primary_emotion.lower()
+            meanings = " ".join(ctx.candidates.candidates[0].meanings).lower()
+
+            # Check for mismatch: somber emotion + joyful meanings
+            somber_emotions = ["sympathy", "grief", "compassion", "sadness", "melancholy"]
+            if emotion in somber_emotions and any(word in meanings for word in ["joy", "excitement", "celebration", "cheer"]):
+                risks_list.append(RiskItem(
+                    risk_type="emotional_alignment",
+                    severity="medium",
+                    description="Flower meanings may not match the somber emotional context",
+                    mitigation="Consider white lilies, chrysanthemums, or other sympathy flowers",
+                ))
+
+        # 4. Cultural concerns (white flowers in Asian cultures)
+        if ctx.region and ctx.candidates and ctx.candidates.candidates:
+            flower_name = ctx.candidates.candidates[0].name.lower()
+            region = ctx.region.lower()
+
+            if region in ["cn", "jp", "kr", "tw", "vn"]:
+                if "white" in flower_name:
+                    # Check if it's for sympathy (then it's OK)
+                    occasion = ""
+                    if ctx.intent and ctx.intent.raw_output:
+                        occasion = ctx.intent.raw_output.get("occasion", "")
+
+                    if occasion not in ["sympathy", "funeral", "memorial"]:
+                        risks_list.append(RiskItem(
+                            risk_type="cultural_concern",
+                            severity="medium",
+                            description="White flowers may symbolize death or mourning in Asian cultures",
+                            mitigation="Consider pink, red, or yellow flowers for celebratory occasions",
+                        ))
+
+        # Determine overall risk level
+        if any(r.severity == "high" for r in risks_list):
+            overall_risk = "high"
+        elif any(r.severity == "medium" for r in risks_list):
+            overall_risk = "medium"
+        else:
+            overall_risk = "low"
 
         ctx.risks = RisksData(
             overall_risk_level=overall_risk,
             risks=risks_list,
-            fit_assessment="Basic assessment (fallback mode)",
-            raw_output={"fallback": True},
+            fit_assessment="Needs review" if risks_list else "Good fit (heuristic assessment)",
+            raw_output={"fallback": True, "checked_categories": 4},
         )

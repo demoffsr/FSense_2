@@ -245,11 +245,48 @@ class CRIAdapter(BaseAgent):
             if db_warnings:
                 warnings_context = f"\nDatabase warnings: {', '.join(db_warnings)}"
 
+            # Build rich context from previous agents
+            flower_meanings = "N/A"
+            if ctx.candidates and ctx.candidates.candidates:
+                meanings_list = ctx.candidates.candidates[0].meanings
+                if meanings_list:
+                    flower_meanings = ", ".join(meanings_list[:5])
+
+            occasion = "N/A"
+            recipient = "N/A"
+            is_making_amends = False
+            if ctx.intent and ctx.intent.raw_output:
+                occasion = ctx.intent.raw_output.get("occasion", "N/A")
+                recipient = ctx.intent.raw_output.get("recipient", "N/A")
+                context_flags = ctx.intent.raw_output.get("context_flags", {})
+                is_making_amends = context_flags.get("is_making_amends", False)
+
+            relationship_type = "N/A"
+            if ctx.relationship:
+                relationship_type = ctx.relationship.relationship_type
+
+            emotion_intensity = "N/A"
+            if ctx.emotions:
+                emotion_intensity = f"{ctx.emotions.emotion_intensity:.2f}"
+
             prompt = f"""Analyze the cultural symbolism of {flower_name} for {region} region.
 
-User context: "{ctx.user_input}"{warnings_context}
+Flower Meanings: {flower_meanings}
 
-Provide traditional and modern symbolism, and cultural insights for major cultures."""
+Context:
+- User message: "{ctx.user_input}"
+- Occasion: {occasion}
+- Recipient: {recipient}
+- Relationship: {relationship_type}
+- Emotional intensity: {emotion_intensity}
+- Is making amends: {is_making_amends}
+{warnings_context}
+
+Provide traditional and modern symbolism considering the full context above.
+Pay special attention to whether this flower is appropriate for:
+1. The specific occasion (e.g., apology flowers should convey sincerity)
+2. The relationship type (e.g., professional contexts need neutral flowers)
+3. Any regional taboos or associations that might conflict with the intent"""
 
             response = client.complete_json(
                 prompt=prompt,

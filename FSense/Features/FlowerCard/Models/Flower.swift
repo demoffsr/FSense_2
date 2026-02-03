@@ -56,7 +56,10 @@ struct Flower: Identifiable, Equatable, Hashable {
     // Related data (loaded separately or embedded)
     var giftingInfo: GiftingInfo?
     var contextInfo: ContextInfo?
-    
+
+    // Alternative flower recommendations
+    var alternatives: [AlternativeFlower]
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -68,7 +71,8 @@ struct Flower: Identifiable, Equatable, Hashable {
         whyThisFlowerText: String = "",
         moodIntensityValue: Double = 0.5,
         giftingInfo: GiftingInfo? = nil,
-        contextInfo: ContextInfo? = nil
+        contextInfo: ContextInfo? = nil,
+        alternatives: [AlternativeFlower] = []
     ) {
         self.id = id
         self.name = name
@@ -81,6 +85,7 @@ struct Flower: Identifiable, Equatable, Hashable {
         self.moodIntensityValue = moodIntensityValue
         self.giftingInfo = giftingInfo
         self.contextInfo = contextInfo
+        self.alternatives = alternatives
     }
     
     // MARK: - Hashable (only by ID for navigation)
@@ -101,6 +106,7 @@ extension Flower {
         whyThisFlowerText: "Perfect for expressing deep romantic feelings. The red rose speaks the universal language of love.",
         moodIntensityValue: 0.85,
         giftingInfo: .mock,
-        contextInfo: .mock
+        contextInfo: .mock,
+        alternatives: AlternativeFlower.mocks
     )
 }
