@@ -21,6 +21,9 @@ enum FlowerCardAction: Equatable {
     case dismissFlowerProducts
     case openProductLink(URL)
 
+    // Alternative flowers
+    case alternativeFlowerTapped(AlternativeFlower)
+
     // Data loading (for future dynamic content)
     case loadFlowerDetails(UUID)
     case flowerDetailsLoaded(Flower)

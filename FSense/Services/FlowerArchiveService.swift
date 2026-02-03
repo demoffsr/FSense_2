@@ -116,7 +116,7 @@ extension Flower: Codable {
     enum CodingKeys: String, CodingKey {
         case id, name, imageAsset, imageURL, imageCacheKey
         case meanings, symbolismText, whyThisFlowerText, moodIntensityValue
-        case giftingInfo, contextInfo
+        case giftingInfo, contextInfo, alternatives
     }
 
     init(from decoder: Decoder) throws {
@@ -141,6 +141,7 @@ extension Flower: Codable {
 
         giftingInfo = try container.decodeIfPresent(GiftingInfo.self, forKey: .giftingInfo)
         contextInfo = try container.decodeIfPresent(ContextInfo.self, forKey: .contextInfo)
+        alternatives = try container.decodeIfPresent([AlternativeFlower].self, forKey: .alternatives) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -157,5 +158,6 @@ extension Flower: Codable {
         try container.encode(moodIntensityValue, forKey: .moodIntensityValue)
         try container.encodeIfPresent(giftingInfo, forKey: .giftingInfo)
         try container.encodeIfPresent(contextInfo, forKey: .contextInfo)
+        try container.encode(alternatives, forKey: .alternatives)
     }
 }

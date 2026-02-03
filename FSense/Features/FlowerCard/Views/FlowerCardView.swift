@@ -184,13 +184,16 @@ struct FlowerCardView: View {
             )
             .padding(.horizontal, 16)
             .padding(.top, 24)
-            
+
             FlowerSegmentContentView(
                 segment: viewModel.selectedSegment,
                 meaningData: viewModel.meaningData,
                 giftingData: viewModel.giftingData,
-                contextData: viewModel.contextData
-            )
+                contextData: viewModel.contextData,
+                alternatives: viewModel.flower?.alternatives ?? []
+            ) { alternative in
+                viewModel.send(.alternativeFlowerTapped(alternative))
+            }
             .padding(.horizontal, 16)
             .padding(.top, 20)
             .padding(.bottom, 120)
