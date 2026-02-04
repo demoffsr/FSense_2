@@ -484,7 +484,8 @@ class SFAAdapter(BaseAgent):
 
             # === CIA ===
             if ctx.intensity:
-                context_parts.append(f"\nCalculated intensity: {ctx.intensity.mood_intensity:.2f} ({ctx.intensity.intensity_label})")
+                mood_val = self._get_safe_mood_intensity(ctx)
+                context_parts.append(f"\nCalculated intensity: {mood_val:.2f} ({ctx.intensity.intensity_label})")
                 if ctx.intensity.intensity_factors:
                     context_parts.append(f"- Factors: {', '.join(ctx.intensity.intensity_factors)}")
 
@@ -532,7 +533,7 @@ Pipeline Analysis:
 
 User's original message: "{ctx.user_input}"
 
-Generate UI content that reflects this rich analysis. Use the calculated intensity value ({ctx.intensity.mood_intensity if ctx.intensity else 0.5}) to determine the mood intensity (convert 0.0-1.0 to 15-40 scale). Incorporate the emotional tone ({ctx.adaptive.tone if ctx.adaptive else 'warm'}), relationship context, and cultural insights into your descriptions."""
+Generate UI content that reflects this rich analysis. Use the calculated intensity value ({self._get_safe_mood_intensity(ctx)}) to determine the mood intensity (convert 0.0-1.0 to 15-40 scale). Incorporate the emotional tone ({ctx.adaptive.tone if ctx.adaptive else 'warm'}), relationship context, and cultural insights into your descriptions."""
 
             response = client.complete_json(
                 prompt=user_prompt,
@@ -543,11 +544,11 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
 
             # Apply calculated intensity from CIA if available
             if ctx.intensity and "meaning" in response:
-                # Convert 0.0-1.0 to 15-40 scale
-                calculated_value = int(15 + (ctx.intensity.mood_intensity * 25))
+                mood_val = self._get_safe_mood_intensity(ctx)
+                calculated_value = self._calculate_mood_intensity_ui(mood_val)
                 response["meaning"]["mood_intensity"] = calculated_value
                 response["meaning"]["mood_label"] = self._get_intensity_label(calculated_value)
-                logger.info(f"SFA applied calculated intensity: {calculated_value} from CIA value {ctx.intensity.mood_intensity:.2f}")
+                logger.info(f"SFA applied calculated intensity: {calculated_value} from CIA value {mood_val:.2f}")
 
             # Debug logging
             meaning_data = response.get("meaning", {})
@@ -563,6 +564,19 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
         except Exception as e:
             logger.error(f"SFA error: {e}", exc_info=True)
             return self._get_fallback_content(flower.name, flower, ctx)
+
+    # Default for None-safety: 0.4 yields 25 on UI scale (15-40), preserving original fallback
+    DEFAULT_MOOD_INTENSITY = 0.4
+
+    def _get_safe_mood_intensity(self, ctx: PipelineContext) -> float:
+        """Get mood_intensity with None safety. Returns 0.0-1.0 scale."""
+        if ctx and ctx.intensity and ctx.intensity.mood_intensity is not None:
+            return ctx.intensity.mood_intensity
+        return self.DEFAULT_MOOD_INTENSITY
+
+    def _calculate_mood_intensity_ui(self, raw_value: float) -> int:
+        """Convert 0.0-1.0 scale to 15-40 UI scale."""
+        return int(15 + (raw_value * 25))
 
     def _get_intensity_label(self, value: int) -> str:
         """Get intensity label for 15-40 scale."""
@@ -599,12 +613,10 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
             elif occasion == "thank you":
                 why_text = f"{flower_name} beautifully conveys gratitude and appreciation."
 
-        # Calculate mood intensity from CIA if available
-        mood_intensity = 25
-        mood_label = "Balanced"
-        if ctx and ctx.intensity:
-            mood_intensity = int(15 + (ctx.intensity.mood_intensity * 25))
-            mood_label = self._get_intensity_label(mood_intensity)
+        # Calculate mood intensity from CIA if available (safe for None)
+        mood_val = self._get_safe_mood_intensity(ctx)
+        mood_intensity = self._calculate_mood_intensity_ui(mood_val)
+        mood_label = self._get_intensity_label(mood_intensity)
 
         # Adjust suitability based on RFFA
         suitability_status = "Safe choice"
