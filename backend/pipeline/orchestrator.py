@@ -1,18 +1,18 @@
 """
-Pipeline Orchestrator - v0.4.0 (Optimized)
+Pipeline Orchestrator - v0.5.0 (RIL Removed)
 
 Manages execution of all agents with PARALLEL optimization.
 Independent agents run concurrently to reduce total time.
 
 Execution Strategy:
 - Phase 1: FIA + EIA (parallel) - Input analysis
-- Phase 2: RIL (sequential) - Needs intent + emotions
-- Phase 3: FMRA (sequential) - Flower matching
-- Phase 4: CIA + AITB + RFFA + CRI (parallel) - Post-matching analysis
-- Phase 5: SRFL (sequential) - Self-reflection
-- Phase 6: SFA (sequential) - Final assembly
+- Phase 1.5: Relationship inference (deterministic, instant)
+- Phase 2: FMRA (sequential) - Flower matching
+- Phase 3: CIA + AITB + RFFA + CRI (parallel) - Post-matching analysis
+- Phase 4: SRFL (sequential) - Self-reflection
+- Phase 5: SFA (sequential) - Final assembly
 
-Expected speedup: ~2x compared to sequential execution.
+Expected speedup: ~2.3x compared to v0.3.0 (RIL removed = -1 AI call)
 """
 
 from typing import Optional, List
@@ -29,7 +29,7 @@ from backend.core.console_logger import get_console_logger
 from backend.agents.adapters.via_adapter import VIAAdapter
 from backend.agents.adapters.fia_adapter import FIAAdapter
 from backend.agents.adapters.eia_adapter import EIAAdapter
-from backend.agents.adapters.ril_adapter import RILAdapter
+from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
 from backend.agents.adapters.fmra_adapter import FMRAAdapter
 from backend.agents.adapters.cia_adapter import CIAAdapter
 from backend.agents.adapters.aitb_adapter import AITBAdapter
@@ -65,9 +65,10 @@ class PipelineOrchestrator:
     """
     Orchestrates agent execution with parallel optimization.
 
-    v0.4.0:
+    v0.5.0:
+    - RIL removed, replaced with deterministic relationship inference
     - Parallel execution for independent agents
-    - ~2x speedup compared to sequential
+    - ~2.3x speedup compared to sequential (one fewer AI call)
     - Thread-safe context access
     """
 
@@ -77,7 +78,7 @@ class PipelineOrchestrator:
         self._via = VIAAdapter()  # Vision Image Analyzer (optional)
         self._fia = FIAAdapter()
         self._eia = EIAAdapter()
-        self._ril = RILAdapter()
+        # RIL removed - replaced with deterministic infer_relationship_from_intent()
         self._fmra = FMRAAdapter()
         self._cia = CIAAdapter()
         self._aitb = AITBAdapter()
@@ -88,13 +89,13 @@ class PipelineOrchestrator:
 
         self._step_counter = 0
         self._step_lock = threading.Lock()
-        self._total_steps = 10  # Updated dynamically if VIA runs
+        self._total_steps = 9  # Updated dynamically if VIA runs
         self._executor: Optional[ThreadPoolExecutor] = None  # Shared executor for pipeline run
 
     @property
     def agent_names(self) -> list[str]:
         """Get ordered list of agent names."""
-        return ["VIA", "FIA", "EIA", "RIL", "FMRA", "CIA", "AITB", "RFFA", "CRI", "SRFL", "SFA"]
+        return ["VIA", "FIA", "EIA", "FMRA", "CIA", "AITB", "RFFA", "CRI", "SRFL", "SFA"]
 
     def run(self, ctx: PipelineContext) -> PipelineContext:
         """
@@ -102,11 +103,11 @@ class PipelineOrchestrator:
 
         Execution phases:
         1. FIA + EIA (parallel)
-        2. RIL (sequential)
-        3. FMRA (sequential)
-        4. CIA + AITB + RFFA + CRI (parallel)
-        5. SRFL (sequential)
-        6. SFA (sequential)
+        1.5. Relationship inference (deterministic, instant)
+        2. FMRA (sequential)
+        3. CIA + AITB + RFFA + CRI (parallel)
+        4. SRFL (sequential)
+        5. SFA (sequential)
 
         Critical agents (FIA, EIA, FMRA, SFA) will stop the pipeline on failure.
         Non-critical agents log errors but allow continuation.
@@ -125,7 +126,7 @@ class PipelineOrchestrator:
             try:
                 # Phase 0: Vision analysis (only if image provided)
                 if ctx.image_base64:
-                    self._total_steps = 11  # Add VIA to step count
+                    self._total_steps = 10  # Add VIA to step count
                     self._execute_agent(self._via, ctx)
 
                     # Check if clarification needed - early exit
@@ -140,19 +141,28 @@ class PipelineOrchestrator:
                 # Phase 1: Input analysis (parallel)
                 self._run_parallel(ctx, [self._fia, self._eia])
 
-                # Phase 2: Relationship analysis (needs intent + emotions)
-                self._execute_agent(self._ril, ctx)
+                # Phase 1.5: Deterministic relationship inference (replaces RIL)
+                # No AI call, instant execution
+                # Pass EIA data for emotion-aware intensity adjustment
+                emotion_data = None
+                if ctx.emotions:
+                    emotion_data = {
+                        "primary_emotion": ctx.emotions.primary_emotion,
+                        "emotion_intensity": ctx.emotions.emotion_intensity,
+                    }
+                ctx.relationship = infer_relationship_from_intent(ctx.intent, emotion_data)
+                logger.debug(f"Inferred relationship: {ctx.relationship.relationship_type}")
 
-                # Phase 3: Flower matching
+                # Phase 2: Flower matching
                 self._execute_agent(self._fmra, ctx)
 
-                # Phase 4: Post-matching analysis (parallel)
+                # Phase 3: Post-matching analysis (parallel)
                 self._run_parallel(ctx, [self._cia, self._aitb, self._rffa, self._cri])
 
-                # Phase 5: Self-reflection
+                # Phase 4: Self-reflection
                 self._execute_agent(self._srfl, ctx)
 
-                # Phase 6: Final assembly
+                # Phase 5: Final assembly
                 self._execute_agent(self._sfa, ctx)
 
                 total_time = time.time() - start_time

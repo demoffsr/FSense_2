@@ -2407,6 +2407,95 @@ def get_flowers_by_emotion(emotion: str, top_n: int = 5) -> tuple:
         return tuple(_row_to_meaning_dict(row) for row in cursor.fetchall())
 
 
+def get_flowers_by_emotions(
+    emotions: list,
+    top_n_per: int = 5,
+    primary_emotion: Optional[str] = None,
+    primary_top_n: Optional[int] = None,
+) -> dict:
+    """
+    Batch lookup: get best flowers for multiple emotions in ONE query.
+
+    Args:
+        emotions: List of emotion strings (e.g., ["love", "gratitude"])
+        top_n_per: Default max flowers per emotion (default 5)
+        primary_emotion: If set, this emotion gets primary_top_n instead
+        primary_top_n: Limit for primary emotion (default None = use top_n_per)
+
+    Returns:
+        Dict mapping emotion -> tuple of meaning dicts.
+        Missing emotions return empty tuple.
+
+    Note:
+        - Uses window functions for per-emotion limiting
+        - ORDER BY match_score DESC, RANDOM() (non-deterministic tiebreaker)
+        - Fallback schema may differ from DB (no 'occasion' in FLOWER_MEANINGS_DATA)
+    """
+    if not emotions:
+        return {}
+
+    # Normalize: lowercase, deduplicate preserving order
+    seen = set()
+    normalized = []
+    for e in emotions:
+        e_lower = e.lower()
+        if e_lower not in seen:
+            seen.add(e_lower)
+            normalized.append(e_lower)
+
+    # Determine per-emotion limits
+    primary_lower = primary_emotion.lower() if primary_emotion else None
+    effective_primary_top_n = primary_top_n if primary_top_n else top_n_per
+
+    if not check_flower_db_exists():
+        # Fallback to in-memory data
+        # Note: FLOWER_MEANINGS_DATA lacks 'occasion' key (matches existing behavior)
+        result = {}
+        for emotion in normalized:
+            limit = effective_primary_top_n if emotion == primary_lower else top_n_per
+            matches = [m for m in FLOWER_MEANINGS_DATA if m["emotion"] == emotion]
+            matches.sort(key=lambda x: x["match_score"], reverse=True)
+            result[emotion] = tuple(matches[:limit])
+        return result
+
+    # Build query with window function
+    # Note: We fetch max(primary_top_n, top_n_per) per emotion then filter in Python.
+    # This may overfetch ~2x for secondary emotions, but simplifies SQL.
+    # Acceptable tradeoff: ~5 extra rows << query round-trip savings.
+    max_limit = max(effective_primary_top_n, top_n_per)
+    placeholders = ",".join("?" * len(normalized))
+    query = f"""
+        WITH ranked AS (
+            SELECT
+                flower_id, emotion, occasion, match_score,
+                meaning_en, meaning_ru, phrases,
+                ROW_NUMBER() OVER (
+                    PARTITION BY emotion
+                    ORDER BY match_score DESC, RANDOM()
+                ) as rn
+            FROM flower_meanings
+            WHERE emotion IN ({placeholders})
+        )
+        SELECT flower_id, emotion, occasion, match_score,
+               meaning_en, meaning_ru, phrases
+        FROM ranked
+        WHERE rn <= ?
+    """
+
+    with get_flower_db() as conn:
+        cursor = conn.execute(query, (*normalized, max_limit))
+
+        # Group and apply per-emotion limits
+        result = {e: [] for e in normalized}
+        for row in cursor.fetchall():
+            emotion = row["emotion"]
+            limit = effective_primary_top_n if emotion == primary_lower else top_n_per
+            if len(result[emotion]) < limit:
+                result[emotion].append(_row_to_meaning_dict(row))
+
+        return {e: tuple(matches) for e, matches in result.items()}
+
+
 def get_flower_by_id(flower_id: str) -> Optional[dict]:
     """
     Get flower by ID from SQLite.

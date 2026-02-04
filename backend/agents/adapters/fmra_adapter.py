@@ -9,6 +9,7 @@ Returns primary flower + alternatives for SFA to assemble.
 """
 
 import logging
+import time
 from typing import Any
 
 from backend.agents.base import BaseAgent
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 try:
     from backend.database.flower_database import (
         get_flowers_by_emotion,
+        get_flowers_by_emotions,
         get_flower_by_id,
         get_flowers_by_ids,
         FLOWERS_DATA,
@@ -149,29 +151,39 @@ class FMRAAdapter(BaseAgent):
         # Generate flower_id from name
         flower_id = flower_name.lower().replace(" ", "_").replace("-", "_")
 
-        # Try to get price_tier from database first
+        # Try to get data from database first
         price_tier = "mid"
+        meanings = None
+
         if DATABASE_AVAILABLE:
             flower_data = get_flower_by_id(flower_id)
             if flower_data:
                 price_tier = flower_data.get("price_tier", "mid")
+                # Use primary_meanings from DB if available (optimization: skip AI call)
+                db_meanings = flower_data.get("primary_meanings")
+                if isinstance(db_meanings, list) and db_meanings:
+                    meanings = [m.capitalize() for m in db_meanings[:6]]
+                    logger.info(f"FMRA: using DB meanings for {flower_name}")
             else:
                 price_tier = self._estimate_price_tier(flower_name)
 
-        # Generate meanings using AI for the identified flower
-        client = get_ai_client_fast()
-        meanings_prompt = f"""For the flower "{flower_name}", provide 4-6 symbolic meanings.
+        # Fallback to AI only if no meanings from DB
+        if not meanings:
+            logger.info(f"FMRA: using AI fallback for meanings ({flower_name})")
+            client = get_ai_client_fast()
+            meanings_prompt = f"""For the flower "{flower_name}", provide 4-6 symbolic meanings.
 Return JSON: {{"meanings": ["meaning1", "meaning2", "meaning3", "meaning4"]}}"""
 
-        try:
-            response = client.complete_json(
-                prompt=meanings_prompt,
-                system_prompt="You are a flower symbolism expert. Return only the JSON.",
-                temperature=0.5,
-            )
-            meanings = response.get("meanings", ["Beauty", "Nature", "Elegance"])[:6]
-        except Exception:
-            meanings = ["Beauty", "Nature", "Elegance", "Grace"]
+            try:
+                response = client.complete_json(
+                    prompt=meanings_prompt,
+                    system_prompt="You are a flower symbolism expert. Return only the JSON.",
+                    temperature=0.5,
+                )
+                meanings = response.get("meanings", ["Beauty", "Nature", "Elegance", "Grace"])[:6]
+            except Exception as e:
+                logger.warning(f"FMRA: AI meanings failed for {flower_name}: {e}")
+                meanings = ["Beauty", "Nature", "Elegance", "Grace"]
 
         return FlowerCandidate(
             flower_id=flower_id,
@@ -183,23 +195,43 @@ Return JSON: {{"meanings": ["meaning1", "meaning2", "meaning3", "meaning4"]}}"""
         )
 
     def _get_database_matches(self, ctx: PipelineContext, top_n: int = 10) -> list[dict]:
-        """Get flower matches from database based on emotion."""
+        """Get flower matches from database based on emotion (batch query)."""
         if not ctx.emotions or not ctx.emotions.primary_emotion:
             return []
 
-        emotion = ctx.emotions.primary_emotion.lower()
-        matches = list(get_flowers_by_emotion(emotion, top_n=top_n))
+        start = time.perf_counter()
 
-        # If not enough matches, try secondary emotions
-        if len(matches) < 5 and ctx.emotions.secondary_emotions:
-            for sec_emotion in ctx.emotions.secondary_emotions[:2]:
-                sec_matches = list(get_flowers_by_emotion(sec_emotion.lower(), top_n=5))
-                # Add unique matches
-                existing_ids = {m["flower_id"] for m in matches}
-                for m in sec_matches:
+        primary = ctx.emotions.primary_emotion.lower()
+
+        # Collect all emotions to query
+        emotions_to_query = [primary]
+        if ctx.emotions.secondary_emotions:
+            emotions_to_query.extend(e.lower() for e in ctx.emotions.secondary_emotions[:2])
+
+        # Single batch query with different limits: primary=top_n, secondary=5
+        emotion_matches = get_flowers_by_emotions(
+            emotions_to_query,
+            top_n_per=5,  # Secondary emotions get 5
+            primary_emotion=primary,
+            primary_top_n=top_n,  # Primary gets full top_n (10)
+        )
+
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.debug(f"Batch emotion query ({len(emotions_to_query)} emotions): {elapsed_ms:.1f}ms")
+
+        # Start with primary emotion matches, track IDs from the start
+        matches = list(emotion_matches.get(primary, ()))
+        existing_ids = {m["flower_id"] for m in matches}
+
+        # Add secondary if not enough matches (deduplicated)
+        if len(matches) < 5:
+            for sec_emotion in emotions_to_query[1:]:
+                for m in emotion_matches.get(sec_emotion, ()):
                     if m["flower_id"] not in existing_ids:
                         matches.append(m)
                         existing_ids.add(m["flower_id"])
+                    if len(matches) >= top_n:
+                        break
                 if len(matches) >= top_n:
                     break
 

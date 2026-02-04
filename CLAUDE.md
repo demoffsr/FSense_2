@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FSense is an AI-powered flower recommendation system with a Python backend (agent pipeline) and iOS SwiftUI frontend. The backend processes user messages through a 10-agent pipeline to generate contextual flower recommendations.
+FSense is an AI-powered flower recommendation system with a Python backend (agent pipeline) and iOS SwiftUI frontend. The backend processes user messages through a **10-agent pipeline** with parallel execution to generate contextual flower recommendations.
 
 ## Commands
 
@@ -22,6 +22,9 @@ PYTHONPATH=. pytest backend/tests/test_pipeline_smoke.py::test_run_flower_chat_s
 
 # Test pipeline CLI
 python -m backend.pipeline.runner "I want to apologize to my wife" --pretty
+
+# Test with image (bouquet scan)
+python -m backend.pipeline.runner "What flower is this?" --image path/to/image.jpg --pretty
 ```
 
 ### iOS Development
@@ -33,23 +36,56 @@ python -m backend.pipeline.runner "I want to apologize to my wife" --pretty
 
 ### Agent Pipeline
 
-User input flows through a fixed-sequence pipeline where each agent enriches a shared `PipelineContext`:
+User input flows through a fixed-sequence pipeline where each agent enriches a shared `PipelineContext`. Independent agents run in **parallel** for ~2.3x speedup:
 
 ```
-User Message → PipelineContext → FIA → EIA → RIL → FMRA → CIA → AITB → RFFA → CRI → SRFL → SFA → FlowerCardPayload
+                          ┌─────────────────────────────────────────┐
+                          │           Phase 0 (if image)           │
+                          │              VIA (vision)              │
+                          └─────────────────────────────────────────┘
+                                            │
+                          ┌─────────────────────────────────────────┐
+                          │        Phase 1 (parallel)              │
+                          │           FIA    EIA                   │
+                          └─────────────────────────────────────────┘
+                                            │
+                          ┌─────────────────────────────────────────┐
+                          │    Phase 1.5 (deterministic, instant)  │
+                          │       Relationship Inference           │
+                          └─────────────────────────────────────────┘
+                                            │
+                          ┌─────────────────────────────────────────┐
+                          │        Phase 2 (sequential)            │
+                          │              FMRA                      │
+                          └─────────────────────────────────────────┘
+                                            │
+                          ┌─────────────────────────────────────────┐
+                          │        Phase 3 (parallel)              │
+                          │      CIA   AITB   RFFA   CRI           │
+                          └─────────────────────────────────────────┘
+                                            │
+                          ┌─────────────────────────────────────────┐
+                          │        Phase 4-5 (sequential)          │
+                          │           SRFL → SFA                   │
+                          └─────────────────────────────────────────┘
 ```
 
-**Agents (in execution order):**
-1. **FIA** - Flower Intent Agent: Parses user intent
-2. **EIA** - Emotion Intelligence Agent: Detects emotions
-3. **RIL** - Relationship Intelligence Layer: Analyzes relationship context
-4. **FMRA** - Flower Matching & Ranking Agent: Selects candidate flowers
-5. **CIA** - Context Intensity Agent: Scores emotional intensity
-6. **AITB** - Adaptive Intelligence & Tone Builder: Adapts tone
-7. **RFFA** - Risk & Fit Assessment Agent: Evaluates gifting risks
-8. **CRI** - Cultural & Regional Intelligence: Adds cultural context
-9. **SRFL** - Self-Reflection Layer: Validates coherence
-10. **SFA** - Symbolic Flower Agent: **Assembles final payload (only agent that writes `ui_payload`)**
+**Agents (10 total):**
+| # | Agent | Name | Description | Critical? |
+|---|-------|------|-------------|-----------|
+| 0 | **VIA** | Vision Image Analyzer | Analyzes bouquet images (optional) | No |
+| 1 | **FIA** | Flower Intent Agent | Parses user intent | **Yes** |
+| 2 | **EIA** | Emotion Intelligence Agent | Detects emotions | **Yes** |
+| - | *Relationship inference* | (deterministic) | Instant, no AI call | - |
+| 3 | **FMRA** | Flower Matching & Ranking Agent | Selects candidate flowers (DB-first for vision) | **Yes** |
+| 4 | **CIA** | Context Intensity Agent | Scores emotional intensity | No |
+| 5 | **AITB** | Adaptive Intelligence & Tone Builder | Adapts tone | No |
+| 6 | **RFFA** | Risk & Fit Assessment Agent | Evaluates gifting risks | No |
+| 7 | **CRI** | Cultural & Regional Intelligence | Adds cultural context | No |
+| 8 | **SRFL** | Self-Reflection Layer | Validates coherence | No |
+| 9 | **SFA** | Symbolic Flower Agent | **Assembles final payload** | **Yes** |
+
+Critical agents (FIA, EIA, FMRA, SFA) stop the pipeline on failure. Non-critical agents log errors but allow continuation.
 
 ### Key Design Principles
 
@@ -57,13 +93,22 @@ User Message → PipelineContext → FIA → EIA → RIL → FMRA → CIA → AI
 - **Agent Standardization**: All agents implement `BaseAgent` interface (`backend/agents/base.py`)
 - **Final Assembler Rule**: Only SFA writes the iOS payload - other agents write to their designated context sections
 - **Stateless Design**: No direct agent-to-agent communication
+- **Parallel Execution**: Independent agents run concurrently via `ThreadPoolExecutor`
 
 ### iOS Integration
 
 ```python
 from backend.pipeline.runner import run_flower_chat
 
+# Text-only request
 result = run_flower_chat("I want to apologize to my wife", region="US")
+
+# With image (bouquet scan)
+result = run_flower_chat("What flower is this?", region="US", image_base64="...")
+
+# With budget
+result = run_flower_chat("Birthday gift for mom", region="US", budget_range="50-100")
+
 # Returns: {"success": bool, "data": FlowerCardPayload | None, "error": str | None}
 ```
 
@@ -73,24 +118,97 @@ The `FlowerCardPayload` schema (`backend/schemas/flower_card_payload.py`) define
 
 ```
 backend/
-├── core/           # Settings, AI client singleton
-├── pipeline/       # Orchestrator, context, runner (iOS entrypoint)
-├── agents/adapters/  # 10 agent implementations
-├── schemas/        # Pydantic models (enums, FlowerCardPayload)
-└── tests/          # Smoke tests
+├── core/             # Settings, AI client singleton, rate limiter, input validator
+├── pipeline/         # Orchestrator, context, runner (iOS entrypoint), scan_*
+├── agents/
+│   ├── base.py       # BaseAgent interface
+│   └── adapters/     # 10 agent implementations + relationship_inference.py
+├── schemas/          # Pydantic models (enums, FlowerCardPayload, scan_payload)
+├── database/         # SQLite DBs, flower_database.py, models, repository
+├── services/         # Knowledge base, image service, search providers, history
+└── tests/            # Smoke tests (pipeline, providers, scan)
 
-FSense/             # iOS SwiftUI app
-├── Features/       # Home, Chat, FlowerCard, Scan, Profile
-└── App/            # Entry point, environment
+FSense/               # iOS SwiftUI app
+├── App/              # FSenseApp.swift, AppEnvironment
+├── Features/
+│   ├── Home/         # HomeView, HomeViewModel
+│   ├── Chat/         # Chat UI, history manager
+│   ├── FlowerCard/   # Card views (Meaning, Gifting, Context tabs)
+│   ├── Scan/         # Camera, ScanResultCard
+│   ├── LovedOnes/    # Profile management
+│   └── Profile/      # Settings, archives
+├── Services/         # API clients, state managers
+├── Shared/           # Reusable components
+└── Resources/        # Assets, colors
 ```
 
 ## Configuration
 
 Copy `backend/.env.example` to `backend/.env` and set:
-- `OPENAI_API_KEY` (required) - OpenAI API key
-- `OPENAI_MODEL` - defaults to gpt-4o
+
+**Required:**
+- `OPENAI_API_KEY` - OpenAI API key
+- `DATABASE_URL` - PostgreSQL connection string (Supabase)
+
+**Optional:**
+- `OPENAI_MODEL` - defaults to `gpt-4o`
+- `OPENAI_MODEL_FAST` - defaults to `gpt-4o-mini` (for simple tasks)
 - `FSENSE_ENV` - local/staging/production
+- `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` - for Storage
+- `YANDEX_CLOUD_API_KEY`, `YANDEX_CLOUD_FOLDER_ID` - Yandex search (Russia)
+- `FLORIST_ONE_API_KEY`, `FLORIST_ONE_API_PASSWORD` - FloristOne (US/Canada)
 
 ## Current Status
 
-**Version 0.0.1** - Foundation architecture with placeholder agent implementations. Agent adapters return mock data; real AI logic planned for v0.1.0.
+**Version 0.5.2** - FMRA batch emotion query optimization: `get_flowers_by_emotions()` replaces serial queries with single SQL using window functions. Saves ~10-15ms when secondary emotions needed. Logs batch query timing for monitoring.
+
+---
+
+## Planning Guidelines
+
+### When Adding New Agents
+
+1. **Implement `BaseAgent` interface** (`backend/agents/base.py`)
+2. **Determine execution phase** - can it run in parallel with others?
+3. **Update orchestrator** - add to appropriate phase in `PipelineOrchestrator.run()`
+4. **Mark criticality** - add to `CRITICAL_AGENTS` set if pipeline cannot continue without it
+5. **Update this file** - add to agent table above
+
+### When Replacing AI Logic with Deterministic Mappings
+
+1. **Check existing fallback code** for ALL handled cases
+   - Look for `_fallback_*` methods that already implement deterministic logic
+   - Include all aliases (mom/mum/mama, gf/bf, ex-*, in-laws)
+   - Document unknown value handling with lower confidence
+
+2. **Always include rollback strategy**
+   - Add feature flag (env var) to toggle between old/new behavior
+   - Use shadow comparison (non-blocking) for A/B validation
+   - Log outputs for offline analysis
+
+3. **Test coverage must be comprehensive**
+   - Unit tests: Test each mapping/function in isolation
+   - Integration tests: Verify downstream consumers receive expected data
+   - Edge case tests: Unknown values, empty inputs
+   - Cross-cutting tests: Same input with different contexts (e.g., emotions)
+
+4. **Respect Single Responsibility Principle**
+   - Don't bloat existing agents with new responsibilities
+   - Prefer calling new logic from orchestrator
+   - Keep modules testable in isolation
+
+5. **Update all documentation**
+   - Dataclass docstrings (ownership changes)
+   - Pipeline comments in context.py
+   - CLAUDE.md agent list and diagram
+
+6. **Consider cross-cutting data**
+   - Check what other agents' data the removed agent consumed
+   - Preserve valuable cross-references in deterministic logic
+   - Add optional parameters for enrichment data
+
+### Code Style
+
+- **Python**: Type hints required, Pydantic for schemas
+- **Swift**: SwiftUI, MVVM pattern, `@Observable` for state
+- **Naming**: Agents use 3-4 letter acronyms (FIA, EIA, FMRA, etc.)

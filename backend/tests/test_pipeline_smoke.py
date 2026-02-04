@@ -173,13 +173,220 @@ class TestFlowerChat:
         assert result["success"] is True
         # pipeline_version uses snake_case (no serialization_alias)
         assert "pipeline_version" in result["data"]
-        # Version 0.4.0 - multi-candidate + diversity support
-        assert result["data"]["pipeline_version"] == "0.4.0"
+        # Version 0.5.0 - RIL removed, deterministic relationship inference
+        assert result["data"]["pipeline_version"] == "0.5.0"
+
+
+class TestRelationshipInference:
+    """Unit tests for deterministic relationship inference."""
+
+    def test_romantic_recipient(self):
+        """Test romantic recipients are correctly identified."""
+        from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
+        from backend.pipeline.context import IntentData
+
+        intent = IntentData(
+            primary_intent="Anniversary for girlfriend",
+            raw_output={
+                "recipient": "girlfriend",
+                "relationship_level": "established",
+                "tone": "passionate",
+                "occasion": "anniversary",
+                "context_flags": {"is_first_gift": False},
+            }
+        )
+
+        rel = infer_relationship_from_intent(intent)
+
+        assert rel.relationship_type == "romantic"
+        assert rel.intimacy_level == 0.7
+        assert rel.formality_level < 0.3
+        assert rel.power_dynamic == "equal"
+        assert rel.raw_output["relationship_stage"] == "established"
+        assert rel.raw_output["gift_appropriateness"]["romantic_flowers_ok"] is True
+        assert rel.raw_output["gift_appropriateness"]["max_intensity"] >= 0.8
+
+    def test_professional_recipient_boss(self):
+        """Test professional recipients have correct power dynamic."""
+        from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
+        from backend.pipeline.context import IntentData
+
+        intent = IntentData(
+            primary_intent="Thank you for boss",
+            raw_output={
+                "recipient": "boss",
+                "relationship_level": "established",
+                "tone": "formal",
+                "occasion": "thank_you",
+            }
+        )
+
+        rel = infer_relationship_from_intent(intent)
+
+        assert rel.relationship_type == "professional"
+        assert rel.power_dynamic == "hierarchical_up"
+        assert rel.formality_level > 0.7
+        assert rel.raw_output["gift_appropriateness"]["romantic_flowers_ok"] is False
+        assert "red rose" in rel.raw_output["gift_appropriateness"]["avoid_flowers"]
+
+    def test_familial_recipient_mother(self):
+        """Test familial recipients with respectful power dynamic."""
+        from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
+        from backend.pipeline.context import IntentData
+
+        intent = IntentData(
+            primary_intent="Birthday for mom",
+            raw_output={
+                "recipient": "mom",
+                "relationship_level": "longterm",
+                "tone": "warm",
+            }
+        )
+
+        rel = infer_relationship_from_intent(intent)
+
+        assert rel.relationship_type == "familial"
+        assert rel.power_dynamic == "respectful"
+        assert rel.intimacy_level == 0.9
+        assert rel.raw_output["relationship_stage"] == "deep"
+
+    def test_unknown_recipient_fallback(self):
+        """Unknown recipients should get safe defaults."""
+        from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
+        from backend.pipeline.context import IntentData
+
+        intent = IntentData(
+            primary_intent="Gift for the nurse",
+            raw_output={
+                "recipient": "the nurse",  # Unknown
+                "relationship_level": "new",
+            }
+        )
+
+        rel = infer_relationship_from_intent(intent)
+
+        assert rel.relationship_type == "neutral"
+        assert rel.power_dynamic == "equal"
+        assert rel.intimacy_level == 0.2  # "new" relationship_level
+        assert rel.raw_output["confidence"] == 0.5  # Lower confidence for unknown
+
+    def test_sympathy_occasion_overrides(self):
+        """Sympathy occasions should limit intensity and disable romantic."""
+        from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
+        from backend.pipeline.context import IntentData
+
+        intent = IntentData(
+            primary_intent="Sympathy for friend",
+            raw_output={
+                "recipient": "friend",
+                "occasion": "sympathy",
+            }
+        )
+
+        rel = infer_relationship_from_intent(intent)
+
+        appropriateness = rel.raw_output["gift_appropriateness"]
+        assert appropriateness["romantic_flowers_ok"] is False
+        assert appropriateness["max_intensity"] <= 0.6
+
+    def test_romantic_with_remorse_vs_love_emotions(self):
+        """Same recipient with different emotions should affect max_intensity."""
+        from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
+        from backend.pipeline.context import IntentData
+
+        base_raw = {"recipient": "wife", "relationship_level": "longterm"}
+
+        # High-intensity remorse should cap max_intensity
+        intent_remorse = IntentData(raw_output={**base_raw, "occasion": "apology"})
+        emotion_remorse = {"primary_emotion": "remorse", "emotion_intensity": 0.9}
+        rel_remorse = infer_relationship_from_intent(intent_remorse, emotion_remorse)
+
+        # Love/joy should allow full intensity
+        intent_love = IntentData(raw_output={**base_raw, "occasion": "anniversary"})
+        emotion_love = {"primary_emotion": "love", "emotion_intensity": 0.9}
+        rel_love = infer_relationship_from_intent(intent_love, emotion_love)
+
+        # Both should be romantic
+        assert rel_remorse.relationship_type == "romantic"
+        assert rel_love.relationship_type == "romantic"
+
+        # Remorse should have capped intensity
+        assert rel_remorse.raw_output["gift_appropriateness"]["max_intensity"] <= 0.6
+        # Love should have higher intensity
+        assert rel_love.raw_output["gift_appropriateness"]["max_intensity"] > 0.8
+
+    def test_recipient_aliases(self):
+        """Test that common recipient aliases are handled."""
+        from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
+        from backend.pipeline.context import IntentData
+
+        aliases = {
+            "gf": "romantic",
+            "bf": "romantic",
+            "mum": "familial",
+            "mama": "familial",
+            "bestie": "platonic",
+            "co-worker": "professional",
+        }
+
+        for alias, expected_type in aliases.items():
+            intent = IntentData(raw_output={"recipient": alias})
+            rel = infer_relationship_from_intent(intent)
+            assert rel.relationship_type == expected_type, f"Failed for {alias}"
+
+    def test_ex_relationships(self):
+        """Test ex-relationships are still romantic context."""
+        from backend.agents.adapters.relationship_inference import infer_relationship_from_intent
+        from backend.pipeline.context import IntentData
+
+        ex_recipients = ["ex-girlfriend", "ex-boyfriend", "ex-wife", "ex-husband", "ex"]
+
+        for recipient in ex_recipients:
+            intent = IntentData(raw_output={"recipient": recipient})
+            rel = infer_relationship_from_intent(intent)
+            assert rel.relationship_type == "romantic", f"Failed for {recipient}"
+
+
+class TestRelationshipIntegration:
+    """Integration tests verifying downstream agents receive correct data."""
+
+    def test_fmra_receives_gift_appropriateness(self):
+        """FMRA should receive gift_appropriateness from inference."""
+        from backend.pipeline.runner import run_flower_chat
+
+        result = run_flower_chat("I want to thank my boss")
+
+        # Verify pipeline succeeded
+        assert result["success"] is True
+
+    def test_pipeline_without_ril_produces_valid_output(self):
+        """Full pipeline should work without RIL agent."""
+        from backend.pipeline.runner import run_flower_chat
+
+        result = run_flower_chat("I want to apologize to my wife")
+
+        assert result["success"] is True
+        assert result["data"] is not None
+        assert "header" in result["data"]
+
+    def test_relationship_data_populated_in_context(self):
+        """Verify relationship data is populated after pipeline run."""
+        from backend.pipeline.orchestrator import PipelineOrchestrator
+        from backend.pipeline.context import PipelineContext
+
+        orchestrator = PipelineOrchestrator()
+        ctx = PipelineContext(user_input="Flowers for my girlfriend")
+
+        ctx = orchestrator.run(ctx)
+
+        # Relationship should be populated
+        assert ctx.relationship.relationship_type != ""
+        assert ctx.relationship.raw_output.get("inference_source") == "deterministic"
 
 
 class TestPipelineContext:
     """Tests for PipelineContext."""
-    
+
     def test_context_creation(self):
         """Test that context can be created with defaults."""
         from backend.pipeline.context import PipelineContext
@@ -217,34 +424,34 @@ class TestPipelineContext:
 
 class TestOrchestrator:
     """Tests for PipelineOrchestrator."""
-    
+
     def test_orchestrator_agent_order(self):
         """Test that orchestrator has correct agent order."""
         from backend.pipeline.orchestrator import PipelineOrchestrator
 
         orchestrator = PipelineOrchestrator()
 
-        # VIA added in v0.3.0 for vision/image analysis
+        # RIL removed in v0.5.0 - relationship now inferred deterministically
         expected_order = [
-            "VIA", "FIA", "EIA", "RIL", "FMRA", "CIA",
+            "VIA", "FIA", "EIA", "FMRA", "CIA",
             "AITB", "RFFA", "CRI", "SRFL", "SFA"
         ]
 
         assert orchestrator.agent_names == expected_order
-    
+
     def test_orchestrator_runs_all_agents(self):
         """Test that orchestrator runs all agents."""
         from backend.pipeline.orchestrator import PipelineOrchestrator
         from backend.pipeline.context import PipelineContext
-        
+
         orchestrator = PipelineOrchestrator()
         ctx = PipelineContext(user_input="Test")
-        
+
         ctx = orchestrator.run(ctx)
-        
-        # Should have timing records for all agents
-        assert len(ctx.timings) == 10
-        
+
+        # Should have timing records for all agents (9, RIL removed)
+        assert len(ctx.timings) == 9
+
         # All should be completed
         for timing in ctx.timings:
             assert timing.status == "completed"
@@ -337,6 +544,112 @@ class TestSchemas:
 
         # Alternatives should be empty by default
         assert json_data["alternatives"] == []
+
+
+class TestFMRAVisionOptimization:
+    """Tests for FMRA vision meanings optimization."""
+
+    def test_fmra_vision_uses_db_meanings_skips_ai(self):
+        """FMRA should use DB meanings and NOT call AI for known flowers."""
+        from backend.agents.adapters.fmra_adapter import FMRAAdapter
+        from backend.pipeline.context import PipelineContext, VisionAnalysisData, DetectedFlower
+
+        ctx = PipelineContext(user_input="What is this?")
+        ctx.vision = VisionAnalysisData(
+            main_flower=DetectedFlower(name="Red Rose", color="red", confidence=0.95)
+        )
+
+        mock_flower_data = {
+            "id": "red_rose",
+            "name": "Red Rose",
+            "price_tier": "mid",
+            "primary_meanings": ["love", "passion", "romance", "desire"]
+        }
+
+        with patch('backend.agents.adapters.fmra_adapter.get_flower_by_id', return_value=mock_flower_data) as mock_db, \
+             patch('backend.agents.adapters.fmra_adapter.get_ai_client_fast') as mock_ai:
+
+            adapter = FMRAAdapter()
+            candidate = adapter._flower_from_vision(ctx)
+
+            # Verify DB was called
+            mock_db.assert_called_once_with("red_rose")
+
+            # CRITICAL: Verify AI was NOT called (the optimization)
+            mock_ai.assert_not_called()
+
+            # Verify meanings are from DB (capitalized)
+            assert candidate.meanings == ["Love", "Passion", "Romance", "Desire"]
+            assert candidate.price_tier == "mid"
+
+    def test_fmra_vision_falls_back_to_ai_when_no_db(self):
+        """FMRA should call AI when flower not in DB."""
+        from backend.agents.adapters.fmra_adapter import FMRAAdapter
+        from backend.pipeline.context import PipelineContext, VisionAnalysisData, DetectedFlower
+
+        ctx = PipelineContext(user_input="What is this?")
+        ctx.vision = VisionAnalysisData(
+            main_flower=DetectedFlower(name="Exotic Orchid", color="purple", confidence=0.85)
+        )
+
+        mock_ai_client = MagicMock()
+        mock_ai_client.complete_json.return_value = {"meanings": ["Exotic", "Luxury", "Beauty"]}
+
+        with patch('backend.agents.adapters.fmra_adapter.get_flower_by_id', return_value=None), \
+             patch('backend.agents.adapters.fmra_adapter.get_ai_client_fast', return_value=mock_ai_client) as mock_ai:
+
+            adapter = FMRAAdapter()
+            # Mock _estimate_price_tier since flower not in DB
+            with patch.object(adapter, '_estimate_price_tier', return_value='premium') as mock_estimate:
+                candidate = adapter._flower_from_vision(ctx)
+
+                # Verify price estimation was called
+                mock_estimate.assert_called_once_with("Exotic Orchid")
+
+            # Verify AI WAS called (fallback)
+            mock_ai.assert_called_once()
+            mock_ai_client.complete_json.assert_called_once()
+
+            # Verify results
+            assert candidate.meanings == ["Exotic", "Luxury", "Beauty"]
+            assert candidate.price_tier == "premium"
+
+    def test_fmra_vision_uses_ai_when_db_meanings_empty(self):
+        """FMRA should call AI when DB flower has empty meanings."""
+        from backend.agents.adapters.fmra_adapter import FMRAAdapter
+        from backend.pipeline.context import PipelineContext, VisionAnalysisData, DetectedFlower
+
+        ctx = PipelineContext(user_input="What is this?")
+        ctx.vision = VisionAnalysisData(
+            main_flower=DetectedFlower(name="Rare Flower", color="white", confidence=0.90)
+        )
+
+        # DB has flower but with empty meanings (edge case)
+        mock_flower_data = {
+            "id": "rare_flower",
+            "name": "Rare Flower",
+            "price_tier": "premium",
+            "primary_meanings": []  # Empty!
+        }
+
+        mock_ai_client = MagicMock()
+        mock_ai_client.complete_json.return_value = {"meanings": ["Rare", "Unique", "Special"]}
+
+        with patch('backend.agents.adapters.fmra_adapter.get_flower_by_id', return_value=mock_flower_data) as mock_db, \
+             patch('backend.agents.adapters.fmra_adapter.get_ai_client_fast', return_value=mock_ai_client) as mock_ai:
+
+            adapter = FMRAAdapter()
+            candidate = adapter._flower_from_vision(ctx)
+
+            # Verify DB was called
+            mock_db.assert_called_once_with("rare_flower")
+
+            # Verify AI WAS called (fallback due to empty meanings)
+            mock_ai.assert_called_once()
+
+            # Verify price_tier from DB, meanings from AI
+            assert candidate.price_tier == "premium"
+            assert candidate.meanings == ["Rare", "Unique", "Special"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

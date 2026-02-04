@@ -247,7 +247,7 @@ class SFAAdapter(BaseAgent):
             pricing=pricing,
             alternatives=alternatives,
             ask_ai=ask_ai,
-            pipeline_version="0.4.0",
+            pipeline_version="0.5.0",
             request_id=ctx.request_id,
         )
 

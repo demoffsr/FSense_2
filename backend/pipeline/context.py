@@ -50,7 +50,12 @@ class EmotionData:
 
 @dataclass
 class RelationshipData:
-    """Output from RIL (Relationship Intelligence Layer)."""
+    """
+    Relationship context data.
+
+    Populated by deterministic inference from FIA intent data.
+    (Previously output from RIL agent, now computed without AI call)
+    """
     relationship_type: str = ""
     intimacy_level: float = 0.0
     formality_level: float = 0.0
@@ -224,7 +229,7 @@ class PipelineContext:
     # EIA → Emotion Intelligence Agent
     emotions: EmotionData = field(default_factory=EmotionData)
     
-    # RIL → Relationship Intelligence Layer
+    # Relationship context (inferred from FIA intent, no separate agent)
     relationship: RelationshipData = field(default_factory=RelationshipData)
     
     # FMRA → Flower Matching & Ranking Agent
