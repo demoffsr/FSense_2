@@ -845,11 +845,26 @@ Generate UI content that reflects this rich analysis. Use the calculated intensi
         return region_ranges.get(tier, region_ranges["mid"])
 
     def _get_budget_warning(self, tier: str, user_budget: Optional[str]) -> Optional[str]:
-        """Get budget warning if flower price doesn't match user's budget."""
-        if tier == "premium":
-            if user_budget in ["modest", "budget", "low", "cheap"]:
-                return "This flower tends to be expensive. Consider the alternatives below for budget-friendly options."
-            return "Premium flower - typically higher priced"
-        elif tier == "budget" and user_budget in ["premium", "high", "expensive", "luxury"]:
+        """
+        Get budget warning if flower price doesn't match user's budget.
+
+        Args:
+            tier: Flower's price tier (already canonical: budget/mid/premium)
+            user_budget: User's budget preference (already normalized: budget/mid/premium/any/None)
+
+        Design: "mid" is treated as non-constraining because it's the neutral tier.
+        Users who select "mid" are flexible and don't need mismatch warnings.
+        Only "budget" and "premium" users get warned about tier mismatches.
+        """
+        if not user_budget or user_budget in ("any", "mid"):
+            # No constraint or neutral tier - only show label for premium
+            if tier == "premium":
+                return "Premium flower - typically higher priced"
+            return None
+
+        if tier == "premium" and user_budget == "budget":
+            return "This flower tends to be expensive. Consider the alternatives below for budget-friendly options."
+        elif tier == "budget" and user_budget == "premium":
             return "Budget-friendly option - premium alternatives available"
+
         return None

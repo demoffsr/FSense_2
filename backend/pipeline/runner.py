@@ -22,6 +22,7 @@ from backend.pipeline.context import PipelineContext, UserPriors
 from backend.pipeline.orchestrator import PipelineOrchestrator
 from backend.core.settings import get_settings, SettingsError
 from backend.core.input_validator import validate_input, validate_region
+from backend.core.budget_normalizer import normalize_budget
 
 logger = logging.getLogger(__name__)
 
@@ -144,11 +145,16 @@ def run_flower_chat(
         has_image = image_base64 is not None
         logger.info(f"Starting flower chat: region={region}, prompt_len={len(prompt)}, has_image={has_image}")
 
+        # Normalize budget terminology early (iOS → canonical)
+        normalized_budget = normalize_budget(budget_range)
+        if budget_range and normalized_budget and budget_range.lower() != normalized_budget:
+            logger.debug(f"Budget normalized: '{budget_range}' -> '{normalized_budget}'")
+
         # Build context with budget priors
         ctx = PipelineContext(
             user_input=prompt,  # Already sanitized
             region=region.lower(),  # Context expects lowercase
-            priors=UserPriors(budget_range=budget_range),
+            priors=UserPriors(budget_range=normalized_budget),
             image_base64=image_base64,  # Pass image for vision analysis
         )
         

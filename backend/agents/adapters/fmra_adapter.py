@@ -9,8 +9,10 @@ Returns primary flower + alternatives for SFA to assemble.
 """
 
 import logging
+import os
+import re
 import time
-from typing import Any
+from typing import Any, Optional
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import (
@@ -20,6 +22,7 @@ from backend.pipeline.context import (
 )
 from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
+from backend.core.budget_normalizer import normalize_budget
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +70,18 @@ class FMRAAdapter(BaseAgent):
 
     name = "FMRA"
 
+    def __init__(self):
+        self._enforce_budget = os.getenv("FMRA_ENFORCE_BUDGET", "true").lower() == "true"
+
     def run(self, ctx: PipelineContext) -> None:
         """Select multiple flowers based on user context with diversity penalty."""
         from backend.services.recommendation_history import get_recommendation_history
 
         try:
+            # Log when budget constraint is active
+            if ctx.priors and ctx.priors.budget_range and ctx.priors.budget_range.lower() not in ["any", "unspecified"]:
+                logger.info(f"FMRA: Budget constraint active: {ctx.priors.budget_range}")
+
             history = get_recommendation_history()
 
             # Check if flower was already identified via vision analysis
@@ -99,14 +109,51 @@ class FMRAAdapter(BaseAgent):
                     candidate.match_reasons.append(f"diversity_adjusted:-{penalty:.2f}")
                     logger.debug(f"FMRA: Applied penalty {penalty:.2f} to {candidate.name}")
 
+            # Budget enforcement (after diversity penalty)
+            budget_adjusted = False
+            if self._enforce_budget and ctx.priors and ctx.priors.budget_range:
+                user_budget = ctx.priors.budget_range
+                if user_budget.lower() not in ["any", "unspecified"]:
+                    for candidate in candidates:
+                        multiplier = self._calculate_budget_multiplier(
+                            candidate.price_tier, user_budget
+                        )
+                        if multiplier != 1.0:
+                            old_score = candidate.match_score
+                            candidate.match_score = min(1.0, max(0.1, candidate.match_score * multiplier))
+                            candidate.match_reasons.append(f"budget_adjusted:{multiplier:.2f}")
+                            budget_adjusted = True
+                            logger.debug(
+                                f"FMRA: Budget adjustment for {candidate.name}: "
+                                f"{old_score:.2f} -> {candidate.match_score:.2f} "
+                                f"(tier={candidate.price_tier}, user={user_budget})"
+                            )
+            elif not self._enforce_budget and ctx.priors and ctx.priors.budget_range:
+                # Shadow mode: log what would happen without applying
+                user_budget = ctx.priors.budget_range
+                if user_budget.lower() not in ["any", "unspecified"]:
+                    for candidate in candidates:
+                        mult = self._calculate_budget_multiplier(candidate.price_tier, user_budget)
+                        if mult != 1.0:
+                            would_be = min(1.0, max(0.1, candidate.match_score * mult))
+                            logger.info(
+                                f"FMRA [shadow]: {candidate.name} "
+                                f"{candidate.match_score:.2f} -> {would_be:.2f} (x{mult})"
+                            )
+
             # Re-sort by adjusted score and take top 5
             candidates.sort(key=lambda c: c.match_score, reverse=True)
             candidates = candidates[:5]
 
+            # Build dynamic ranking criteria
+            criteria = ["emotional_match", "cultural_fit", "diversity_adjusted"]
+            if budget_adjusted:
+                criteria.append("budget_adjusted")
+
             ctx.candidates = CandidatesData(
                 candidates=candidates,
                 total_considered=len(candidates),
-                ranking_criteria=["emotional_match", "cultural_fit", "diversity_adjusted"],
+                ranking_criteria=criteria,
                 raw_output={
                     "primary": candidates[0].flower_id if candidates else None,
                     "alternatives_count": len(candidates) - 1 if candidates else 0,
@@ -129,6 +176,7 @@ class FMRAAdapter(BaseAgent):
             console.agent_result("FMRA", {
                 "Primary Flower": primary.name if primary else "None",
                 "Match Score": f"{primary.match_score:.2f}" if primary else "N/A",
+                "Budget Adjusted": budget_adjusted,
                 "Alternatives": [c.name for c in candidates[1:]] if len(candidates) > 1 else [],
                 "Meanings": primary.meanings[:4] if primary else [],
             })
@@ -482,7 +530,10 @@ Select the top 5 matches, ranked from best to good. Return JSON:
                 if flags.get("is_special_milestone"):
                     parts.append("⚠️ Note: This is a SIGNIFICANT life event - choose something special and meaningful")
                 budget = flags.get("budget_hint")
-                if budget and budget != "unspecified":
+                # Explicit budget_range takes precedence over inferred budget_hint
+                if ctx.priors and ctx.priors.budget_range and ctx.priors.budget_range.lower() not in ["any", "unspecified"]:
+                    pass  # Will be added in priors section below
+                elif budget and budget != "unspecified":
                     parts.append(f"Budget hint: {budget}")
 
         if ctx.priors:
@@ -490,6 +541,9 @@ Select the top 5 matches, ranked from best to good. Return JSON:
                 parts.append(f"Prior occasion: {ctx.priors.occasion}")
             if ctx.priors.relationship_type:
                 parts.append(f"Prior relationship: {ctx.priors.relationship_type}")
+            # Add budget constraint to prompt
+            if ctx.priors.budget_range and ctx.priors.budget_range.lower() not in ["any", "unspecified"]:
+                parts.append(f"Budget preference: {ctx.priors.budget_range}")
 
         # Enhanced EIA data
         if ctx.emotions:
@@ -547,3 +601,42 @@ Select the top 5 matches, ranked from best to good. Return JSON:
             ranking_criteria=["fallback_contextual"],
             raw_output={"fallback": True, "fallback_type": "context_aware"},
         )
+
+    def _calculate_budget_multiplier(self, flower_tier: Optional[str], user_budget: str) -> float:
+        """
+        Calculate score multiplier based on budget match.
+
+        Returns:
+            1.2 for exact match (boost)
+            1.0 for adjacent tier or unknown
+            0.7 for opposite tier (penalty)
+        """
+        if not flower_tier or not user_budget:
+            return 1.0
+
+        user_budget_lower = user_budget.lower()
+
+        # Skip non-constraints
+        if user_budget_lower in ["any", "unspecified", "mid", "standard"]:
+            return 1.0
+
+        # Map user budget to tier
+        user_tier = self._parse_budget_to_tier(user_budget_lower)
+        if not user_tier:
+            return 1.0  # Unknown format, no adjustment
+
+        # Calculate multiplier
+        if flower_tier == user_tier:
+            return 1.2  # Exact match: boost
+        elif (flower_tier == "budget" and user_tier == "premium") or \
+             (flower_tier == "premium" and user_tier == "budget"):
+            return 0.7  # Opposite tier: penalty
+        else:
+            return 1.0  # Adjacent tier (mid): neutral
+
+    def _parse_budget_to_tier(self, budget_str: str) -> Optional[str]:
+        """
+        Parse budget string to tier. Delegates to central normalize_budget().
+        Kept for backward compatibility and FIA budget_hint normalization.
+        """
+        return normalize_budget(budget_str)

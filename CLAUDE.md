@@ -77,7 +77,7 @@ User input flows through a fixed-sequence pipeline where each agent enriches a s
 | 1 | **FIA** | Flower Intent Agent | Parses user intent | **Yes** |
 | 2 | **EIA** | Emotion Intelligence Agent | Detects emotions | **Yes** |
 | - | *Relationship inference* | (deterministic) | Instant, no AI call | - |
-| 3 | **FMRA** | Flower Matching & Ranking Agent | Selects candidate flowers (DB-first for vision) | **Yes** |
+| 3 | **FMRA** | Flower Matching & Ranking Agent | Selects candidate flowers (DB-first for vision, budget enforcement) | **Yes** |
 | 4 | **CIA** | Context Intensity Agent | Scores emotional intensity | No |
 | 5 | **AITB** | Adaptive Intelligence & Tone Builder | Adapts tone | No |
 | 6 | **RFFA** | Risk & Fit Assessment Agent | Evaluates gifting risks | No |
@@ -94,6 +94,29 @@ Critical agents (FIA, EIA, FMRA, SFA) stop the pipeline on failure. Non-critical
 - **Final Assembler Rule**: Only SFA writes the iOS payload - other agents write to their designated context sections
 - **Stateless Design**: No direct agent-to-agent communication
 - **Parallel Execution**: Independent agents run concurrently via `ThreadPoolExecutor`
+- **Early Normalization**: External inputs (iOS budget terms) normalized at pipeline entry before agents run
+
+### Budget Normalization Flow
+
+Budget terms from different sources are normalized to canonical tiers (`budget`, `mid`, `premium`, `any`):
+
+```
+iOS sends budget_range (e.g., "Luxury", "Moderate")
+        ↓
+runner.py: normalize_budget() → canonical tier ("premium", "mid")
+        ↓
+ctx.priors.budget_range = normalized
+        ↓
+FIA runs → outputs budget_hint (legacy terms: "modest", "luxury")
+        ↓
+FMRA: normalize_budget(budget_hint) → canonical tier
+        ↓
+FMRA precedence: budget_range > budget_hint
+        ↓
+SFA: receives only canonical terms for warnings
+```
+
+**Canonical tiers:** `budget` (<$50), `mid` ($50-99), `premium` ($100+), `any` (no constraint), `None` (parse error)
 
 ### iOS Integration
 
@@ -106,8 +129,10 @@ result = run_flower_chat("I want to apologize to my wife", region="US")
 # With image (bouquet scan)
 result = run_flower_chat("What flower is this?", region="US", image_base64="...")
 
-# With budget
-result = run_flower_chat("Birthday gift for mom", region="US", budget_range="50-100")
+# With budget (any format - normalized automatically)
+result = run_flower_chat("Birthday gift for mom", region="US", budget_range="Luxury")  # iOS term
+result = run_flower_chat("Birthday gift for mom", region="US", budget_range="premium")  # canonical
+result = run_flower_chat("Birthday gift for mom", region="US", budget_range="$50-100")  # dollar range
 
 # Returns: {"success": bool, "data": FlowerCardPayload | None, "error": str | None}
 ```
@@ -118,7 +143,7 @@ The `FlowerCardPayload` schema (`backend/schemas/flower_card_payload.py`) define
 
 ```
 backend/
-├── core/             # Settings, AI client singleton, rate limiter, input validator
+├── core/             # Settings, AI client singleton, rate limiter, input validator, budget_normalizer
 ├── pipeline/         # Orchestrator, context, runner (iOS entrypoint), scan_*
 ├── agents/
 │   ├── base.py       # BaseAgent interface
@@ -157,10 +182,14 @@ Copy `backend/.env.example` to `backend/.env` and set:
 - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` - for Storage
 - `YANDEX_CLOUD_API_KEY`, `YANDEX_CLOUD_FOLDER_ID` - Yandex search (Russia)
 - `FLORIST_ONE_API_KEY`, `FLORIST_ONE_API_PASSWORD` - FloristOne (US/Canada)
+- `FMRA_ENFORCE_BUDGET` - defaults to `true`; set `false` for shadow-only logging
+- `BUDGET_NORMALIZE_ENABLED` - defaults to `true`; set `false` to disable budget normalization (rollback)
 
 ## Current Status
 
-**Version 0.5.2** - FMRA batch emotion query optimization: `get_flowers_by_emotions()` replaces serial queries with single SQL using window functions. Saves ~10-15ms when secondary emotions needed. Logs batch query timing for monitoring.
+**Version 0.5.4** - Budget terminology normalization: Central `normalize_budget()` utility in `backend/core/budget_normalizer.py` converts all budget terms to canonical tiers (`budget`, `mid`, `premium`, `any`). Normalization happens at two points: (1) `budget_range` from iOS normalized in `runner.py` at pipeline entry, (2) `budget_hint` from FIA normalized by FMRA. Supports iOS terms (`Luxury`, `Moderate`), FIA terms (`modest`, `standard`), synonyms (`cheap`, `expensive`), and dollar ranges with exclusive upper bounds (`$49` → budget, `$50` → mid, `$100` → premium). Rollback via `BUDGET_NORMALIZE_ENABLED=false`.
+
+**Version 0.5.3** - FMRA budget range enforcement: When user selects a budget tier in iOS UI (`priors.budget_range`), FMRA applies score multipliers to candidates (1.2x boost for match, 0.7x penalty for opposite tier). Explicit `budget_range` takes precedence over inferred `budget_hint` from FIA. Rollback via `FMRA_ENFORCE_BUDGET=false` with shadow logging.
 
 ---
 
