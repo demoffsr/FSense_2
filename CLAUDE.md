@@ -143,7 +143,7 @@ The `FlowerCardPayload` schema (`backend/schemas/flower_card_payload.py`) define
 
 ```
 backend/
-├── core/             # Settings, AI client singleton, rate limiter, input validator, budget_normalizer
+├── core/             # Settings, AI client singleton, rate limiter, input validator, budget_normalizer, safe_parse
 ├── pipeline/         # Orchestrator, context, runner (iOS entrypoint), scan_*
 ├── agents/
 │   ├── base.py       # BaseAgent interface
@@ -186,6 +186,8 @@ Copy `backend/.env.example` to `backend/.env` and set:
 - `BUDGET_NORMALIZE_ENABLED` - defaults to `true`; set `false` to disable budget normalization (rollback)
 
 ## Current Status
+
+**Version 0.5.5** - Safe float parsing for AI responses: Central `safe_parse_float()` utility in `backend/core/safe_parse.py` handles invalid AI responses (e.g., `"high"` instead of `0.8`, `"nan"`, `"inf"`, malformed strings like `"0.7.2"`). Applied to all adapters parsing numeric values: EIA (emotion_intensity), CIA (intensity_score), FIA (confidence), FMRA (match_score ×2), FlowerID (confidence ×3), VIA (confidence). Prevents crashes and uses sensible defaults with logging. No rollback needed — purely defensive code.
 
 **Version 0.5.4** - Budget terminology normalization: Central `normalize_budget()` utility in `backend/core/budget_normalizer.py` converts all budget terms to canonical tiers (`budget`, `mid`, `premium`, `any`). Normalization happens at two points: (1) `budget_range` from iOS normalized in `runner.py` at pipeline entry, (2) `budget_hint` from FIA normalized by FMRA. Supports iOS terms (`Luxury`, `Moderate`), FIA terms (`modest`, `standard`), synonyms (`cheap`, `expensive`), and dollar ranges with exclusive upper bounds (`$49` → budget, `$50` → mid, `$100` → premium). Rollback via `BUDGET_NORMALIZE_ENABLED=false`.
 
@@ -235,6 +237,27 @@ Copy `backend/.env.example` to `backend/.env` and set:
    - Check what other agents' data the removed agent consumed
    - Preserve valuable cross-references in deterministic logic
    - Add optional parameters for enrichment data
+
+### When Parsing AI Responses
+
+Always use `safe_parse_float()` from `backend.core.safe_parse` when parsing numeric values from AI responses:
+
+```python
+from backend.core.safe_parse import safe_parse_float
+
+# Instead of: intensity = float(response.get("intensity", 0.7))
+intensity = safe_parse_float(
+    response.get("intensity"),
+    default=0.7,
+    context="AgentName.field_name"  # For logging
+)
+```
+
+This handles:
+- Non-numeric strings (`"high"`, `"low"`) → default
+- Malformed values (`"0.7.2"`, `""`, `None`) → default
+- Special floats (`"nan"`, `"inf"`, `"-inf"`) → default
+- Out-of-range values → clamped to `[min_val, max_val]`
 
 ### Code Style
 

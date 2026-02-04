@@ -15,6 +15,7 @@ from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, EmotionData
 from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
+from backend.core.safe_parse import safe_parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,11 @@ Analyze the emotional state behind this message with nuance and depth."""
             # Parse emotional data
             dominant = response.get("dominant_emotion", "affection")
             tone = response.get("emotion_tone", "warm")
-            intensity = float(response.get("emotion_intensity", 0.7))
+            intensity = safe_parse_float(
+                response.get("emotion_intensity"),
+                default=0.7,
+                context="EIA.emotion_intensity"
+            )
 
             # Build secondary emotions list (now can be array in response)
             secondary_emotions = []

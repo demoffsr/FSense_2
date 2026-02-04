@@ -15,6 +15,7 @@ from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, IntensityData
 from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
+from backend.core.safe_parse import safe_parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -241,12 +242,13 @@ Analyze and calibrate the final emotional intensity for this context."""
                 temperature=0.3,
             )
 
-            intensity = float(response.get("intensity_score", heuristic_score))
+            intensity = safe_parse_float(
+                response.get("intensity_score"),
+                default=heuristic_score,
+                context="CIA.intensity_score"
+            )
             factors = response.get("factors", ["emotional_context"])
             reasoning = response.get("reasoning", "AI-refined intensity calculation")
-
-            # Ensure intensity is in valid range
-            intensity = max(0.0, min(1.0, intensity))
 
             return intensity, factors, reasoning
 

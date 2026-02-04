@@ -23,6 +23,7 @@ from backend.pipeline.context import (
 from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
 from backend.core.budget_normalizer import normalize_budget
+from backend.core.safe_parse import safe_parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -343,7 +344,11 @@ Select the top 5 matches, ranked from best to good. Return JSON:
                 candidates.append(FlowerCandidate(
                     flower_id=selected["id"],
                     name=selected["name"],
-                    match_score=float(item.get("match_score", selected["match_score"])),
+                    match_score=safe_parse_float(
+                        item.get("match_score", selected["match_score"]),
+                        default=0.85,
+                        context="FMRA.match_score"
+                    ),
                     match_reasons=[item.get("match_reason", "database_match"), "ai_ranked"],
                     meanings=meanings[:6],
                     price_tier=selected.get("price_tier", "mid"),
@@ -390,7 +395,11 @@ Select the top 5 matches, ranked from best to good. Return JSON:
             candidates.append(FlowerCandidate(
                 flower_id=item.get("flower_id", "unknown_flower"),
                 name=flower_name,
-                match_score=float(item.get("match_score", 0.85)),
+                match_score=safe_parse_float(
+                    item.get("match_score"),
+                    default=0.85,
+                    context="FMRA.match_score"
+                ),
                 match_reasons=[item.get("match_reason", "AI recommendation")],
                 meanings=item.get("meanings", ["Beauty", "Emotion"])[:6],
                 price_tier=price_tier,

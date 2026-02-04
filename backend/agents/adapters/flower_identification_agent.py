@@ -14,6 +14,7 @@ import uuid
 from backend.pipeline.scan_context import ScanContext, IdentifiedFlower, IdentificationData
 from backend.core.ai_client import get_ai_client, AIClientError
 from backend.core.console_logger import get_console_logger
+from backend.core.safe_parse import safe_parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +151,11 @@ class FlowerIdentificationAgent:
                 id=str(uuid.uuid4())[:8],
                 name=flower_data.get("name", "Unknown"),
                 scientific_name=flower_data.get("scientific_name"),
-                confidence=float(flower_data.get("confidence", 0.0)),
+                confidence=safe_parse_float(
+                    flower_data.get("confidence"),
+                    default=0.0,
+                    context="FlowerID.confidence"
+                ),
                 color=flower_data.get("color"),
                 position="primary",
             )
@@ -172,7 +177,11 @@ class FlowerIdentificationAgent:
                 id=str(uuid.uuid4())[:8],
                 name=primary_data.get("name", "Unknown"),
                 scientific_name=primary_data.get("scientific_name"),
-                confidence=float(primary_data.get("confidence", 0.0)),
+                confidence=safe_parse_float(
+                    primary_data.get("confidence"),
+                    default=0.0,
+                    context="FlowerID.confidence"
+                ),
                 color=primary_data.get("color"),
                 position="primary",
             )
@@ -185,7 +194,11 @@ class FlowerIdentificationAgent:
                     id=str(uuid.uuid4())[:8],
                     name=flower_data.get("name", ""),
                     scientific_name=flower_data.get("scientific_name"),
-                    confidence=float(flower_data.get("confidence", 0.0)),
+                    confidence=safe_parse_float(
+                        flower_data.get("confidence"),
+                        default=0.0,
+                        context="FlowerID.confidence"
+                    ),
                     color=flower_data.get("color"),
                     position="secondary",
                 ))

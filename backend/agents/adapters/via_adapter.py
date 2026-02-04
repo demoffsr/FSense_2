@@ -20,6 +20,7 @@ from backend.pipeline.context import (
 )
 from backend.core.ai_client import get_ai_client, AIClientError
 from backend.core.console_logger import get_console_logger
+from backend.core.safe_parse import safe_parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -75,15 +76,6 @@ class VIAAdapter(BaseAgent):
 
     name = "VIA"
 
-    def _safe_parse_confidence(self, value: Any) -> float:
-        """Safely parse confidence value to float in range [0.0, 1.0]."""
-        try:
-            conf = float(value)
-            # Clamp to valid range
-            return max(0.0, min(1.0, conf))
-        except (TypeError, ValueError):
-            return 0.0
-
     def _parse_detected_flower(self, data: Any) -> Optional[DetectedFlower]:
         """Parse and validate flower data from Vision API response.
 
@@ -104,7 +96,11 @@ class VIAAdapter(BaseAgent):
         return DetectedFlower(
             name=name,
             color=color,
-            confidence=self._safe_parse_confidence(data.get("confidence", 0.0)),
+            confidence=safe_parse_float(
+                data.get("confidence"),
+                default=0.0,
+                context="VIA.confidence"
+            ),
         )
 
     def _validate_color(self, color: Any) -> Optional[str]:

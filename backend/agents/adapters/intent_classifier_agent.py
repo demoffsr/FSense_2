@@ -14,6 +14,7 @@ import re
 from typing import Optional
 
 from backend.core.ai_client import get_ai_client_fast, AIClientError
+from backend.core.safe_parse import safe_parse_float
 from backend.schemas.chat_response import (
     ClassifierOutput,
     IntentType,
@@ -225,7 +226,11 @@ Classify this message."""
 
             # Parse response
             intent_str = response.get("intent", "flower_request")
-            confidence = float(response.get("confidence", 0.7))
+            confidence = safe_parse_float(
+                response.get("confidence"),
+                default=0.7,
+                context="FIA.confidence"
+            )
 
             # Conservative: if low confidence, default to flower_request
             if confidence < self.CONFIDENCE_THRESHOLD:

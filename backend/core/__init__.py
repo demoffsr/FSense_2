@@ -8,6 +8,7 @@ Contains:
 
 from backend.core.settings import get_settings, reset_settings, Settings, SettingsError
 from backend.core.ai_client import AIClient, get_ai_client, reset_ai_client, AIClientError
+from backend.core.safe_parse import safe_parse_float
 
 __all__ = [
     # Settings
@@ -20,6 +21,8 @@ __all__ = [
     "AIClientError",
     "get_ai_client",
     "reset_ai_client",
+    # Safe parsing
+    "safe_parse_float",
 ]
 
 __version__ = "0.0.1"
