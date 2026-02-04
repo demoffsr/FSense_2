@@ -17,14 +17,40 @@ Response Format:
 from typing import Any, Dict, Optional, Union, List
 import logging
 import traceback
+import os
+
+from pydantic import ValidationError
 
 from backend.pipeline.context import PipelineContext, UserPriors
 from backend.pipeline.orchestrator import PipelineOrchestrator
 from backend.core.settings import get_settings, SettingsError
 from backend.core.input_validator import validate_input, validate_region
 from backend.core.budget_normalizer import normalize_budget
+from backend.schemas.flower_card_payload import (
+    FlowerCardPayload,
+    FlowerHeader,
+    MeaningTab,
+    SymbolismCard,
+    WhyThisFlowerCard,
+    MoodIntensity,
+    GiftingTab,
+    GiftSuitabilityCard,
+    EmotionalRiskCard,
+    RecipientFitItem,
+    GiftingOccasionItem,
+    ContextTab,
+    ContextSummary,
+    CulturalInterpretationItem,
+    RelationshipContextItem,
+    TimingSensitivityItem,
+    CommonMisinterpretationItem,
+    AskAIMetadata,
+)
 
 logger = logging.getLogger(__name__)
+
+# Feature flag for rollback capability
+FALLBACK_PAYLOAD_ENABLED = os.getenv("FALLBACK_PAYLOAD_ENABLED", "true").lower() == "true"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -75,6 +101,160 @@ def build_conversation_summary(history: List[Dict[str, Any]], max_messages: int 
             lines.append(f"{role}: {content}")
 
     return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FALLBACK PAYLOAD BUILDER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _build_fallback_payload(ctx: PipelineContext) -> Optional[FlowerCardPayload]:
+    """
+    Build minimal FlowerCardPayload from available context when SFA fails.
+
+    Returns None if:
+    - Feature flag disabled
+    - No candidates from FMRA
+    - Invalid flower data (missing id/name)
+    - Pydantic validation fails
+    """
+    if not FALLBACK_PAYLOAD_ENABLED:
+        logger.debug("Fallback payload disabled by FALLBACK_PAYLOAD_ENABLED=false")
+        return None
+
+    # Need at least one flower candidate from FMRA
+    if not ctx.candidates or not ctx.candidates.candidates:
+        logger.warning("Cannot build fallback: no candidates from FMRA")
+        return None
+
+    top_flower = ctx.candidates.candidates[0]
+
+    # Validate required flower fields
+    flower_id = top_flower.flower_id or "unknown"
+    flower_name = top_flower.name or "Flower"
+
+    if not top_flower.flower_id or not top_flower.name:
+        logger.warning(
+            f"Fallback: using placeholder for missing flower data: "
+            f"id={top_flower.flower_id}, name={top_flower.name}"
+        )
+
+    # Use flower meanings from FMRA, ensure non-empty
+    meanings = top_flower.meanings[:4] if top_flower.meanings else []
+    if not meanings:
+        meanings = ["Beauty", "Emotion", "Care"]
+
+    # Simple why_this_flower text (avoid duplicating SFA's occasion logic)
+    why_text = f"{flower_name} is a thoughtful choice that carries meaningful symbolism."
+
+    # Risk assessment from RFFA if available
+    risk_level = "low"
+    risk_description = "Generally well-received."
+    suitability_level = "good"
+    suitability_description = f"{flower_name} is appropriate for this context."
+
+    if ctx.risks:
+        if ctx.risks.overall_risk_level == "high":
+            risk_level = "high"
+            risk_description = ctx.risks.fit_assessment or "Review context before gifting."
+            suitability_level = "moderate"
+            suitability_description = f"{flower_name} requires careful consideration."
+        elif ctx.risks.overall_risk_level == "medium":
+            risk_level = "moderate"
+            risk_description = ctx.risks.fit_assessment or "Generally appropriate with some considerations."
+
+    try:
+        payload = FlowerCardPayload(
+            header=FlowerHeader(
+                flower_id=flower_id,
+                name=flower_name,
+                image_url=None,
+                image_asset=None,
+            ),
+            meaning=MeaningTab(
+                meanings=meanings,
+                symbolism=SymbolismCard(
+                    text=f"{flower_name} carries meaningful symbolism and emotional depth.",
+                ),
+                why_this_flower=WhyThisFlowerCard(
+                    text=why_text,
+                ),
+                mood_intensity=MoodIntensity(
+                    value=0.4,  # Project default (raw 0.0-1.0 scale)
+                    label="Balanced",
+                ),
+            ),
+            gifting=GiftingTab(
+                suitability=GiftSuitabilityCard(
+                    level=suitability_level,
+                    description=suitability_description,
+                ),
+                emotional_risk=EmotionalRiskCard(
+                    level=risk_level,
+                    description=risk_description,
+                ),
+                recipient_fits=[
+                    RecipientFitItem(recipient_type="General", fit_level="good", note=None)
+                ],
+                when_to_gift=[
+                    GiftingOccasionItem(
+                        occasion="Special occasions", suitability="good", description=None
+                    )
+                ],
+                when_to_avoid=[
+                    GiftingOccasionItem(
+                        occasion="Uncertain contexts", suitability="risky", description=None
+                    )
+                ],
+            ),
+            context=ContextTab(
+                summary=ContextSummary(
+                    text=f"{flower_name} is versatile and carries positive symbolism."
+                ),
+                cultural_interpretations=[
+                    CulturalInterpretationItem(
+                        emoji="🌍",
+                        culture="Universal",
+                        interpretation="Symbol of beauty and emotion",
+                        sentiment="positive",
+                    )
+                ],
+                relationship_contexts=[
+                    RelationshipContextItem(
+                        relationship_type="Close relationship",
+                        appropriateness="appropriate",
+                        guidance="A meaningful gesture",
+                    )
+                ],
+                timing_sensitivities=[
+                    TimingSensitivityItem(
+                        timing="Any occasion",
+                        sensitivity="low",
+                        note="Generally appropriate",
+                    )
+                ],
+                common_misinterpretations=[
+                    CommonMisinterpretationItem(
+                        misinterpretation="One flower fits all",
+                        clarification="Context always matters for best results",
+                    )
+                ],
+            ),
+            ask_ai=AskAIMetadata(
+                enabled=True,
+                suggested_questions=[
+                    f"What pairs well with {flower_name}?",
+                    "What message should I include?",
+                ],
+            ),
+            pipeline_version="0.5.7",
+            request_id=ctx.request_id,
+        )
+        return payload
+    except ValidationError as e:
+        logger.error(
+            f"Fallback payload validation failed: request_id={ctx.request_id}, error={e}"
+        )
+        return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -165,6 +345,20 @@ def run_flower_chat(
         # Check for UI payload
         if ctx.ui_payload is None:
             logger.error(f"Pipeline completed but no UI payload: request_id={ctx.request_id}")
+
+            # Attempt to build minimal payload from available context
+            fallback_payload = _build_fallback_payload(ctx)
+            if fallback_payload:
+                logger.warning(f"SFA fallback activated: request_id={ctx.request_id}")
+                # Convert to dict with camelCase keys for iOS (by_alias=True)
+                # Schema uses serialization_alias for flowerId, imageUrl, etc.
+                payload_dict = fallback_payload.model_dump(by_alias=True)
+                payload_dict["_fallback"] = True
+                return {
+                    "success": True,
+                    "data": payload_dict,
+                }
+
             return {
                 "success": False,
                 "error": "Failed to generate flower recommendation. Please try again.",
@@ -404,8 +598,16 @@ def run_pipeline(
     # Return UI payload
     if ctx.ui_payload is not None:
         return ctx.ui_payload
-    
-    # Fallback: return error payload
+
+    # Attempt fallback
+    fallback_payload = _build_fallback_payload(ctx)
+    if fallback_payload:
+        logger.warning(f"SFA fallback activated (raw API): request_id={ctx.request_id}")
+        payload_dict = fallback_payload.model_dump(by_alias=True)
+        payload_dict["_fallback"] = True
+        return payload_dict
+
+    # Final fallback: return error payload
     return {
         "error": True,
         "message": "Pipeline completed but no UI payload was generated",

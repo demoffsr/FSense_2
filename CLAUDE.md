@@ -184,8 +184,11 @@ Copy `backend/.env.example` to `backend/.env` and set:
 - `FLORIST_ONE_API_KEY`, `FLORIST_ONE_API_PASSWORD` - FloristOne (US/Canada)
 - `FMRA_ENFORCE_BUDGET` - defaults to `true`; set `false` for shadow-only logging
 - `BUDGET_NORMALIZE_ENABLED` - defaults to `true`; set `false` to disable budget normalization (rollback)
+- `FALLBACK_PAYLOAD_ENABLED` - defaults to `true`; set `false` to disable fallback payload on SFA failure
 
 ## Current Status
+
+**Version 0.5.7** - SFA fallback payload: When SFA fails but FMRA has candidates, builds minimal valid FlowerCardPayload from available context (flower name, meanings, RFFA risk data). Pydantic-validated, with `_fallback: true` flag for iOS to optionally show simplified view indicator. Rollback via `FALLBACK_PAYLOAD_ENABLED=false`. Warning-level logging when activated.
 
 **Version 0.5.6** - SFA mood_intensity None safety: Added defensive handling in SFA for `mood_intensity` being `None`. New helper methods `_get_safe_mood_intensity(ctx)` and `_calculate_mood_intensity_ui(raw_value)` centralize None-safe access and scale conversion. Default `0.4` (raw) yields `25` on UI scale (15-40), preserving original fallback behavior. Applied to 4 locations in SFA: CIA context summary, AI prompt template, post-AI intensity application, and fallback content. Tests in `backend/tests/test_sfa_mood_intensity.py`. No rollback needed — purely defensive code.
 
