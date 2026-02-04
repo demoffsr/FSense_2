@@ -27,6 +27,51 @@ from backend.core.safe_parse import safe_parse_float
 
 logger = logging.getLogger(__name__)
 
+# Feature flag for flower name validation (default: enabled)
+FMRA_VALIDATE_FLOWER_NAMES = os.getenv("FMRA_VALIDATE_FLOWER_NAMES", "true").lower() == "true"
+
+# Explicit blocklist of invalid flower names (lowercase)
+_INVALID_FLOWER_NAMES = frozenset({
+    "unknown flower", "unknown", "n/a", "none", "null",
+    "undefined", "not found", "error", "invalid",
+    "test", "placeholder", "sample", "tbd", "flower"
+})
+
+# Substring patterns that indicate invalid names
+_INVALID_NAME_PATTERNS = ("unknown", "error", "not found", "invalid", "placeholder")
+
+# Approximate counter for observability (not thread-safe, but good enough for metrics)
+_invalid_flower_count = 0
+
+
+def is_valid_flower_name(name: str) -> bool:
+    """Validate flower name is not a placeholder or error value.
+
+    Returns False for:
+    - Empty/whitespace-only strings
+    - Explicit blocklist matches (case-insensitive)
+    - Names containing error patterns (substring match)
+    """
+    if not name or not isinstance(name, str):
+        return False
+
+    name_clean = name.strip()
+    if not name_clean:
+        return False
+
+    name_lower = name_clean.lower()
+
+    # Exact blocklist match
+    if name_lower in _INVALID_FLOWER_NAMES:
+        return False
+
+    # Substring pattern match (catches "Flower Not Found", "Unknown Species", etc.)
+    for pattern in _INVALID_NAME_PATTERNS:
+        if pattern in name_lower:
+            return False
+
+    return True
+
 # Import flower database functions
 try:
     from backend.database.flower_database import (
@@ -377,6 +422,8 @@ Select the top 5 matches, ranked from best to good. Return JSON:
 
     def _ai_selection_multiple(self, ctx: PipelineContext) -> list[FlowerCandidate]:
         """Pure AI selection returning multiple candidates when database doesn't have matches."""
+        global _invalid_flower_count
+
         client = get_ai_client_fast()
         user_prompt = self._build_prompt(ctx)
 
@@ -386,14 +433,45 @@ Select the top 5 matches, ranked from best to good. Return JSON:
             temperature=0.7,
         )
 
+        # Defensive check: AI might return null, string, or other non-list
+        raw_candidates = response.get("candidates") or []
+        if not isinstance(raw_candidates, list):
+            logger.warning(f"FMRA: AI returned non-list candidates: {type(raw_candidates).__name__}")
+            return [self._fallback_candidate(ctx)]
+
         candidates = []
-        for item in response.get("candidates", [])[:5]:
-            # Estimate price tier from flower name if not in database
-            flower_name = item.get("flower_name", "Unknown Flower")
+        skipped_count = 0
+
+        for item in raw_candidates[:5]:
+            # Skip non-dict items
+            if not isinstance(item, dict):
+                skipped_count += 1
+                continue
+
+            # Validate flower name (if validation enabled)
+            raw_name = item.get("flower_name")
+            if not isinstance(raw_name, str):
+                logger.debug(f"FMRA: AI returned non-string flower_name: {type(raw_name).__name__}")
+                skipped_count += 1
+                continue
+
+            flower_name = raw_name.strip()
+
+            if FMRA_VALIDATE_FLOWER_NAMES and not is_valid_flower_name(flower_name):
+                logger.debug(f"FMRA: Skipping invalid flower name: '{flower_name}'")
+                skipped_count += 1
+                continue
+
+            # Generate display-only flower_id from name
+            # Note: In pure AI selection, flower_id is NOT a DB key - it's for display/tracking only
+            flower_id = item.get("flower_id", "")
+            if not flower_id or not isinstance(flower_id, str) or not is_valid_flower_name(flower_id):
+                flower_id = flower_name.lower().replace(" ", "_").replace("-", "_")
+
             price_tier = self._estimate_price_tier(flower_name)
 
             candidates.append(FlowerCandidate(
-                flower_id=item.get("flower_id", "unknown_flower"),
+                flower_id=flower_id,
                 name=flower_name,
                 match_score=safe_parse_float(
                     item.get("match_score"),
@@ -405,7 +483,17 @@ Select the top 5 matches, ranked from best to good. Return JSON:
                 price_tier=price_tier,
             ))
 
-        return candidates if candidates else [self._fallback_candidate(ctx)]
+        # Track metrics (approximate; not thread-safe)
+        if skipped_count > 0:
+            _invalid_flower_count += skipped_count
+            logger.debug(f"FMRA: Skipped {skipped_count} invalid candidates (total: {_invalid_flower_count})")
+
+        # If all candidates were invalid, use context-aware fallback
+        if not candidates:
+            logger.warning("FMRA: AI returned no valid flowers, using context-aware fallback")
+            return [self._fallback_candidate(ctx)]
+
+        return candidates
 
     def _estimate_price_tier(self, flower_name: str) -> str:
         """Estimate price tier for flowers not in database."""

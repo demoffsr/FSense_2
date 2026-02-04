@@ -183,10 +183,13 @@ Copy `backend/.env.example` to `backend/.env` and set:
 - `YANDEX_CLOUD_API_KEY`, `YANDEX_CLOUD_FOLDER_ID` - Yandex search (Russia)
 - `FLORIST_ONE_API_KEY`, `FLORIST_ONE_API_PASSWORD` - FloristOne (US/Canada)
 - `FMRA_ENFORCE_BUDGET` - defaults to `true`; set `false` for shadow-only logging
+- `FMRA_VALIDATE_FLOWER_NAMES` - defaults to `true`; set `false` to disable flower name validation (rollback)
 - `BUDGET_NORMALIZE_ENABLED` - defaults to `true`; set `false` to disable budget normalization (rollback)
 - `FALLBACK_PAYLOAD_ENABLED` - defaults to `true`; set `false` to disable fallback payload on SFA failure
 
 ## Current Status
+
+**Version 0.5.8** - FMRA flower name validation: Validates AI-returned flower names in `_ai_selection_multiple()` to reject placeholder/error values like "Unknown Flower", "N/A", "Error". Uses blocklist + substring pattern matching via `is_valid_flower_name()` helper. Skipped candidates logged at DEBUG level; approximate counter `_invalid_flower_count` for observability. Also adds defensive handling for malformed AI responses (null/string candidates, non-dict items, non-string flower_name). Generates flower_id from name when AI provides invalid ID. Rollback via `FMRA_VALIDATE_FLOWER_NAMES=false`. Tests in `backend/tests/test_fmra_validation.py`.
 
 **Version 0.5.7** - SFA fallback payload: When SFA fails but FMRA has candidates, builds minimal valid FlowerCardPayload from available context (flower name, meanings, RFFA risk data). Pydantic-validated, with `_fallback: true` flag for iOS to optionally show simplified view indicator. Rollback via `FALLBACK_PAYLOAD_ENABLED=false`. Warning-level logging when activated.
 
