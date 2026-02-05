@@ -85,14 +85,18 @@ struct LovedOneEditView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Cancel") {
+                Button {
                     dismiss()
+                } label: {
+                    Text("Cancel", comment: "Button to dismiss without saving")
                 }
             }
 
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Save") {
+                Button {
                     saveProfile()
+                } label: {
+                    Text("Save", comment: "Button to save loved one profile")
                 }
                 .font(.system(size: 16, weight: .semibold))
                 .disabled(!isValid)
@@ -224,7 +228,7 @@ struct LovedOneEditView: View {
                     .foregroundColor(themeAccent)
                     .frame(width: 24)
 
-                Text(selectedRelationship?.rawValue ?? "Relationship *")
+                Text(selectedRelationship?.displayName ?? "Relationship *")
                     .font(.system(size: 16))
                     .foregroundColor(selectedRelationship == nil ? .secondary : .primary)
 
@@ -267,7 +271,7 @@ struct LovedOneEditView: View {
                                         .foregroundColor(category.color)
                                         .frame(width: 24)
 
-                                    Text(category.rawValue)
+                                    Text(category.displayName)
                                         .font(.system(size: 15, weight: .medium))
                                         .foregroundColor(.primary)
 
@@ -294,7 +298,7 @@ struct LovedOneEditView: View {
                                         }
                                     } label: {
                                         HStack {
-                                            Text(relationship.rawValue)
+                                            Text(relationship.displayName)
                                                 .font(.system(size: 15))
                                                 .foregroundColor(.primary)
 

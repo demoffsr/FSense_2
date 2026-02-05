@@ -94,7 +94,7 @@ struct LovedOneDetailView: View {
             HStack(spacing: 8) {
                 Image(systemName: profile.category.icon)
                     .font(.system(size: 14))
-                Text(profile.relationship.rawValue)
+                Text(profile.relationship.displayName)
                     .font(.system(size: 15, weight: .semibold))
             }
             .foregroundColor(profile.category.color)
@@ -136,7 +136,7 @@ struct LovedOneDetailView: View {
                     preferenceRow(
                         icon: style.icon,
                         label: "Style",
-                        value: style.rawValue
+                        value: style.displayName
                     )
                     Divider().padding(.leading, 44)
                 }
@@ -145,7 +145,7 @@ struct LovedOneDetailView: View {
                     preferenceRow(
                         icon: "dollarsign.circle",
                         label: "Budget",
-                        value: budget.displayText
+                        value: budget.displayName
                     )
                     Divider().padding(.leading, 44)
                 }
@@ -160,7 +160,7 @@ struct LovedOneDetailView: View {
         }
     }
 
-    private func preferenceRow(icon: String, label: String, value: String) -> some View {
+    private func preferenceRow(icon: String, label: LocalizedStringKey, value: LocalizedStringKey) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16))
@@ -198,7 +198,7 @@ struct LovedOneDetailView: View {
 
             FlowLayout(spacing: 6) {
                 ForEach(profile.tasteProfile.preferredMoods) { mood in
-                    Text(mood.rawValue)
+                    Text(mood.displayName)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(mood.color)
                         .padding(.horizontal, 10)

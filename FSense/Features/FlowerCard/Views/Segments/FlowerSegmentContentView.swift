@@ -51,8 +51,8 @@ struct FlowerSegmentContentView: View {
             Image(systemName: "doc.text")
                 .font(.system(size: 32))
                 .foregroundColor(.secondary.opacity(0.5))
-            
-            Text("No \(segment.rawValue.lowercased()) information available")
+
+            Text(segment.emptyStateMessage)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }

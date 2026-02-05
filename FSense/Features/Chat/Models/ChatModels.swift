@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import SwiftUI
 
 // MARK: - Image Storage Manager
 
@@ -193,7 +194,7 @@ enum BudgetOption: String, CaseIterable, Codable, Equatable {
     case premium = "premium"    // $80+ / 6000₽+
     case any = "any"            // Any budget
 
-    var displayName: String {
+    var displayName: LocalizedStringKey {
         switch self {
         case .budget: return "Budget"
         case .mid: return "Mid-range"
@@ -202,13 +203,17 @@ enum BudgetOption: String, CaseIterable, Codable, Equatable {
         }
     }
 
-    var priceHint: String {
+    var priceHint: LocalizedStringKey {
         switch self {
         case .budget: return "~$20-40"
         case .mid: return "~$40-80"
         case .premium: return "$80+"
         case .any: return ""
         }
+    }
+
+    var hasPriceHint: Bool {
+        self != .any
     }
 }
 
@@ -219,14 +224,14 @@ enum ChatMode: String, Codable, Equatable {
     case ask   // Simple GPT chat - no flower pipeline
     case find  // Full flower recommendation pipeline (default)
 
-    var displayName: String {
+    var displayName: LocalizedStringKey {
         switch self {
         case .ask: return "Ask"
         case .find: return "Find"
         }
     }
 
-    var subtitle: String {
+    var subtitle: LocalizedStringKey {
         switch self {
         case .ask: return "Speak mode"
         case .find: return "Search mode"

@@ -3,12 +3,18 @@ import SwiftUI
 // MARK: - Relationship Category
 
 enum RelationshipCategory: String, Codable, CaseIterable, Identifiable {
-    case family = "Family"
-    case romance = "Romance"
-    case friends = "Friends"
-    case professional = "Professional"
+    case family, romance, friends, professional
 
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .family: return "Family"
+        case .romance: return "Romance"
+        case .friends: return "Friends"
+        case .professional: return "Professional"
+        }
+    }
 
     var icon: String {
         switch self {
@@ -46,37 +52,46 @@ enum RelationshipCategory: String, Codable, CaseIterable, Identifiable {
 
 enum Relationship: String, Codable, CaseIterable, Identifiable {
     // Family
-    case mom = "Mom"
-    case dad = "Dad"
-    case sister = "Sister"
-    case brother = "Brother"
-    case grandparent = "Grandparent"
-    case aunt = "Aunt"
-    case uncle = "Uncle"
-    case cousin = "Cousin"
-    case child = "Child"
+    case mom, dad, sister, brother, grandparent, aunt, uncle, cousin, child
 
     // Romance
-    case girlfriend = "Girlfriend"
-    case boyfriend = "Boyfriend"
-    case wife = "Wife"
-    case husband = "Husband"
-    case partner = "Partner"
-    case fiance = "Fiance"
+    case girlfriend, boyfriend, wife, husband, partner, fiance
 
     // Friends
-    case closeFriend = "Close Friend"
-    case friend = "Friend"
-    case colleague = "Colleague"
-    case neighbor = "Neighbor"
-    case mentor = "Mentor"
+    case closeFriend, friend, colleague, neighbor, mentor
 
     // Professional
-    case boss = "Boss"
-    case client = "Client"
-    case employee = "Employee"
+    case boss, client, employee
 
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .mom: return "Mom"
+        case .dad: return "Dad"
+        case .sister: return "Sister"
+        case .brother: return "Brother"
+        case .grandparent: return "Grandparent"
+        case .aunt: return "Aunt"
+        case .uncle: return "Uncle"
+        case .cousin: return "Cousin"
+        case .child: return "Child"
+        case .girlfriend: return "Girlfriend"
+        case .boyfriend: return "Boyfriend"
+        case .wife: return "Wife"
+        case .husband: return "Husband"
+        case .partner: return "Partner"
+        case .fiance: return "Fiance"
+        case .closeFriend: return "Close Friend"
+        case .friend: return "Friend"
+        case .colleague: return "Colleague"
+        case .neighbor: return "Neighbor"
+        case .mentor: return "Mentor"
+        case .boss: return "Boss"
+        case .client: return "Client"
+        case .employee: return "Employee"
+        }
+    }
 
     var category: RelationshipCategory {
         switch self {
@@ -155,9 +170,15 @@ struct ImportantDate: Identifiable, Codable, Equatable {
 }
 
 enum DateType: String, Codable, CaseIterable {
-    case birthday = "Birthday"
-    case anniversary = "Anniversary"
-    case custom = "Custom"
+    case birthday, anniversary, custom
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .birthday: return "Birthday"
+        case .anniversary: return "Anniversary"
+        case .custom: return "Custom"
+        }
+    }
 
     var icon: String {
         switch self {

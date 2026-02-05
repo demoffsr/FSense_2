@@ -1,15 +1,22 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Mood Intensity Level
 
 enum MoodIntensityLevel: String, CaseIterable, Identifiable {
-    case veryLow = "Very Low"
-    case low = "Low"
-    case balanced = "Balanced"
-    case high = "High"
-    case veryHigh = "Very High"
-    
+    case veryLow, low, balanced, high, veryHigh
+
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .veryLow: return "Very Low"
+        case .low: return "Low"
+        case .balanced: return "Balanced"
+        case .high: return "High"
+        case .veryHigh: return "Very High"
+        }
+    }
     
     /// Numeric range for each level (0.0 - 1.0)
     var range: ClosedRange<Double> {

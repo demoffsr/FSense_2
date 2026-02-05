@@ -8,6 +8,8 @@ struct SettingsView: View {
 
     @State private var selectedRegion: String = UserSettings.selectedRegion
     @State private var selectedCity: String = UserSettings.selectedCity
+    @State private var selectedLanguage: AppLanguage = LanguageManager.shared.currentLanguage
+    @State private var showRestartAlert = false
 
     var body: some View {
         ScrollView {
@@ -21,6 +23,10 @@ struct SettingsView: View {
 
                 // MARK: - Appearance Settings
                 ThemeSelectionSection()
+                    .padding(.bottom, 24)
+
+                // MARK: - Language Settings
+                languageSection
                     .padding(.bottom, 24)
 
                 // MARK: - Location Settings
@@ -122,6 +128,67 @@ struct SettingsView: View {
         }
         .onChange(of: selectedCity) { _, _ in
             saveSettings()
+        }
+        .onChange(of: selectedLanguage) { _, newLanguage in
+            LanguageManager.shared.currentLanguage = newLanguage
+            showRestartAlert = true
+        }
+        .alert("Language Changed", isPresented: $showRestartAlert) {
+            Button("OK") {
+                LanguageManager.shared.clearRestartFlag()
+            }
+        } message: {
+            Text("The interface language has been changed. Some text may update after restarting the app.")
+        }
+    }
+
+    // MARK: - Language Section
+
+    private var languageSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Language")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+
+            VStack(spacing: 0) {
+                HStack {
+                    Image(systemName: "globe")
+                        .font(.system(size: 20))
+                        .foregroundColor(themeAccent)
+                        .frame(width: 32)
+
+                    Text("App Language")
+                        .font(.system(size: 17))
+
+                    Spacer()
+
+                    Picker("", selection: $selectedLanguage) {
+                        ForEach(AppLanguage.allCases) { language in
+                            HStack {
+                                Image(systemName: language.icon)
+                                Text(language.nativeName)
+                            }
+                            .tag(language)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(themeAccent)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 16)
+
+            Text("Choose the language for the app interface.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 32)
+                .padding(.top, 8)
         }
     }
 

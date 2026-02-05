@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Single-select chip picker
-struct ChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepresentable, T.RawValue == String {
-    let title: String
+struct ChipSelectionView<T: Identifiable & Hashable & LocalizedDisplayable>: View {
+    let title: LocalizedStringKey
     let options: [T]
     @Binding var selection: T?
     var iconProvider: ((T) -> String)? = nil
@@ -17,7 +17,7 @@ struct ChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepresent
                 HStack(spacing: 10) {
                     ForEach(options) { option in
                         ChipButton(
-                            label: option.rawValue,
+                            label: option.displayName,
                             icon: iconProvider?(option),
                             isSelected: selection == option
                         ) {
@@ -38,10 +38,10 @@ struct ChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepresent
 }
 
 /// Multi-select chip picker
-struct MultiChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepresentable, T.RawValue == String {
+struct MultiChipSelectionView<T: Identifiable & Hashable & LocalizedDisplayable>: View {
     @Environment(\.themeAccent) private var themeAccent
 
-    let title: String
+    let title: LocalizedStringKey
     let options: [T]
     @Binding var selection: [T]
     var iconProvider: ((T) -> String)? = nil
@@ -59,7 +59,7 @@ struct MultiChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepr
                     let color = colorProvider?(option) ?? themeAccent
 
                     ChipButton(
-                        label: option.rawValue,
+                        label: option.displayName,
                         icon: iconProvider?(option),
                         isSelected: isSelected,
                         selectedColor: color
@@ -82,7 +82,7 @@ struct MultiChipSelectionView<T: Identifiable & Hashable>: View where T: RawRepr
 struct ChipButton: View {
     @Environment(\.themeAccent) private var defaultAccent
 
-    let label: String
+    let label: LocalizedStringKey
     var icon: String? = nil
     let isSelected: Bool
     var selectedColor: Color? = nil

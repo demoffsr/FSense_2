@@ -1,5 +1,12 @@
 import SwiftUI
 
+// MARK: - Localized Displayable Protocol
+
+/// Protocol for enums that provide localized display names
+protocol LocalizedDisplayable {
+    var displayName: LocalizedStringKey { get }
+}
+
 // MARK: - Taste Profile
 
 struct TasteProfile: Codable, Equatable {
@@ -43,14 +50,20 @@ struct TasteProfile: Codable, Equatable {
 
 // MARK: - Flower Style
 
-enum FlowerStyle: String, Codable, CaseIterable, Identifiable {
-    case minimal = "Minimal"
-    case classic = "Classic"
-    case modern = "Modern"
-    case lush = "Lush"
-    case wildflower = "Wildflower"
+enum FlowerStyle: String, Codable, CaseIterable, Identifiable, LocalizedDisplayable {
+    case minimal, classic, modern, lush, wildflower
 
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .minimal: return "Minimal"
+        case .classic: return "Classic"
+        case .modern: return "Modern"
+        case .lush: return "Lush"
+        case .wildflower: return "Wildflower"
+        }
+    }
 
     var description: String {
         switch self {
@@ -75,13 +88,19 @@ enum FlowerStyle: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Budget Range
 
-enum BudgetRange: String, Codable, CaseIterable, Identifiable {
-    case budget = "Budget"
-    case moderate = "Moderate"
-    case premium = "Premium"
-    case luxury = "Luxury"
+enum BudgetRange: String, Codable, CaseIterable, Identifiable, LocalizedDisplayable {
+    case budget, moderate, premium, luxury
 
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .budget: return "Budget"
+        case .moderate: return "Moderate"
+        case .premium: return "Premium"
+        case .luxury: return "Luxury"
+        }
+    }
 
     var priceRange: String {
         switch self {
@@ -91,23 +110,25 @@ enum BudgetRange: String, Codable, CaseIterable, Identifiable {
         case .luxury: return "$150+"
         }
     }
-
-    var displayText: String {
-        "\(rawValue) (\(priceRange))"
-    }
 }
 
 // MARK: - Mood Preference
 
-enum MoodPreference: String, Codable, CaseIterable, Identifiable {
-    case romantic = "Romantic"
-    case cheerful = "Cheerful"
-    case elegant = "Elegant"
-    case playful = "Playful"
-    case calming = "Calming"
-    case dramatic = "Dramatic"
+enum MoodPreference: String, Codable, CaseIterable, Identifiable, LocalizedDisplayable {
+    case romantic, cheerful, elegant, playful, calming, dramatic
 
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .romantic: return "Romantic"
+        case .cheerful: return "Cheerful"
+        case .elegant: return "Elegant"
+        case .playful: return "Playful"
+        case .calming: return "Calming"
+        case .dramatic: return "Dramatic"
+        }
+    }
 
     var icon: String {
         switch self {
@@ -134,18 +155,24 @@ enum MoodPreference: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Color Preference
 
-enum ColorPreference: String, Codable, CaseIterable, Identifiable {
-    case red = "Red"
-    case pink = "Pink"
-    case white = "White"
-    case yellow = "Yellow"
-    case orange = "Orange"
-    case purple = "Purple"
-    case blue = "Blue"
-    case green = "Green"
-    case mixed = "Mixed"
+enum ColorPreference: String, Codable, CaseIterable, Identifiable, LocalizedDisplayable {
+    case red, pink, white, yellow, orange, purple, blue, green, mixed
 
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .red: return "Red"
+        case .pink: return "Pink"
+        case .white: return "White"
+        case .yellow: return "Yellow"
+        case .orange: return "Orange"
+        case .purple: return "Purple"
+        case .blue: return "Blue"
+        case .green: return "Green"
+        case .mixed: return "Mixed"
+        }
+    }
 
     var color: Color {
         switch self {

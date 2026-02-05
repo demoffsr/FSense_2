@@ -227,7 +227,7 @@ private struct CategorySection: View {
                             .font(.system(size: 16))
                             .foregroundColor(category.color)
 
-                        Text(category.rawValue)
+                        Text(category.displayName)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.primary)
 

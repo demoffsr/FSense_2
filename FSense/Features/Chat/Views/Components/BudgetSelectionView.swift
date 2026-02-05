@@ -41,7 +41,7 @@ struct BudgetSelectionView: View {
                 Text(option.displayName)
                     .font(.system(size: 14, weight: .medium))
 
-                if !option.priceHint.isEmpty {
+                if option.hasPriceHint {
                     Text(option.priceHint)
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)

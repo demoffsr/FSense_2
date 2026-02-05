@@ -15,7 +15,7 @@ struct LovedOneRowView: View {
                     .lineLimit(1)
 
                 HStack(spacing: 6) {
-                    Text(profile.relationship.rawValue)
+                    Text(profile.relationship.displayName)
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
 

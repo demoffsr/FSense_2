@@ -165,7 +165,7 @@ struct HomeView: View {
                 chatEditAction = nil
             }
         } message: { action in
-            Text("Are you sure you want to delete \"\(action.session.title)\"? This action cannot be undone.")
+            Text("Are you sure you want to delete \"\(action.session.title)\"? This action cannot be undone.", comment: "Confirmation message for deleting a chat")
         }
     }
 }

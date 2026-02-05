@@ -1,13 +1,28 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Flower Card Segment
 
 enum FlowerCardSegment: String, CaseIterable, Identifiable {
-    case meaning = "Meaning"
-    case gifting = "Gifting"
-    case context = "Context"
-    
+    case meaning, gifting, context
+
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .meaning: return "Meaning"
+        case .gifting: return "Gifting"
+        case .context: return "Context"
+        }
+    }
+
+    var emptyStateMessage: LocalizedStringKey {
+        switch self {
+        case .meaning: return "No meaning information available"
+        case .gifting: return "No gifting information available"
+        case .context: return "No context information available"
+        }
+    }
 }
 
 // MARK: - Flower Card State

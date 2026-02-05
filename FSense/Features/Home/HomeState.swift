@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// State for Home screen
 /// Responsibility: Holds all data displayed on Home screen
@@ -10,8 +11,14 @@ struct HomeState {
 
 /// Tab options for Recent section
 enum RecentTab: String, CaseIterable {
-    case chats = "Chats"
-    case scans = "Scans"
+    case chats, scans
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .chats: return "Chats"
+        case .scans: return "Scans"
+        }
+    }
 }
 
 /// Model for recent scan item (flowers identified via camera)
