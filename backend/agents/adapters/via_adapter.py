@@ -10,6 +10,7 @@ Position in pipeline: FIRST (before FIA), only runs if image_base64 is present.
 """
 
 import logging
+import math
 from typing import Any, Optional
 
 from backend.agents.base import BaseAgent
@@ -20,7 +21,6 @@ from backend.pipeline.context import (
 )
 from backend.core.ai_client import get_ai_client, AIClientError
 from backend.core.console_logger import get_console_logger
-from backend.core.safe_parse import safe_parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +96,7 @@ class VIAAdapter(BaseAgent):
         return DetectedFlower(
             name=name,
             color=color,
-            confidence=safe_parse_float(
-                data.get("confidence"),
-                default=0.0,
-                context="VIA.confidence"
-            ),
+            confidence=self._safe_parse_confidence(data.get("confidence")),
         )
 
     def _validate_color(self, color: Any) -> Optional[str]:
@@ -115,6 +111,28 @@ class VIAAdapter(BaseAgent):
             if valid_color in color_lower:
                 return valid_color
         return None
+
+    def _safe_parse_confidence(self, value: Any) -> float:
+        """Parse confidence with warning-level logging for out-of-range values.
+
+        Unlike safe_parse_float which logs clamping at DEBUG level,
+        VIA confidence warrants WARNING level since it affects clarification flow.
+        Values outside [0.0, 1.0] trigger alerts in production monitoring.
+        """
+        try:
+            conf = float(value)
+            # Handle NaN and Inf (float() parses these successfully)
+            if not math.isfinite(conf):
+                logger.warning(f"VIA: Non-finite confidence value '{value}', returning 0.0")
+                return 0.0
+            if conf < 0.0 or conf > 1.0:
+                clamped = max(0.0, min(1.0, conf))
+                logger.warning(f"VIA: Confidence {conf} outside [0.0, 1.0], clamping to {clamped}")
+                return clamped
+            return conf
+        except (TypeError, ValueError):
+            logger.warning(f"VIA: Invalid confidence value '{value}', returning 0.0")
+            return 0.0
 
     def run(self, ctx: PipelineContext) -> None:
         """Analyze bouquet image and extract flower information."""

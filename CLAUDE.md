@@ -208,6 +208,8 @@ Copy `backend/.env.example` to `backend/.env` and set:
 
 ## Current Status
 
+**Version 0.6.3** - VIA confidence warning-level logging: VIA adapter now uses custom `_safe_parse_confidence()` method instead of generic `safe_parse_float()` for parsing confidence values. Out-of-range confidence values (outside [0.0, 1.0]) and invalid values (None, "high", NaN, Inf) now generate WARNING-level logs instead of DEBUG, enabling production monitoring alerts. This is important because confidence < 0.7 triggers the clarification flow in the UI. Handles: valid floats/strings pass through, values outside range are clamped with warning, non-finite values (NaN, Inf) return 0.0 with warning, invalid strings return 0.0 with warning. No feature flag (intentional behavior change for monitoring). Tests in `backend/tests/test_via_confidence.py` (14 tests: 11 unit + 3 integration).
+
 **Version 0.6.2** - SRFL emotion substring matching fix: Replaced bidirectional substring matching (`dominant_emotion in emotion_key or emotion_key in dominant_emotion`) with segment-based matching using underscore splits. Now `"puppy_love"` correctly falls back to `"love"` targets (exact segment match), `"care_concern"` uses `"concern"` targets (longer key preferred), and typos like `"lovey"` return neutral 0.6 (no false positives). Added None guard for `primary_emotion` to prevent crashes. Dictionary keys sorted by length descending so longer/more specific keys match first. Debug logging tracks fallback matches. Rollback via `SRFL_USE_SEGMENT_MATCHING=false`. Tests in `backend/tests/test_srfl_emotion_matching.py` (21 tests).
 
 **Version 0.6.1** - CRI flower ID resolution fix: Fixed naive `flower_name.lower().replace(" ", "_")` ID generation in CRI that caused `get_cultural_warnings()` to silently fail when IDs didn't match database format. Implemented 3-tier resolution strategy: (1) match flower_name against ALL candidates by name (case-insensitive), (2) use `FlowerKnowledgeBase.resolve_flower_id()` for fuzzy matching, (3) fallback to heuristics only. Extracted `_check_heuristic_warnings()` method for reuse. Combined DB + heuristic warnings with deduplication instead of early-return on DB match. Added `None` region handling. Rollback via `CRI_USE_KNOWLEDGE_BASE=false`. Tests in `backend/tests/test_cri_flower_id.py` (21 tests).
@@ -334,17 +336,33 @@ Before implementing a helper method, verify these common pitfalls:
    - Any shared state or service must be thread-safe
    - Check if called service uses file handles, caches, or mutable globals
 
+7. **Integration test is mandatory for every helper**
+   ```python
+   # Unit test (necessary but not sufficient):
+   def test_safe_parse_confidence_clamps(self, adapter):
+       result = adapter._safe_parse_confidence(1.5)
+       assert result == 1.0
+
+   # Integration test (REQUIRED):
+   def test_parse_detected_flower_uses_safe_confidence(self, adapter):
+       """Verify the caller actually uses the helper and processes result."""
+       result = adapter._parse_detected_flower({"flower_name": "Rose", "confidence": 1.5})
+       assert result.confidence == 1.0  # Confirms integration works
+   ```
+
 ### When Planning Changes
 
 1. **Feature flag default: YES**
    - "No feature flag needed" requires explicit justification
    - Defensive code with no behavior change → OK without flag
    - Any behavior change (different results, new calls) → needs flag
+   - **Logging level changes ARE behavior changes** — WARNING/ERROR logs may trigger alerts in prod
 
 2. **Test levels required**
    - Unit tests for helper methods in isolation
-   - Integration tests verifying the helper is called correctly AND results used properly
+   - **Integration tests are MANDATORY** — verify caller uses helper correctly AND processes result
    - Don't just test `_resolve_id()` — also test that `_check_warnings()` uses resolved ID
+   - Example: if adding `_safe_parse_confidence()`, also test `_parse_detected_flower()` calls it
 
 3. **Early return logic review**
    ```python
@@ -381,8 +399,39 @@ Before implementing a helper method, verify these common pitfalls:
 
 6. **Check existing imports before adding**
    - Read the file header before planning import additions
-   - `List`, `Optional`, `Dict` may already be imported
+   - `List`, `Optional`, `Dict`, `Any` may already be imported
    - Avoid duplicate imports that cause linter warnings
+   - **Verify type hints are importable** — `value: Any` requires `from typing import Any`
+
+7. **NEVER use line numbers in plans**
+   - Line numbers drift as code changes — plans become wrong immediately
+   - Reference by: function name, class name, unique code pattern, or surrounding context
+
+   | Task | BAD | GOOD |
+   |------|-----|------|
+   | Add import | "Add after line 12" | "Add after `import logging`" |
+   | Add method | "Add after line 117" | "Add after the `_validate_color` method, before `run`" |
+   | Replace code | "Replace lines 99-103" | "Find this pattern: `confidence=safe_parse_float(...)` and replace with..." |
+   | Remove line | "Remove line 23" | "Remove the line: `from backend.core.safe_parse import safe_parse_float`" |
+   | Verify location | "at line 99" | "Verified via grep: appears only in `_parse_detected_flower`" |
+
+8. **Make conditions definitive, not vague**
+   - Bad: "If X is no longer used elsewhere, remove it"
+   - Good: grep the file first, then state definitively: "X is not used elsewhere; remove the import"
+   - Read the actual file to determine facts before writing the plan
+
+9. **Standardize log message format**
+   - Include: component name, what happened, what action was taken
+   - Bad: `f"Confidence {conf} outside valid range, clamping"` (to what?)
+   - Good: `f"VIA: Confidence {conf} outside [0.0, 1.0], clamped to {clamped}"`
+   - Be consistent across similar log statements in the same method
+
+10. **Test edge cases checklist for numeric parsing**
+    - Valid values: `0`, `0.0`, `1.0`, `0.5`, `"0.7"`
+    - Boundary: `-0.1`, `1.1`, `-1`, `2`
+    - Invalid strings: `"high"`, `"low"`, `""`, `"  "`, `"0.7.2"`
+    - Special values: `None`, `float("nan")`, `float("inf")`, `float("-inf")`
+    - Type variants: integer `0` vs float `0.0` vs string `"0"`
 
 ### Before Writing Any Plan: Verify Factual Claims
 
@@ -483,6 +532,27 @@ When modifying an agent, verify compatibility with upstream/downstream agents:
        matches = [s for s in segments if s in srfl_keys]
        print(f'{e}: fallback={matches or \"none\"}')"
    ```
+
+### Plan Quality Checklist
+
+Before submitting any plan, verify:
+
+| Check | Question | How to verify |
+|-------|----------|---------------|
+| **Imports** | Are all type hints importable? | Read file header for existing imports |
+| **Integration tests** | Does plan include test that caller uses helper correctly? | Not just unit test of helper |
+| **Behavior change** | Is "no behavior change" claim accurate? | Log level change = behavior change |
+| **Definitive statements** | Are conditions vague ("if X unused") or definitive? | grep/read file first |
+| **Code references** | Using line numbers? | Use function/pattern names instead |
+| **Edge cases** | Are ALL edge cases covered? | See numeric parsing checklist above |
+| **Log consistency** | Do similar log messages have same format? | Include: component, event, action taken |
+
+**Red flags in plans:**
+- ANY line number reference: "line 12", "line 117", "lines 99-103" — ALWAYS wrong approach
+- "If X is no longer used" — should be definitive
+- "No behavior change" + log level change — contradiction
+- Unit tests only, no integration test — incomplete
+- `value: Any` without verifying `Any` is imported — will crash
 
 ### Code Style
 
