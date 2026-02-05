@@ -7,8 +7,13 @@ Expected savings: ~300ms per pipeline run.
 Version: v0.5.0
 """
 
+import os
 from typing import Optional
 from backend.pipeline.context import RelationshipData, IntentData
+
+
+# Feature flag for emotion capping logic (default: enabled)
+EMOTION_CAPPING_ENABLED = os.getenv("EMOTION_CAPPING_ENABLED", "true").lower() == "true"
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -241,12 +246,14 @@ def _compute_gift_appropriateness(
         max_intensity -= 0.1
 
     # Adjust for high-intensity negative emotions (EIA cross-reference)
-    if emotion_data:
-        emotion = emotion_data.get("primary_emotion", "").lower()
-        intensity = emotion_data.get("emotion_intensity", 0.5)
+    if emotion_data and EMOTION_CAPPING_ENABLED:
+        raw_emotion = emotion_data.get("primary_emotion")
+        emotion = (raw_emotion or "").lower()
+        raw_intensity = emotion_data.get("emotion_intensity")
+        intensity = raw_intensity if raw_intensity is not None else 0.5
 
-        # "Making amends" emotions should cap intensity
-        if emotion in ["remorse", "guilt", "regret", "apologetic"] and intensity > 0.7:
+        # Guilt-family emotions from EIA taxonomy (keep "guilt" as defensive catch)
+        if emotion in ["remorse", "regret", "shame", "contrition", "guilt"] and intensity > 0.7:
             max_intensity = min(max_intensity, 0.6)
 
     # Clamp
