@@ -6,7 +6,7 @@ struct RecentTabsView: View {
     var body: some View {
         Picker("Recent", selection: $selectedTab) {
             ForEach(RecentTab.allCases, id: \.self) { tab in
-                Text(tab.rawValue)
+                Text(tab.displayName)
                     .tag(tab)
             }
         }

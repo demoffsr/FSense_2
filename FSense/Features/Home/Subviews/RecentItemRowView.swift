@@ -52,7 +52,7 @@ struct RecentItemRowView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 9)
                     .inset(by: 0.5)
-                    .stroke(Color(red: 0.95, green: 0.95, blue: 0.95), lineWidth: 1)
+                    .stroke(Color("BorderStroke"), lineWidth: 1)
             )
     }
 }
