@@ -32,6 +32,23 @@ python -m backend.pipeline.runner "What flower is this?" --image path/to/image.j
 - Open `FSense_2.xcodeproj` in Xcode
 - Build server configured at `/opt/homebrew/bin/xcode-build-server`
 
+### Adding New Languages
+
+```bash
+# Export template with all 217 strings
+python scripts/add_language.py --export > scripts/translations/ko.json
+
+# Translate the JSON file, then add the language
+python scripts/add_language.py ko "한국어" scripts/translations/ko.json
+
+# Build to verify (catches switch exhaustiveness errors)
+xcodebuild -project FSense_2.xcodeproj -scheme FSense_2 build
+```
+
+The script updates: `LanguageManager.swift`, `project.pbxproj`, `Localizable.xcstrings`, `InfoPlist.xcstrings`, `FSenseApp.swift`
+
+**Current languages (7):** English, Russian, Spanish, German, French, Chinese (Simplified), Japanese
+
 ## Architecture
 
 ### Agent Pipeline
