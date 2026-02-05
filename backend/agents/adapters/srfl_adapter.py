@@ -9,12 +9,17 @@ Version: v3 - Expanded emotion vocabulary, improved string matching
 """
 
 import logging
+import os
 import re
 from typing import List, Set
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import PipelineContext, ReflectionData
 from backend.core.console_logger import get_console_logger
+
+# Feature flag for segment-based matching (default: true for new behavior)
+# Set SRFL_USE_SEGMENT_MATCHING=false to revert to old bidirectional matching
+SRFL_USE_SEGMENT_MATCHING = os.getenv("SRFL_USE_SEGMENT_MATCHING", "true").lower() == "true"
 
 logger = logging.getLogger(__name__)
 
@@ -167,8 +172,11 @@ class SRFLAdapter(BaseAgent):
         if not ctx.emotions or not ctx.candidates or not ctx.candidates.candidates:
             return 0.5
 
-        # Get primary emotion
-        dominant_emotion = ctx.emotions.primary_emotion.lower()
+        # Get primary emotion with None guard
+        primary_emotion = ctx.emotions.primary_emotion
+        if not primary_emotion:
+            return 0.5  # No emotion data
+        dominant_emotion = primary_emotion.lower()
 
         # Get flower meanings and extract individual words
         candidate = ctx.candidates.candidates[0]
@@ -176,16 +184,34 @@ class SRFLAdapter(BaseAgent):
         # Use word boundaries to avoid false positives (e.g., "care" in "careful")
         meanings_words = set(re.findall(r'\b\w+\b', meanings_text))
 
-        # Check if emotion matches meanings
+        # Try exact match first
         targets = EMOTION_TO_MEANING_TONES.get(dominant_emotion, set())
-        if not targets:
-            # Unknown emotion - try to find partial match in all emotions
+
+        if not targets and SRFL_USE_SEGMENT_MATCHING:
+            # Unknown emotion - try to find key that is an exact segment of dominant_emotion
+            # Split by underscore to get segments (e.g., "care_concern" → ["care", "concern"])
+            emotion_segments = set(dominant_emotion.split("_"))
+
+            # Sort by length (longer keys = more specific) to prefer better matches
+            for emotion_key, emotion_targets in sorted(
+                EMOTION_TO_MEANING_TONES.items(),
+                key=lambda x: len(x[0]),
+                reverse=True  # Longer keys first
+            ):
+                # Check if emotion_key is an exact segment of dominant_emotion
+                if emotion_key in emotion_segments:
+                    targets = emotion_targets
+                    logger.debug(f"SRFL: Fallback matched '{emotion_key}' for unknown emotion '{dominant_emotion}'")
+                    break
+        elif not targets:
+            # Old bidirectional matching (disabled by default)
             for emotion_key, emotion_targets in EMOTION_TO_MEANING_TONES.items():
                 if dominant_emotion in emotion_key or emotion_key in dominant_emotion:
                     targets = emotion_targets
                     break
-            if not targets:
-                return 0.6  # Unknown emotion, assume neutral
+
+        if not targets:
+            return 0.6  # Unknown emotion, assume neutral
 
         # Count hits using word matching
         hits = sum(1 for target in targets if target in meanings_words)

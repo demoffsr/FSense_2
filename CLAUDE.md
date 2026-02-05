@@ -204,8 +204,11 @@ Copy `backend/.env.example` to `backend/.env` and set:
 - `BUDGET_NORMALIZE_ENABLED` - defaults to `true`; set `false` to disable budget normalization (rollback)
 - `FALLBACK_PAYLOAD_ENABLED` - defaults to `true`; set `false` to disable fallback payload on SFA failure
 - `CRI_USE_KNOWLEDGE_BASE` - defaults to `true`; set `false` to disable FlowerKnowledgeBase resolution in CRI (rollback)
+- `SRFL_USE_SEGMENT_MATCHING` - defaults to `true`; set `false` to revert to old bidirectional substring matching in SRFL (rollback)
 
 ## Current Status
+
+**Version 0.6.2** - SRFL emotion substring matching fix: Replaced bidirectional substring matching (`dominant_emotion in emotion_key or emotion_key in dominant_emotion`) with segment-based matching using underscore splits. Now `"puppy_love"` correctly falls back to `"love"` targets (exact segment match), `"care_concern"` uses `"concern"` targets (longer key preferred), and typos like `"lovey"` return neutral 0.6 (no false positives). Added None guard for `primary_emotion` to prevent crashes. Dictionary keys sorted by length descending so longer/more specific keys match first. Debug logging tracks fallback matches. Rollback via `SRFL_USE_SEGMENT_MATCHING=false`. Tests in `backend/tests/test_srfl_emotion_matching.py` (21 tests).
 
 **Version 0.6.1** - CRI flower ID resolution fix: Fixed naive `flower_name.lower().replace(" ", "_")` ID generation in CRI that caused `get_cultural_warnings()` to silently fail when IDs didn't match database format. Implemented 3-tier resolution strategy: (1) match flower_name against ALL candidates by name (case-insensitive), (2) use `FlowerKnowledgeBase.resolve_flower_id()` for fuzzy matching, (3) fallback to heuristics only. Extracted `_check_heuristic_warnings()` method for reuse. Combined DB + heuristic warnings with deduplication instead of early-return on DB match. Added `None` region handling. Rollback via `CRI_USE_KNOWLEDGE_BASE=false`. Tests in `backend/tests/test_cri_flower_id.py` (21 tests).
 
@@ -380,6 +383,106 @@ Before implementing a helper method, verify these common pitfalls:
    - Read the file header before planning import additions
    - `List`, `Optional`, `Dict` may already be imported
    - Avoid duplicate imports that cause linter warnings
+
+### Before Writing Any Plan: Verify Factual Claims
+
+**CRITICAL**: Never assume string operations, comparisons, or language behaviors. Always verify.
+
+1. **Verify string operations in Python REPL**
+   ```python
+   # WRONG assumption in a plan:
+   # "care" in "concern" → True  (ACTUALLY FALSE!)
+
+   # Always test:
+   >>> "care" in "concern"
+   False  # "care" is NOT a substring of "concern"
+
+   >>> "love" in "romantic_love"
+   True  # This one IS true
+   ```
+
+2. **Test assertions must actually pass**
+   - Before writing `assert X`, verify X is true
+   - Don't write tests that demonstrate "bugs" without checking the bug exists
+   - Bad: `assert "care" in "concern"  # Demonstrates the bug` — this FAILS!
+
+3. **Verify dictionary/data structure contents**
+   - Read the actual code to see what keys/values exist
+   - Don't assume key names — check the source file
+   - Example: Plan assumed "care"/"concern" were problematic, but `"care" in "concern"` is False
+
+4. **Integration tests over isolated logic tests**
+   ```python
+   # Weak: tests substring logic in isolation
+   def test_substring_logic(self):
+       assert f"_key" in f"_compound_key_"
+
+   # Strong: tests the actual method behavior
+   def test_compute_consistency_with_compound_emotion(self):
+       ctx = create_mock_context(primary_emotion="care_concern")
+       result = adapter._compute_consistency(ctx)
+       assert result > 0.5  # Verifies correct targets were used
+   ```
+
+5. **When fixing "bugs", verify the bug exists first**
+   - Run the problematic code path with actual inputs
+   - Capture current behavior before proposing fix
+   - Document: "Current: X, Expected: Y, Actual difference: Z"
+
+6. **Edge cases must be verified, not assumed**
+   - What happens with `None`? Test it.
+   - What happens with empty string? Test it.
+   - What happens with the actual data the system produces? Check EIA/FIA outputs.
+
+### Cross-Reference Pipeline Components
+
+When modifying an agent, verify compatibility with upstream/downstream agents:
+
+1. **Check actual outputs from upstream agents**
+   ```python
+   # Example: SRFL uses EIA's primary_emotion
+   # Don't assume EIA outputs — check EIA prompt and code:
+
+   # EIA can output emotions NOT in SRFL dict:
+   # - puppy_love, mature_love → need fallback to "love"
+   # - indebtedness, recognition, disappointment → no fallback match
+
+   # Test REAL scenarios, not just theoretical edge cases
+   ```
+
+2. **Verify data format assumptions**
+   - If Agent B expects Agent A's output in format X, read Agent A's code
+   - Check prompts: AI may not follow instructions exactly
+   - Example: EIA prompt says "pick ONE emotion" but AI might return compounds
+
+3. **Test with actual agent outputs**
+   ```python
+   # Bad: test only theoretical inputs
+   def test_unknown_emotion(self):
+       ctx = self._create_mock_context("xyz_unknown", [...])
+
+   # Good: test inputs EIA actually produces
+   def test_puppy_love_fallback(self):
+       """puppy_love is valid EIA output not in SRFL dict."""
+       ctx = self._create_mock_context("puppy_love", [...])
+   ```
+
+4. **Document coverage gaps**
+   - If upstream can produce values downstream doesn't handle, document it
+   - Example: EIA outputs `indebtedness`, `recognition`, `disappointment` — SRFL returns neutral 0.6
+
+5. **Quick verification script**
+   ```bash
+   # Compare EIA outputs vs SRFL expected inputs
+   python3 -c "
+   eia_outputs = ['puppy_love', 'mature_love', 'indebtedness', ...]
+   srfl_keys = ['love', 'care', 'concern', ...]
+   missing = [e for e in eia_outputs if e not in srfl_keys]
+   for e in missing:
+       segments = e.split('_')
+       matches = [s for s in segments if s in srfl_keys]
+       print(f'{e}: fallback={matches or \"none\"}')"
+   ```
 
 ### Code Style
 
