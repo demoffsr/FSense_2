@@ -10,7 +10,8 @@ Based on: cultural_reasoning_intelligence_v2.py
 """
 
 import logging
-from typing import List
+import os
+from typing import List, Optional
 
 from backend.agents.base import BaseAgent
 from backend.pipeline.context import (
@@ -20,6 +21,7 @@ from backend.pipeline.context import (
 )
 from backend.core.ai_client import get_ai_client_fast, AIClientError
 from backend.core.console_logger import get_console_logger
+from backend.services.flower_knowledge_base import FlowerKnowledgeBase
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,9 @@ try:
 except ImportError:
     DATABASE_AVAILABLE = False
     logger.warning("Flower database not available for CRI, using heuristics only")
+
+# Feature flag for FlowerKnowledgeBase resolution (rollback safety)
+CRI_USE_KNOWLEDGE_BASE = os.getenv("CRI_USE_KNOWLEDGE_BASE", "true").lower() == "true"
 
 CULTURAL_ANALYSIS_PROMPT = """You are CRI v2 — Cultural Reasoning Intelligence for FSense.
 Analyze flowers from the perspective of regional traditions and modern culture.
@@ -95,7 +100,7 @@ class CRIAdapter(BaseAgent):
             region = ctx.region.upper()
 
             # Check database for warnings first
-            warnings = self._check_cultural_warnings(flower_name, region)
+            warnings = self._check_cultural_warnings(flower_name, region, ctx)
 
             # Use AI for cultural analysis with database context
             result = self._analyze_with_ai(ctx, flower_name, region, warnings)
@@ -192,47 +197,45 @@ class CRIAdapter(BaseAgent):
 
         return insights[:3]
 
-    def _check_cultural_warnings(self, flower_name: str, region: str) -> List[str]:
-        """Check for cultural warnings - uses database if available."""
+    def _check_cultural_warnings(self, flower_name: str, region: str, ctx: PipelineContext) -> List[str]:
+        """Check for cultural warnings - uses database if available, combines with heuristics."""
+        # Handle None region early
+        if not region:
+            return self._check_heuristic_warnings(flower_name, "")
+
         warnings = []
+        db_warnings_found = False
 
         # Try database first
         if DATABASE_AVAILABLE:
-            # Get flower ID from candidates context
-            flower_id = None
-            # Try to infer flower_id from name (e.g., "Red Rose" -> "red_rose")
-            flower_id = flower_name.lower().replace(" ", "_")
+            # Resolve flower_id using 3-tier strategy
+            flower_id = self._resolve_flower_id(flower_name, ctx)
 
-            # Check database for cultural warnings
-            db_warning = get_cultural_warnings(flower_id, region.lower())
-            if db_warning and db_warning.get("is_taboo"):
-                if db_warning.get("taboo_reason"):
-                    warnings.append(db_warning["taboo_reason"])
+            if flower_id:
+                # Check database for cultural warnings
+                db_warning = get_cultural_warnings(flower_id, region.lower())
+                if db_warning and db_warning.get("is_taboo"):
+                    db_warnings_found = True
+                    if db_warning.get("taboo_reason"):
+                        warnings.append(db_warning["taboo_reason"])
 
-                # Add occasion-specific warnings
-                if db_warning.get("taboo_occasions"):
-                    occasions = ", ".join(db_warning["taboo_occasions"])
-                    warnings.append(f"Avoid for: {occasions}")
+                    # Add occasion-specific warnings
+                    if db_warning.get("taboo_occasions"):
+                        occasions = ", ".join(db_warning["taboo_occasions"])
+                        warnings.append(f"Avoid for: {occasions}")
 
-            # If database had results, return them
-            if warnings:
-                logger.info(f"CRI: Found cultural warnings in database for {flower_id} in {region}")
-                return warnings
+                if db_warnings_found:
+                    logger.debug(f"CRI: Found cultural warnings in database for {flower_id} in {region}")
 
-        # Fallback to heuristics if no database or no matches
-        flower_lower = flower_name.lower()
+        # ALWAYS check heuristics (combine with DB warnings, don't skip)
+        heuristic_warnings = self._check_heuristic_warnings(flower_name, region)
 
-        # Yellow flowers in some cultures
-        if "yellow" in flower_lower and region in ("RU",):
-            warnings.append("Yellow flowers may be associated with separation in Russian culture")
-
-        # White flowers and funerals
-        if "white" in flower_lower and region in ("JP", "CN"):
-            warnings.append("White flowers are often associated with funerals in East Asian cultures")
-
-        # Chrysanthemums
-        if "chrysanthemum" in flower_lower and region in ("EU", "IT", "FR"):
-            warnings.append("Chrysanthemums are associated with funerals in many European countries")
+        # Deduplicate while preserving order
+        seen = set(w.lower() for w in warnings)
+        for hw in heuristic_warnings:
+            if hw.lower() not in seen:
+                warnings.append(hw)
+                seen.add(hw.lower())
 
         return warnings
 
@@ -365,3 +368,60 @@ Pay special attention to whether this flower is appropriate for:
             warnings=[],
             raw_output={"fallback": True},
         )
+
+    def _resolve_flower_id(self, flower_name: str, ctx: PipelineContext) -> Optional[str]:
+        """
+        Resolve flower name to database ID using 3-tier strategy:
+        1. Match flower_name against candidate names (case-insensitive)
+        2. Use FlowerKnowledgeBase.resolve_flower_id()
+        3. Return None (caller should use heuristics)
+
+        Args:
+            flower_name: Display name of the flower (e.g., "Red Rose")
+            ctx: Pipeline context with candidates
+
+        Returns:
+            Resolved flower_id or None if unresolved
+        """
+        flower_name_lower = flower_name.lower().strip()
+
+        # Tier 1: Match flower_name against ALL candidates (not just [0])
+        if ctx.candidates and ctx.candidates.candidates:
+            for candidate in ctx.candidates.candidates:
+                if candidate.name and candidate.name.lower().strip() == flower_name_lower:
+                    if candidate.flower_id and candidate.flower_id != "unknown":
+                        logger.debug(f"CRI: Matched '{flower_name}' to candidate flower_id: {candidate.flower_id}")
+                        return candidate.flower_id
+
+        # Tier 2: Try FlowerKnowledgeBase resolution (if enabled)
+        if CRI_USE_KNOWLEDGE_BASE:
+            try:
+                resolved_id = FlowerKnowledgeBase.resolve_flower_id(flower_name)
+                if resolved_id:
+                    logger.debug(f"CRI: Resolved '{flower_name}' to '{resolved_id}' via FlowerKnowledgeBase")
+                    return resolved_id
+            except Exception as e:
+                logger.warning(f"CRI: FlowerKnowledgeBase.resolve_flower_id failed: {e}")
+
+        # Tier 3: Could not resolve
+        logger.debug(f"CRI: Could not resolve flower_id for '{flower_name}', will use heuristics")
+        return None
+
+    def _check_heuristic_warnings(self, flower_name: str, region: str) -> List[str]:
+        """Generate cultural warnings based on heuristics (color/type patterns)."""
+        warnings = []
+        flower_lower = flower_name.lower()
+
+        # Yellow flowers in some cultures
+        if "yellow" in flower_lower and region in ("RU",):
+            warnings.append("Yellow flowers may be associated with separation in Russian culture")
+
+        # White flowers and funerals
+        if "white" in flower_lower and region in ("JP", "CN"):
+            warnings.append("White flowers are often associated with funerals in East Asian cultures")
+
+        # Chrysanthemums
+        if "chrysanthemum" in flower_lower and region in ("EU", "IT", "FR"):
+            warnings.append("Chrysanthemums are associated with funerals in many European countries")
+
+        return warnings

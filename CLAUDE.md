@@ -203,8 +203,11 @@ Copy `backend/.env.example` to `backend/.env` and set:
 - `FMRA_VALIDATE_FLOWER_NAMES` - defaults to `true`; set `false` to disable flower name validation (rollback)
 - `BUDGET_NORMALIZE_ENABLED` - defaults to `true`; set `false` to disable budget normalization (rollback)
 - `FALLBACK_PAYLOAD_ENABLED` - defaults to `true`; set `false` to disable fallback payload on SFA failure
+- `CRI_USE_KNOWLEDGE_BASE` - defaults to `true`; set `false` to disable FlowerKnowledgeBase resolution in CRI (rollback)
 
 ## Current Status
+
+**Version 0.6.1** - CRI flower ID resolution fix: Fixed naive `flower_name.lower().replace(" ", "_")` ID generation in CRI that caused `get_cultural_warnings()` to silently fail when IDs didn't match database format. Implemented 3-tier resolution strategy: (1) match flower_name against ALL candidates by name (case-insensitive), (2) use `FlowerKnowledgeBase.resolve_flower_id()` for fuzzy matching, (3) fallback to heuristics only. Extracted `_check_heuristic_warnings()` method for reuse. Combined DB + heuristic warnings with deduplication instead of early-return on DB match. Added `None` region handling. Rollback via `CRI_USE_KNOWLEDGE_BASE=false`. Tests in `backend/tests/test_cri_flower_id.py` (21 tests).
 
 **Version 0.6.0** - Full iOS localization with in-app language picker: Added support for 7 languages (English, Russian, Spanish, German, French, Chinese Simplified, Japanese). `LanguageManager.swift` extended with new `AppLanguage` cases, each with `displayName`, `nativeName`, and globe icons. `Localizable.xcstrings` contains 217 translated strings covering: navigation titles, buttons, relationships (24 types), categories, mood intensity levels, flower card sections, empty states, alerts, placeholders, date types, and taste profile enums. `InfoPlist.xcstrings` updated with camera/photo library permission descriptions for all languages. `project.pbxproj` updated with `knownRegions`. `FSenseApp.swift` updated with locale mappings. Users can switch languages in Settings → Language.
 
@@ -287,6 +290,96 @@ This handles:
 - Malformed values (`"0.7.2"`, `""`, `None`) → default
 - Special floats (`"nan"`, `"inf"`, `"-inf"`) → default
 - Out-of-range values → clamped to `[min_val, max_val]`
+
+### When Writing Helper Methods
+
+Before implementing a helper method, verify these common pitfalls:
+
+1. **Parameter-data alignment**
+   - If method takes `item_name` as parameter, don't blindly use `collection[0]` — verify the item matches
+   - Bad: `def resolve_id(flower_name, ctx): return ctx.candidates[0].flower_id`
+   - Good: `for c in ctx.candidates: if c.name == flower_name: return c.flower_id`
+
+2. **Parameter None checks**
+   - Always validate parameters before calling methods on them
+   - Bad: `region.lower()` — crashes if `region=None`
+   - Good: `if not region: return default` or `(region or "").lower()`
+
+3. **Collection edge cases**
+   - `if collection:` is True for non-empty, but `collection[0]` still fails on empty list
+   - Always handle: `None`, empty list `[]`, missing keys
+
+4. **External service calls need try/except**
+   ```python
+   # Bad: assumes service never fails
+   result = SomeService.lookup(name)
+
+   # Good: defensive
+   try:
+       result = SomeService.lookup(name)
+   except Exception as e:
+       logger.warning(f"Service failed: {e}")
+       result = None
+   ```
+
+5. **Verify method signatures before using**
+   - Is it `@staticmethod`, `@classmethod`, or instance method?
+   - Check the actual file, don't assume from naming convention
+
+6. **Thread safety for parallel phases**
+   - Phase 3 agents (CIA, AITB, RFFA, CRI) run concurrently
+   - Any shared state or service must be thread-safe
+   - Check if called service uses file handles, caches, or mutable globals
+
+### When Planning Changes
+
+1. **Feature flag default: YES**
+   - "No feature flag needed" requires explicit justification
+   - Defensive code with no behavior change → OK without flag
+   - Any behavior change (different results, new calls) → needs flag
+
+2. **Test levels required**
+   - Unit tests for helper methods in isolation
+   - Integration tests verifying the helper is called correctly AND results used properly
+   - Don't just test `_resolve_id()` — also test that `_check_warnings()` uses resolved ID
+
+3. **Early return logic review**
+   ```python
+   # Risky: may skip heuristics when DB returns empty/false
+   if db_result:
+       return db_result
+   # Heuristics here...
+
+   # Better: combine sources
+   warnings = []
+   if db_result:
+       warnings.extend(db_result)
+   warnings.extend(heuristic_warnings)
+   return warnings
+   ```
+
+4. **Signature changes cascade**
+   - When adding parameter to method, grep for ALL call sites
+   - `def foo(a, b)` → `def foo(a, b, ctx)` breaks callers
+
+5. **Tests must patch feature flags for code paths**
+   ```python
+   # Bad: test won't exercise DB path if DATABASE_AVAILABLE=False
+   def test_db_lookup(self):
+       with patch('module.get_warnings') as mock:
+           result = check_warnings("Rose", "IT", ctx)
+
+   # Good: explicitly enable the code path
+   @patch('module.DATABASE_AVAILABLE', True)
+   def test_db_lookup(self):
+       with patch('module.get_warnings') as mock:
+           result = check_warnings("Rose", "IT", ctx)
+   ```
+
+6. **Check existing imports before adding**
+   - Read the file header before planning import additions
+   - `List`, `Optional`, `Dict` may already be imported
+   - Avoid duplicate imports that cause linter warnings
 
 ### Code Style
 
