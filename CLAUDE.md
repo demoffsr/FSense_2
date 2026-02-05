@@ -189,6 +189,8 @@ Copy `backend/.env.example` to `backend/.env` and set:
 
 ## Current Status
 
+**Version 0.5.9** - Multiline chat input with smooth expansion: TextField in `ChatView.swift` and `BottomInputBarView.swift` now supports multiline input via `axis: .vertical` with `.lineLimit(1...5)`. Tracks `isInputMultiline` state based on newlines or text length (>35 chars). HStack alignment dynamically switches: `.center` for single line (text vertically centered), `.bottom` for multiline (send button stays at bottom). Spring animation (0.3s, 0.85 damping) triggers only on line count change, not every keystroke, for smooth transitions. ChatView background changes corner radius (25→20) when expanded.
+
 **Version 0.5.8** - FMRA flower name validation: Validates AI-returned flower names in `_ai_selection_multiple()` to reject placeholder/error values like "Unknown Flower", "N/A", "Error". Uses blocklist + substring pattern matching via `is_valid_flower_name()` helper. Skipped candidates logged at DEBUG level; approximate counter `_invalid_flower_count` for observability. Also adds defensive handling for malformed AI responses (null/string candidates, non-dict items, non-string flower_name). Generates flower_id from name when AI provides invalid ID. Rollback via `FMRA_VALIDATE_FLOWER_NAMES=false`. Tests in `backend/tests/test_fmra_validation.py`.
 
 **Version 0.5.7** - SFA fallback payload: When SFA fails but FMRA has candidates, builds minimal valid FlowerCardPayload from available context (flower name, meanings, RFFA risk data). Pydantic-validated, with `_fallback: true` flag for iOS to optionally show simplified view indicator. Rollback via `FALLBACK_PAYLOAD_ENABLED=false`. Warning-level logging when activated.
