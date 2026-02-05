@@ -3,18 +3,24 @@ import SwiftUI
 /// Container view that switches content based on selected segment
 /// Delegates to specific segment views without containing layout logic
 struct FlowerSegmentContentView: View {
-    
+
     let segment: FlowerCardSegment
     let meaningData: MeaningSegmentData?
     let giftingData: GiftingInfo?
     let contextData: ContextInfo?
-    
+    let alternatives: [AlternativeFlower]
+    var onAlternativeTap: ((AlternativeFlower) -> Void)?
+
     var body: some View {
         Group {
             switch segment {
             case .meaning:
                 if let data = meaningData {
-                    FlowerMeaningView(data: data)
+                    FlowerMeaningView(
+                        data: data,
+                        alternatives: alternatives,
+                        onAlternativeTap: onAlternativeTap
+                    )
                 } else {
                     emptyState(for: segment)
                 }
@@ -45,8 +51,8 @@ struct FlowerSegmentContentView: View {
             Image(systemName: "doc.text")
                 .font(.system(size: 32))
                 .foregroundColor(.secondary.opacity(0.5))
-            
-            Text("No \(segment.rawValue.lowercased()) information available")
+
+            Text(segment.emptyStateMessage)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -69,8 +75,11 @@ struct FlowerSegmentContentView: View {
                 moodIntensityLevel: .veryHigh
             ),
             giftingData: .mock,
-            contextData: .mock
-        )
+            contextData: .mock,
+            alternatives: AlternativeFlower.mocks
+        ) { flower in
+            print("Tapped: \(flower.name)")
+        }
         .padding()
     }
     .background(Color(.systemGray6))

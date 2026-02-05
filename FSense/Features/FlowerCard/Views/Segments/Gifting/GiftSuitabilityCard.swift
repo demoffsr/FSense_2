@@ -49,8 +49,8 @@ struct GiftSuitabilityCard: View {
     
     private var suitabilityColor: Color {
         switch suitability {
-        case .excellent: return Color(red: 0, green: 0.76, blue: 0.14)
-        case .good: return Color(red: 0, green: 0.76, blue: 0.14)
+        case .excellent: return Color("Success")
+        case .good: return Color("Success")
         case .moderate: return .orange
         case .risky: return .red.opacity(0.8)
         case .notRecommended: return .red
@@ -82,5 +82,5 @@ struct GiftSuitabilityCard: View {
         )
     }
     .padding()
-    .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+    .background(Color("SecondaryBackground"))
 }

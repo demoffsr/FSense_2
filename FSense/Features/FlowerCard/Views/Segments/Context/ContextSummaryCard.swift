@@ -31,5 +31,5 @@ struct ContextSummaryCard: View {
         summary: "Best suited for emotionally sensitive situations where subtlety and restraint are important."
     )
     .padding()
-    .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+    .background(Color("SecondaryBackground"))
 }

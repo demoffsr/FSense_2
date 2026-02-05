@@ -61,5 +61,5 @@ struct CulturalInterpretationSection: View {
         CulturalInterpretation(emoji: "🇸🇦", culture: "Middle Eastern", interpretation: "Symbol of beauty and love, referenced in poetry", sentiment: .positive)
     ])
     .padding()
-    .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+    .background(Color("SecondaryBackground"))
 }

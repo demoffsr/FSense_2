@@ -60,8 +60,8 @@ struct EmotionalRiskCard: View {
     
     private var riskColor: Color {
         switch riskLevel {
-        case .none: return Color(red: 0, green: 0.76, blue: 0.14)
-        case .low: return Color(red: 0, green: 0.76, blue: 0.14)
+        case .none: return Color("Success")
+        case .low: return Color("Success")
         case .moderate: return .orange
         case .high: return .red.opacity(0.8)
         case .veryHigh: return .red
@@ -87,5 +87,5 @@ struct EmotionalRiskCard: View {
         )
     }
     .padding()
-    .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+    .background(Color("SecondaryBackground"))
 }

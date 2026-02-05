@@ -1,9 +1,12 @@
 import SwiftUI
 
 struct MoodIntensityView: View {
-    
+
     let value: Double
     let level: MoodIntensityLevel
+
+    // Static shadow color to avoid recreation on each render
+    private static let shadowColor = Color.black.opacity(0.1)
     
     // Scale range (0-16)
     private let minValue: Double = 0
@@ -40,11 +43,11 @@ struct MoodIntensityView: View {
             HStack {
                 Text(String(format: "%.1f", displayValue))
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(Color(red: 0.12, green: 0.11, blue: 0.09))
+                    .foregroundColor(Color("TextPrimary"))
                 
                 Spacer()
                 
-                Text(level.rawValue)
+                Text(level.displayName)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(levelColor)
             }
@@ -93,15 +96,15 @@ struct MoodIntensityView: View {
             
             // Legend
             HStack {
-                legendDot(color: .blue, text: "Very Low")
+                legendDot(color: .blue, text: MoodIntensityLevel.veryLow.displayName)
                 Spacer()
-                legendDot(color: .green, text: "Low")
+                legendDot(color: .green, text: MoodIntensityLevel.low.displayName)
                 Spacer()
-                legendDot(color: .yellow, text: "Balanced")
+                legendDot(color: .yellow, text: MoodIntensityLevel.balanced.displayName)
                 Spacer()
-                legendDot(color: .orange, text: "High")
+                legendDot(color: .orange, text: MoodIntensityLevel.high.displayName)
                 Spacer()
-                legendDot(color: .red, text: "Very High")
+                legendDot(color: .red, text: MoodIntensityLevel.veryHigh.displayName)
             }
             .frame(maxWidth: .infinity)
         }
@@ -109,15 +112,16 @@ struct MoodIntensityView: View {
         .frame(maxWidth: .infinity)
         .background(Color.white)
         .cornerRadius(20)
-        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 2)
+        .compositingGroup()
+        .shadow(color: Self.shadowColor, radius: 10, x: 0, y: 2)
     }
-    
-    private func legendDot(color: Color, text: String) -> some View {
+
+    private func legendDot(color: Color, text: LocalizedStringKey) -> some View {
         HStack(spacing: 4) {
             Circle()
                 .fill(color)
                 .frame(width: 8, height: 8)
-            
+
             Text(text)
                 .font(.system(size: 12))
                 .foregroundColor(.black)

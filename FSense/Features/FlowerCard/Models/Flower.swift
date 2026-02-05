@@ -1,15 +1,22 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Mood Intensity Level
 
 enum MoodIntensityLevel: String, CaseIterable, Identifiable {
-    case veryLow = "Very Low"
-    case low = "Low"
-    case balanced = "Balanced"
-    case high = "High"
-    case veryHigh = "Very High"
-    
+    case veryLow, low, balanced, high, veryHigh
+
     var id: String { rawValue }
+
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .veryLow: return "Very Low"
+        case .low: return "Low"
+        case .balanced: return "Balanced"
+        case .high: return "High"
+        case .veryHigh: return "Very High"
+        }
+    }
     
     /// Numeric range for each level (0.0 - 1.0)
     var range: ClosedRange<Double> {
@@ -40,7 +47,8 @@ struct Flower: Identifiable, Equatable, Hashable {
     let name: String
     let imageAsset: String?
     let imageURL: URL?
-    
+    let imageCacheKey: String?
+
     // Meaning data
     let meanings: [String]
     let symbolismText: String
@@ -55,29 +63,36 @@ struct Flower: Identifiable, Equatable, Hashable {
     // Related data (loaded separately or embedded)
     var giftingInfo: GiftingInfo?
     var contextInfo: ContextInfo?
-    
+
+    // Alternative flower recommendations
+    var alternatives: [AlternativeFlower]
+
     init(
         id: UUID = UUID(),
         name: String,
         imageAsset: String? = nil,
         imageURL: URL? = nil,
+        imageCacheKey: String? = nil,
         meanings: [String] = [],
         symbolismText: String = "",
         whyThisFlowerText: String = "",
         moodIntensityValue: Double = 0.5,
         giftingInfo: GiftingInfo? = nil,
-        contextInfo: ContextInfo? = nil
+        contextInfo: ContextInfo? = nil,
+        alternatives: [AlternativeFlower] = []
     ) {
         self.id = id
         self.name = name
         self.imageAsset = imageAsset
         self.imageURL = imageURL
+        self.imageCacheKey = imageCacheKey
         self.meanings = meanings
         self.symbolismText = symbolismText
         self.whyThisFlowerText = whyThisFlowerText
         self.moodIntensityValue = moodIntensityValue
         self.giftingInfo = giftingInfo
         self.contextInfo = contextInfo
+        self.alternatives = alternatives
     }
     
     // MARK: - Hashable (only by ID for navigation)
@@ -98,6 +113,7 @@ extension Flower {
         whyThisFlowerText: "Perfect for expressing deep romantic feelings. The red rose speaks the universal language of love.",
         moodIntensityValue: 0.85,
         giftingInfo: .mock,
-        contextInfo: .mock
+        contextInfo: .mock,
+        alternatives: AlternativeFlower.mocks
     )
 }
