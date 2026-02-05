@@ -220,6 +220,9 @@ struct ExpandedChatSheet: View {
     // Mention autocomplete state
     @State private var mentionQuery: String?
 
+    // Track if input is multiline for alignment
+    @State private var isInputMultiline = false
+
     private var showMentionAutocomplete: Bool {
         mentionQuery != nil
     }
@@ -742,15 +745,28 @@ struct ExpandedChatSheet: View {
                 modeBadge
             }
 
-            // Text field row
-            HStack(spacing: 8) {
-                TextField("Ask me about...", text: inputTextBinding)
+            // Text field row - center when single line, bottom when multiline
+            HStack(alignment: isInputMultiline ? .bottom : .center, spacing: 8) {
+                TextField("Ask me about...", text: inputTextBinding, axis: .vertical)
+                    .lineLimit(1...5)
                     .font(.system(size: 16))
                     .focused($isInputFocused)
                     .disabled(!viewModel.isInputEnabled)
                     .submitLabel(.send)
                     .onSubmit(sendMessageIfCan)
                     .onChange(of: viewModel.inputText) { _, newValue in
+                        // Update multiline state based on content
+                        let hasNewline = newValue.contains("\n")
+                        let isLongText = newValue.count > 35  // Approximate chars per line
+                        let shouldBeMultiline = hasNewline || isLongText
+
+                        if shouldBeMultiline != isInputMultiline {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                isInputMultiline = shouldBeMultiline
+                            }
+                        }
+
+                        // Update mention query
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             mentionQuery = MentionParser.extractMentionQuery(from: newValue)
                         }
@@ -758,6 +774,7 @@ struct ExpandedChatSheet: View {
 
                 sendButton
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isInputMultiline)
         }
         .padding(.leading, 16)
         .padding(.trailing, 10)

@@ -14,6 +14,7 @@ struct ChatView: View {
     @State private var showImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var mentionQuery: String?
+    @State private var isInputMultiline = false
 
     @FocusState private var isInputFocused: Bool
 
@@ -211,9 +212,11 @@ struct ChatView: View {
                 }
                 .disabled(!viewModel.isInputEnabled)
 
-                HStack(spacing: 8) {
+                // Center when single line, bottom when multiline
+                HStack(alignment: isInputMultiline ? .bottom : .center, spacing: 8) {
                     // Direct binding to viewModel.inputText - no action dispatch per keystroke
-                    TextField("Ask me about flowers...", text: $viewModel.inputText)
+                    TextField("Ask me about flowers...", text: $viewModel.inputText, axis: .vertical)
+                        .lineLimit(1...5)
                         .font(.system(size: 16))
                         .focused($isInputFocused)
                         .disabled(!viewModel.isInputEnabled)
@@ -221,9 +224,22 @@ struct ChatView: View {
                         .onSubmit {
                             if viewModel.canSendMessage {
                                 viewModel.send(.sendMessage)
+                                isInputFocused = false
                             }
                         }
                         .onChange(of: viewModel.inputText) { _, newValue in
+                            // Update multiline state based on content
+                            let hasNewline = newValue.contains("\n")
+                            let isLongText = newValue.count > 35
+                            let shouldBeMultiline = hasNewline || isLongText
+
+                            if shouldBeMultiline != isInputMultiline {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                    isInputMultiline = shouldBeMultiline
+                                }
+                            }
+
+                            // Update mention query
                             let query = MentionParser.extractMentionQuery(from: newValue)
                             print("[ChatView] Input changed: '\(newValue)' → mentionQuery: \(query ?? "nil")")
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -245,10 +261,14 @@ struct ChatView: View {
                     }
                     .disabled(!viewModel.canSendMessage)
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isInputMultiline)
                 .padding(.leading, 16)
                 .padding(.trailing, 8)
                 .padding(.vertical, 8)
-                .background(Capsule().fill(Color(white: 0.95)))
+                .background(
+                    RoundedRectangle(cornerRadius: isInputMultiline ? 20 : 25)
+                        .fill(Color(white: 0.95))
+                )
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
