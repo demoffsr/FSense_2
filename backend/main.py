@@ -120,6 +120,7 @@ class RecommendRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, description="Session ID for conversation continuity")
     device_id: Optional[str] = Field(default=None, description="iOS device identifier")
     image_base64: Optional[str] = Field(default=None, description="Base64-encoded bouquet image for flower identification")
+    budget_range: Optional[str] = Field(default=None, description="Budget preference: 'budget', 'mid', 'premium', or 'any'")
 
 
 class RecommendResponse(BaseModel):
@@ -343,6 +344,7 @@ async def recommend(request: RecommendRequest, http_request: Request):
             prompt=request.prompt,
             region=request.region,
             image_base64=request.image_base64,
+            budget_range=request.budget_range,
         )
     )
 

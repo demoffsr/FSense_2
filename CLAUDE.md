@@ -208,6 +208,8 @@ Copy `backend/.env.example` to `backend/.env` and set:
 
 ## Current Status
 
+**Version 0.6.4** - Preserve context in VIA clarification payload: When VIA triggers a clarification response (low-confidence detection or ambiguous bouquet), the pipeline exits early at Phase 0. Previously, user context (`budget_range`, `region`, `user_input`) was lost. Now `_build_clarification_payload()` in `orchestrator.py` includes `_preserved_context` dict containing full `UserPriors` (via `dataclasses.asdict()`), `region`, and `user_input`. Also added `budget_range` field to `RecommendRequest` in `main.py` and passes it through `/api/recommend` POST handler for API completeness. No feature flag (purely additive — new key in response dict, unknown JSON keys silently ignored by Swift `Codable`). **Known limitation**: iOS `ChatResponseType` only handles `.recommendation`/`.text` — not `"clarification"`. VIA clarification is broken end-to-end until iOS is updated to parse the new type and re-send `_preserved_context` on follow-up. Tests in `backend/tests/test_clarification_context.py` (11 tests: 8 unit + 3 integration).
+
 **Version 0.6.3** - VIA confidence warning-level logging: VIA adapter now uses custom `_safe_parse_confidence()` method instead of generic `safe_parse_float()` for parsing confidence values. Out-of-range confidence values (outside [0.0, 1.0]) and invalid values (None, "high", NaN, Inf) now generate WARNING-level logs instead of DEBUG, enabling production monitoring alerts. This is important because confidence < 0.7 triggers the clarification flow in the UI. Handles: valid floats/strings pass through, values outside range are clamped with warning, non-finite values (NaN, Inf) return 0.0 with warning, invalid strings return 0.0 with warning. No feature flag (intentional behavior change for monitoring). Tests in `backend/tests/test_via_confidence.py` (14 tests: 11 unit + 3 integration).
 
 **Version 0.6.2** - SRFL emotion substring matching fix: Replaced bidirectional substring matching (`dominant_emotion in emotion_key or emotion_key in dominant_emotion`) with segment-based matching using underscore splits. Now `"puppy_love"` correctly falls back to `"love"` targets (exact segment match), `"care_concern"` uses `"concern"` targets (longer key preferred), and typos like `"lovey"` return neutral 0.6 (no false positives). Added None guard for `primary_emotion` to prevent crashes. Dictionary keys sorted by length descending so longer/more specific keys match first. Debug logging tracks fallback matches. Rollback via `SRFL_USE_SEGMENT_MATCHING=false`. Tests in `backend/tests/test_srfl_emotion_matching.py` (21 tests).
@@ -533,6 +535,62 @@ When modifying an agent, verify compatibility with upstream/downstream agents:
        print(f'{e}: fallback={matches or \"none\"}')"
    ```
 
+### When Modifying API Response Payloads
+
+**CRITICAL**: Always trace the full request/response chain before planning any change to data flowing between backend and iOS.
+
+1. **Trace the full data flow end-to-end**
+   - Don't just look at the method you're changing — trace from iOS call to iOS handler
+   - Chain: iOS view → iOS API service → HTTP endpoint (`main.py`) → request model → runner function → orchestrator → response → response model → iOS parser
+   - **Verify every link**: if ANY link doesn't pass/handle the field, the change is dead code
+
+   ```
+   # The "budget in clarification" incident:
+   # Plan patched _build_clarification_payload() in orchestrator.py
+   # But /api/recommend endpoint didn't even pass budget_range to runner!
+   # RecommendRequest model had no budget_range field.
+   # Result: _preserved_context.budget_range would ALWAYS be None from that endpoint.
+   ```
+
+2. **Verify the consumer exists before adding producer data**
+   - Adding a new key to a backend response is useless until iOS reads it
+   - Backend-only changes that require iOS changes to have any effect = **no-op until iOS ships**
+   - Plan must either: include iOS changes, OR explicitly state "zero user-facing impact until iOS task [X] is completed"
+   - Never close the bug based on backend-only change when the fix requires both sides
+
+3. **Identify which endpoint/pipeline iOS actually uses for the flow**
+   - FSense has MULTIPLE pipelines: main orchestrator (`orchestrator.py`) and scan (`scan_orchestrator.py`)
+   - FSense has MULTIPLE endpoints: `/api/recommend`, `/api/chat`, `/api/scan`, `/api/scan/detail`
+   - Each has different request models with different fields
+   - **Read the iOS code** to see which endpoint it calls for the specific flow
+   - Example: Scan flow uses `/api/scan` (separate pipeline), NOT `/api/recommend`
+
+4. **Check ALL fields that could be lost, not just the reported one**
+   - If budget is lost in a flow, check if relationship, occasion, region, color_preferences are also lost
+   - Partial fix = partial bug = second ticket later
+   - Prefer preserving the full context object over cherry-picking individual fields
+
+5. **Verify iOS can parse the new response structure**
+   - Swift `Codable` ignores unknown keys BY DEFAULT, but only if using default decoder
+   - Check iOS response models: custom `CodingKeys`? Strict decoder? Enum-based type dispatch?
+   - If iOS dispatches on `type` field (e.g., `"recommendation"` vs `"text"`), verify your new response type is handled
+   - Example: VIA clarification returns `type: "clarification"` inside `data`, but v2 wraps it as `type: "recommendation"` — iOS may try to parse data as FlowerCardPayload
+
+6. **Quick verification steps for response changes**
+   ```bash
+   # 1. Which endpoints can trigger this flow?
+   grep -n "run_flower_chat\|run_flower_chat_v2" backend/main.py
+
+   # 2. Does the request model have the field you need?
+   grep -A5 "class RecommendRequest\|class ChatRequestV2" backend/main.py
+
+   # 3. Does the endpoint pass the field to the runner?
+   grep -A10 "run_flower_chat(" backend/main.py
+
+   # 4. Does iOS handle this response type?
+   grep -rn "clarification\|preserved_context" FSense/
+   ```
+
 ### Plan Quality Checklist
 
 Before submitting any plan, verify:
@@ -546,6 +604,10 @@ Before submitting any plan, verify:
 | **Code references** | Using line numbers? | Use function/pattern names instead |
 | **Edge cases** | Are ALL edge cases covered? | See numeric parsing checklist above |
 | **Log consistency** | Do similar log messages have same format? | Include: component, event, action taken |
+| **Full data flow** | Traced from iOS call → endpoint → runner → agent → response → iOS handler? | Read each link in the chain |
+| **Consumer exists** | Does iOS actually parse the new field/key? | grep iOS codebase for the field name |
+| **Correct endpoint** | Does the endpoint pass required fields to the runner? | Read request model AND endpoint handler |
+| **All lost fields** | Are ALL context fields preserved, not just the reported one? | Compare full dataclass vs what's preserved |
 
 **Red flags in plans:**
 - ANY line number reference: "line 12", "line 117", "lines 99-103" — ALWAYS wrong approach
@@ -553,6 +615,9 @@ Before submitting any plan, verify:
 - "No behavior change" + log level change — contradiction
 - Unit tests only, no integration test — incomplete
 - `value: Any` without verifying `Any` is imported — will crash
+- "Not in scope: iOS changes" when the backend change has zero effect without iOS — plan is a no-op
+- Patching one method without checking if the endpoint even passes the data to it
+- Preserving 2 of 6 fields without explaining why the other 4 don't matter
 
 ### Code Style
 

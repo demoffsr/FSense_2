@@ -16,6 +16,7 @@ Expected speedup: ~2.3x compared to v0.3.0 (RIL removed = -1 AI call)
 """
 
 from typing import Optional, List
+import dataclasses
 import logging
 import time
 import threading
@@ -235,6 +236,12 @@ class PipelineOrchestrator:
             "bouquet_description": ctx.vision.bouquet_description,
             "request_id": ctx.request_id,
             "pipeline_version": "0.3.0",
+            # TODO: iOS must read _preserved_context and re-send priors on follow-up
+            "_preserved_context": {
+                "priors": dataclasses.asdict(ctx.priors) if ctx.priors else {},
+                "region": ctx.region,
+                "user_input": ctx.user_input,
+            },
         }
 
     def _execute_agent(
