@@ -42,6 +42,33 @@ class ResponseType(str, Enum):
     TEXT = "text"
 
 
+class RouteAction(str, Enum):
+    """
+    Action determined by ConversationRouter.
+    """
+    RESPOND = "respond"                # Conversational text response
+    RECOMMEND = "recommend"            # Signal pipeline trigger
+    CLARIFY_FLOWER = "clarify_flower"  # Delegate to QuickReplyAgent
+
+
+class ExtractedContext(BaseModel):
+    """Context extracted from multi-turn conversation for pipeline enrichment."""
+    relationship: Optional[str] = None      # "wife", "friend", "colleague"
+    occasion: Optional[str] = None          # "birthday", "apology"
+    emotion: Optional[str] = None           # "love", "gratitude", "regret"
+    budget_hint: Optional[str] = None       # "budget", "mid", "premium"
+    synthesized_request: Optional[str] = None  # Natural language summary
+
+
+class RouteResult(BaseModel):
+    """Output from ConversationRouter."""
+    action: RouteAction
+    message: str
+    extracted_context: Optional[ExtractedContext] = None
+    detected_language: str = "en"
+    clarification_type: Optional[ClarificationType] = None  # For clarify_flower
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # INPUT MODELS
 # ═══════════════════════════════════════════════════════════════════════════════

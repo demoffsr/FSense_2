@@ -13,7 +13,7 @@ Or from project root:
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Dict, Optional
 import asyncio
 import json
@@ -184,6 +184,9 @@ class ChatRequestV2Extended(BaseModel):
     image_base64: Optional[str] = Field(default=None, description="Base64-encoded image")
     context: Optional[ChatContextV2Request] = Field(default=None, description="Extended context with history")
     budget_range: Optional[str] = Field(default=None, description="Budget preference: 'budget', 'mid', 'premium', or 'any'")
+    pre_routed: bool = Field(default=False, description="Skip classification, go directly to pipeline")
+    relationship_hint: Optional[str] = Field(default=None, description="Relationship from router context")
+    occasion_hint: Optional[str] = Field(default=None, description="Occasion from router context")
 
 
 class IntentClassificationResponse(BaseModel):
@@ -394,7 +397,89 @@ async def recommend(request: RecommendRequest, http_request: Request):
 # V2 CHAT API WITH CLARIFICATION SUPPORT
 # ═══════════════════════════════════════════════════════════════════════════════
 
-from backend.pipeline.runner import run_flower_chat_v2, build_conversation_summary
+from backend.pipeline.runner import run_flower_chat_v2, build_conversation_summary, route_conversation
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONVERSATIONAL ROUTING ENDPOINT (v0.7.0)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class RouteRequest(BaseModel):
+    """Request body for conversation routing."""
+    prompt: str = Field(..., min_length=1, description="User's message")
+    region: str = Field(default="US", description="Geographic region")
+    context: Optional[ChatContextV2Request] = Field(default=None, description="Extended context with history")
+    image_base64: Optional[str] = Field(default=None, description="Base64-encoded image")
+
+
+class RouteContextResponse(BaseModel):
+    """Extracted context from conversation."""
+    model_config = ConfigDict(populate_by_name=True)
+
+    relationship: Optional[str] = None
+    occasion: Optional[str] = None
+    emotion: Optional[str] = None
+    budget_hint: Optional[str] = Field(None, serialization_alias="budgetHint")
+    synthesized_request: Optional[str] = Field(None, serialization_alias="synthesizedRequest")
+
+
+class RouteResponse(BaseModel):
+    """Response from conversation routing."""
+    action: str  # "respond" or "recommend"
+    message: str
+    context: Optional[RouteContextResponse] = None
+
+
+@app.post("/api/chat/route", response_model=RouteResponse, response_model_by_alias=True)
+async def route_chat(request: RouteRequest):
+    """
+    Route a chat message to either conversational response or pipeline trigger.
+
+    Returns:
+        RouteResponse with action, message, and optional extracted context
+    """
+    # Build conversation history from context
+    conversation_history = None
+    if request.context and request.context.conversationHistory:
+        conversation_history = [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "message_type": msg.messageType,
+                "flower_name": msg.flowerName,
+            }
+            for msg in request.context.conversationHistory
+        ]
+
+    # Run router in thread pool
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: route_conversation(
+            prompt=request.prompt,
+            region=request.region,
+            conversation_history=conversation_history,
+            image_base64=request.image_base64,
+        )
+    )
+
+    # Build response
+    context = None
+    if result.get("context"):
+        ctx = result["context"]
+        context = RouteContextResponse(
+            relationship=ctx.get("relationship"),
+            occasion=ctx.get("occasion"),
+            emotion=ctx.get("emotion"),
+            budget_hint=ctx.get("budgetHint"),
+            synthesized_request=ctx.get("synthesizedRequest"),
+        )
+
+    return RouteResponse(
+        action=result["action"],
+        message=result["message"],
+        context=context,
+    )
 
 
 @app.post("/api/chat/classify", response_model=IntentClassificationResponse)
@@ -467,6 +552,34 @@ async def chat_v2(request: ChatRequestV2Extended):
         ChatResponseV2 with type="recommendation" or type="text"
     """
     # Convert context if provided
+    # Pre-routed mode: skip classification, go directly to pipeline with hints
+    if request.pre_routed:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: run_flower_chat(
+                prompt=request.prompt,
+                region=request.region,
+                image_base64=request.image_base64,
+                budget_range=request.budget_range,
+                relationship_hint=request.relationship_hint,
+                occasion_hint=request.occasion_hint,
+            )
+        )
+
+        if not result["success"]:
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("error", "Failed to process message")
+            )
+
+        return ChatResponseV2(
+            success=True,
+            type="recommendation",
+            data=result["data"],
+        )
+
+    # Normal flow: classify intent first
     context_dict = None
     conversation_summary = None
 

@@ -266,6 +266,8 @@ def run_flower_chat(
     region: str = "US",
     image_base64: Optional[str] = None,
     budget_range: Optional[str] = None,
+    relationship_hint: Optional[str] = None,
+    occasion_hint: Optional[str] = None,
 ) -> PipelineResponse:
     """
     Run the flower recommendation pipeline for a chat message.
@@ -330,11 +332,17 @@ def run_flower_chat(
         if budget_range and normalized_budget and budget_range.lower() != normalized_budget:
             logger.debug(f"Budget normalized: '{budget_range}' -> '{normalized_budget}'")
 
-        # Build context with budget priors
+        # Build context with budget priors and optional router hints
+        priors = UserPriors(budget_range=normalized_budget)
+        if relationship_hint:
+            priors.relationship_type = relationship_hint
+        if occasion_hint:
+            priors.occasion = occasion_hint
+
         ctx = PipelineContext(
             user_input=prompt,  # Already sanitized
             region=region.lower(),  # Context expects lowercase
-            priors=UserPriors(budget_range=normalized_budget),
+            priors=priors,
             image_base64=image_base64,  # Pass image for vision analysis
         )
         
@@ -546,6 +554,150 @@ def run_flower_chat_v2(
             "type": ResponseType.TEXT.value,
             "error": f"An unexpected error occurred: {str(e)}",
         }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONVERSATIONAL ROUTER (v0.7.0)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Feature flag for rollback
+CHAT_CONVERSATIONAL_ROUTER = os.getenv("CHAT_CONVERSATIONAL_ROUTER", "true").lower() == "true"
+
+
+def route_conversation(
+    prompt: str,
+    region: str = "US",
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+    image_base64: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Route a user message to either conversational response or pipeline trigger.
+
+    Args:
+        prompt: User's message
+        region: Geographic region
+        conversation_history: List of conversation messages
+        image_base64: Optional base64-encoded image
+
+    Returns:
+        {
+            "action": "respond" | "recommend",
+            "message": "Text to show user",
+            "context": {"relationship": ..., "occasion": ..., ...} | None
+        }
+    """
+    from backend.agents.adapters.conversation_router import ConversationRouter
+    from backend.agents.adapters.intent_classifier_agent import IntentClassifierAgent
+    from backend.agents.adapters.quick_reply_agent import QuickReplyAgent
+    from backend.schemas.chat_response import (
+        RouteAction,
+        IntentType,
+    )
+
+    # Validate input
+    validation = validate_input(prompt)
+    if not validation.is_valid:
+        return {
+            "action": "respond",
+            "message": validation.error_message or "Invalid input.",
+        }
+
+    prompt = validation.sanitized_input
+    region = validate_region(region)
+
+    # Build conversation summary
+    conversation_summary = build_conversation_summary(conversation_history or [])
+
+    if CHAT_CONVERSATIONAL_ROUTER:
+        # New conversational router
+        router = ConversationRouter()
+        result = router.route(
+            message=prompt,
+            conversation_summary=conversation_summary or None,
+            image_base64=image_base64,
+        )
+
+        logger.info(
+            f"ConversationRouter: action={result.action.value}, "
+            f"lang={result.detected_language}, "
+            f"has_context={result.extracted_context is not None}"
+        )
+
+        # Handle clarify_flower by delegating to QuickReplyAgent
+        if result.action == RouteAction.CLARIFY_FLOWER:
+            try:
+                from backend.schemas.chat_response import ClassifierOutput, ClarificationType
+
+                # Build ClassifierOutput from router's result to avoid redundant AI call
+                classification = ClassifierOutput(
+                    intent=IntentType("clarification"),
+                    confidence=0.9,
+                    detected_language=result.detected_language,
+                    clarification_type=result.clarification_type or ClarificationType.GENERAL_INFO,
+                )
+
+                quick_agent = QuickReplyAgent()
+                text_response = quick_agent.generate_response(
+                    message=prompt,
+                    classifier_output=classification,
+                    conversation_summary=conversation_summary or None,
+                )
+                return {
+                    "action": "respond",
+                    "message": text_response.message,
+                }
+            except Exception as e:
+                logger.error(f"QuickReplyAgent fallback error: {e}")
+                return {
+                    "action": "respond",
+                    "message": result.message or "I can help with that!",
+                }
+
+        # Build response dict
+        response: Dict[str, Any] = {
+            "action": result.action.value,
+            "message": result.message,
+        }
+
+        if result.extracted_context:
+            response["context"] = {
+                "relationship": result.extracted_context.relationship,
+                "occasion": result.extracted_context.occasion,
+                "emotion": result.extracted_context.emotion,
+                "budgetHint": result.extracted_context.budget_hint,
+                "synthesizedRequest": result.extracted_context.synthesized_request,
+            }
+
+        return response
+
+    else:
+        # Fallback: use old IntentClassifier + QuickReplyAgent, map to route format
+        try:
+            classifier = IntentClassifierAgent()
+            classification = classifier.classify(prompt, None, conversation_summary or None)
+
+            if classification.intent == IntentType.FLOWER_REQUEST:
+                return {
+                    "action": "recommend",
+                    "message": "Let me find the perfect flowers for you...",
+                }
+            else:
+                quick_agent = QuickReplyAgent()
+                text_response = quick_agent.generate_response(
+                    message=prompt,
+                    classifier_output=classification,
+                    conversation_summary=conversation_summary or None,
+                )
+                return {
+                    "action": "respond",
+                    "message": text_response.message,
+                }
+        except Exception as e:
+            logger.error(f"Fallback router error: {e}")
+            return {
+                "action": "recommend",
+                "message": "Let me find the perfect flowers for you...",
+            }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

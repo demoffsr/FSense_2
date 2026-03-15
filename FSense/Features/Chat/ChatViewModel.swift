@@ -67,6 +67,9 @@ final class ChatViewModel: ObservableObject {
     /// Selected budget for current flower request
     private var selectedBudget: BudgetOption?
 
+    /// Route context from ConversationRouter (stored while budget question is shown)
+    private var pendingRouteContext: RouteContext?
+
     // MARK: - Cached Precomputed Data
 
     /// Cached message row data - automatically invalidated via didSet on messages
@@ -438,15 +441,21 @@ final class ChatViewModel: ObservableObject {
                     await handleFlowerRequestWithBudget(userQuery, image: image, context: context, budget: selectedBudget ?? .any)
 
                 case nil:
-                    // General mode: show typing indicator during classification
+                    // General mode: route through conversation router
                     let typingMessage = ChatMessage(content: .typing, sender: .ai)
                     messages.append(typingMessage)
                     let typingMessageId = typingMessage.id
 
                     do {
-                        let classification = try await APIService.shared.classifyIntent(
+                        var imageBase64ForRouter: String? = nil
+                        if let img = image {
+                            imageBase64ForRouter = imageToBase64(img)
+                        }
+
+                        let routeResponse = try await APIService.shared.routeMessage(
                             prompt: userQuery,
-                            context: context
+                            context: context,
+                            imageBase64: imageBase64ForRouter
                         )
 
                         guard !Task.isCancelled else {
@@ -454,25 +463,24 @@ final class ChatViewModel: ObservableObject {
                             return
                         }
 
-                        // Remove typing indicator before routing
                         messages.removeFirst(withId: typingMessageId)
 
-                        let intent = classification.intent
-
-                        // Route based on intent
-                        if intent == "off_topic" || intent == "clarification" {
-                            // Non-flower query: get text response directly (no acknowledgement)
-                            await handleNonFlowerQuery(userQuery, image: image, context: context)
+                        if routeResponse.action == "respond" {
+                            await showTextResponse(routeResponse.message)
                         } else {
-                            // Flower request: show acknowledgement + pipeline
-                            await handleFlowerRequest(userQuery, image: image, context: context)
+                            await handleRoutedFlowerRequest(
+                                userQuery,
+                                image: image,
+                                context: context,
+                                routeResponse: routeResponse
+                            )
                         }
                     } catch {
-                        print("[ChatViewModel] classifyIntent failed: \(error)")
+                        print("[ChatViewModel] routeMessage failed: \(error)")
                         messages.removeFirst(withId: typingMessageId)
 
-                        // Fallback: treat as flower request
-                        await handleFlowerRequest(userQuery, image: image, context: context)
+                        // Fallback: use old classifyIntent flow (handles greetings/off-topic correctly)
+                        await handleFallbackClassification(userQuery, image: image, context: context)
                     }
                 }
             } onCancel: {
@@ -580,6 +588,139 @@ final class ChatViewModel: ObservableObject {
         await startThinkingProcessWithAPI(for: query, image: image, context: context, budget: budget)
     }
 
+    /// Fallback when routeMessage fails — uses old classifyIntent + sendMessage flow
+    private func handleFallbackClassification(_ query: String, image: UIImage?, context: ChatContextV2) async {
+        // Show typing indicator while classifying
+        let typingMessage = ChatMessage(content: .typing, sender: .ai)
+        messages.append(typingMessage)
+        let typingMessageId = typingMessage.id
+
+        do {
+            let classification = try await APIService.shared.classifyIntent(
+                prompt: query,
+                context: context
+            )
+
+            guard !Task.isCancelled else {
+                messages.removeFirst(withId: typingMessageId)
+                return
+            }
+
+            messages.removeFirst(withId: typingMessageId)
+
+            let intent = classification.intent
+            if intent == "off_topic" || intent == "clarification" {
+                await handleNonFlowerQuery(query, image: image, context: context)
+            } else {
+                await handleFlowerRequest(query, image: image, context: context)
+            }
+        } catch {
+            print("[ChatViewModel] fallback classifyIntent also failed: \(error)")
+            messages.removeFirst(withId: typingMessageId)
+            // Both router and classifier failed — treat as flower request as last resort
+            await handleFlowerRequest(query, image: image, context: context)
+        }
+    }
+
+    /// Handle flower request pre-routed by ConversationRouter
+    private func handleRoutedFlowerRequest(
+        _ query: String,
+        image: UIImage?,
+        context: ChatContextV2,
+        routeResponse: RouteResponse
+    ) async {
+        let routerBudget = routeResponse.context?.budgetHint
+        if routerBudget == nil && !containsBudgetHint(query) && selectedBudget == nil {
+            pendingBudgetQuery = query
+            pendingBudgetImage = image
+            pendingRouteContext = routeResponse.context
+
+            let budgetMessage = ChatMessage(content: .budgetQuestion, sender: .ai)
+            messages.append(budgetMessage)
+            isInputEnabled = false
+            return
+        }
+
+        try? await Task.sleep(nanoseconds: acknowledgementDelay)
+        guard !Task.isCancelled else { return }
+
+        let ackMessage = ChatMessage(content: .acknowledgement(routeResponse.message), sender: .ai)
+        animatingMessageIds.insert(ackMessage.id)
+        messages.append(ackMessage)
+        phase = .acknowledgement
+        saveToHistory()
+
+        let budget = selectedBudget ?? (routerBudget != nil ? BudgetOption(rawValue: routerBudget!) : nil)
+        await startPreRoutedThinkingProcess(
+            for: query,
+            image: image,
+            context: context,
+            budget: budget,
+            routeContext: routeResponse.context
+        )
+    }
+
+    /// Start thinking process with pre-routed context (skips backend classification)
+    private func startPreRoutedThinkingProcess(
+        for userQuery: String,
+        image: UIImage?,
+        context: ChatContextV2,
+        budget: BudgetOption?,
+        routeContext: RouteContext?
+    ) async {
+        guard !Task.isCancelled else { return }
+
+        let thinkingMessage = ChatMessage(
+            content: .thinking(ThinkingContent(steps: [], isExpanded: true, isComplete: false)),
+            sender: .ai
+        )
+        messages.append(thinkingMessage)
+        expandedThinkingCards.insert(thinkingMessage.id)
+        let thinkingMessageId = thinkingMessage.id
+        phase = .thinking
+        eventService.start()
+
+        var response: ChatResponse?
+        do {
+            response = try await APIService.shared.sendPreRoutedMessage(
+                prompt: userQuery,
+                context: context,
+                image: image,
+                budgetRange: budget?.rawValue,
+                relationshipHint: routeContext?.relationship,
+                occasionHint: routeContext?.occasion
+            )
+        } catch {
+            print("[ChatViewModel] Pre-routed API Error: \(error.localizedDescription)")
+        }
+
+        guard !Task.isCancelled else { return }
+
+        eventService.stop()
+        messages.removeAll { $0.id == thinkingMessageId }
+        expandedThinkingCards.remove(thinkingMessageId)
+
+        if let response = response {
+            switch response.type {
+            case .recommendation:
+                if let payload = response.recommendation {
+                    lastPayload = payload
+                    await showRecommendation(from: payload)
+                } else {
+                    await showError()
+                }
+            case .text:
+                if let textMessage = response.textMessage {
+                    await showTextResponse(textMessage)
+                } else {
+                    await showError()
+                }
+            }
+        } else {
+            await showError()
+        }
+    }
+
     private func cleanupPartialState() {
         messages.removeAll { message in
             switch message.content {
@@ -599,6 +740,7 @@ final class ChatViewModel: ObservableObject {
         // Clear budget flow state
         pendingBudgetQuery = nil
         pendingBudgetImage = nil
+        pendingRouteContext = nil
 
         isInputEnabled = true
         phase = .idle
@@ -635,11 +777,16 @@ final class ChatViewModel: ObservableObject {
         // Continue with stored query
         if let query = pendingBudgetQuery {
             let image = pendingBudgetImage
+            let routeCtx = pendingRouteContext
             pendingBudgetQuery = nil
             pendingBudgetImage = nil
+            pendingRouteContext = nil
 
-            // Start the flower request flow with budget
-            startAIResponseFlowWithBudget(for: query, image: image, budget: option)
+            if let routeCtx = routeCtx {
+                startPreRoutedFlowWithBudget(for: query, image: image, budget: option, routeContext: routeCtx)
+            } else {
+                startAIResponseFlowWithBudget(for: query, image: image, budget: option)
+            }
         }
     }
 
@@ -656,6 +803,44 @@ final class ChatViewModel: ObservableObject {
 
                 // Go straight to flower request with budget
                 await handleFlowerRequestWithBudget(userQuery, image: image, context: context, budget: budget)
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    self?.cleanupPartialState()
+                }
+            }
+        }
+    }
+
+    /// Start pre-routed flow after budget selection
+    private func startPreRoutedFlowWithBudget(for userQuery: String, image: UIImage?, budget: BudgetOption, routeContext: RouteContext) {
+        if let existingTask = thinkingTask {
+            existingTask.cancel()
+            eventService.stop()
+        }
+
+        thinkingTask = Task {
+            await withTaskCancellationHandler {
+                let context = buildChatContextV2()
+
+                try? await Task.sleep(nanoseconds: acknowledgementDelay)
+                guard !Task.isCancelled else { return }
+
+                let ack = containsCyrillic(userQuery)
+                    ? "Понял! Дайте мне подобрать лучший вариант..."
+                    : "Got it! Let me find the perfect flowers..."
+                let ackMessage = ChatMessage(content: .acknowledgement(ack), sender: .ai)
+                animatingMessageIds.insert(ackMessage.id)
+                messages.append(ackMessage)
+                phase = .acknowledgement
+                saveToHistory()
+
+                await startPreRoutedThinkingProcess(
+                    for: userQuery,
+                    image: image,
+                    context: context,
+                    budget: budget,
+                    routeContext: routeContext
+                )
             } onCancel: {
                 Task { @MainActor [weak self] in
                     self?.cleanupPartialState()
@@ -880,6 +1065,7 @@ final class ChatViewModel: ObservableObject {
         pendingBudgetQuery = nil
         pendingBudgetImage = nil
         selectedBudget = nil
+        pendingRouteContext = nil
 
         // Clear active session state
         stateManager.clearActiveState()

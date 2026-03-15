@@ -243,6 +243,125 @@ actor APIService {
         }
     }
 
+    /// Route a message through the conversation router
+    func routeMessage(
+        prompt: String,
+        context: ChatContextV2? = nil,
+        imageBase64: String? = nil
+    ) async throws -> RouteResponse {
+        let endpoint = "\(baseURL)/api/chat/route"
+
+        guard let url = URL(string: endpoint) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body = RouteRequestBody(
+            prompt: prompt,
+            region: context?.region ?? "US",
+            context: context,
+            imageBase64: imageBase64
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            return try decoder.decode(RouteResponse.self, from: data)
+
+        case 400..<500:
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.detail)
+            }
+            throw APIError.clientError(httpResponse.statusCode)
+
+        case 500..<600:
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+
+        default:
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
+
+    /// Send a message with pre-routed context (skip backend classification)
+    func sendPreRoutedMessage(
+        prompt: String,
+        context: ChatContextV2? = nil,
+        region: String = "US",
+        image: UIImage? = nil,
+        budgetRange: String? = nil,
+        relationshipHint: String? = nil,
+        occasionHint: String? = nil
+    ) async throws -> ChatResponse {
+        let endpoint = "\(baseURL)/api/chat"
+
+        guard let url = URL(string: endpoint) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var imageBase64: String? = nil
+        if let image = image {
+            imageBase64 = imageToBase64(image)
+        }
+
+        let body = ChatRequestV2PreRouted(
+            prompt: prompt,
+            region: region,
+            imageBase64: imageBase64,
+            context: context,
+            budgetRange: budgetRange,
+            preRouted: true,
+            relationshipHint: relationshipHint,
+            occasionHint: occasionHint
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            let result = try decoder.decode(ChatResponseRaw.self, from: data)
+
+            if !result.success {
+                throw APIError.serverError(result.error ?? "Unknown error")
+            }
+
+            return ChatResponse(
+                type: result.type,
+                recommendation: result.type == .recommendation ? result.recommendationData : nil,
+                textMessage: result.type == .text ? result.textData?.message : nil
+            )
+
+        case 400..<500:
+            if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.detail)
+            }
+            throw APIError.clientError(httpResponse.statusCode)
+
+        case 500..<600:
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+
+        default:
+            throw APIError.unknown(httpResponse.statusCode)
+        }
+    }
+
     /// Send a simple chat message (Ask mode) - no flower pipeline
     /// Uses gpt-4o-mini for fast responses
     /// - Parameters:
@@ -425,6 +544,54 @@ struct ChatResponse {
 
     var isRecommendation: Bool { type == .recommendation }
     var isText: Bool { type == .text }
+}
+
+// MARK: - Route API Models
+
+struct RouteResponse: Decodable {
+    let action: String
+    let message: String
+    let context: RouteContext?
+}
+
+struct RouteContext: Decodable {
+    let relationship: String?
+    let occasion: String?
+    let emotion: String?
+    let budgetHint: String?
+    let synthesizedRequest: String?
+}
+
+private struct RouteRequestBody: Encodable {
+    let prompt: String
+    let region: String
+    let context: ChatContextV2?
+    let imageBase64: String?
+
+    enum CodingKeys: String, CodingKey {
+        case prompt, region, context
+        case imageBase64 = "image_base64"
+    }
+}
+
+private struct ChatRequestV2PreRouted: Encodable {
+    let prompt: String
+    let region: String
+    let imageBase64: String?
+    let context: ChatContextV2?
+    let budgetRange: String?
+    let preRouted: Bool
+    let relationshipHint: String?
+    let occasionHint: String?
+
+    enum CodingKeys: String, CodingKey {
+        case prompt, region, context
+        case imageBase64 = "image_base64"
+        case budgetRange = "budget_range"
+        case preRouted = "pre_routed"
+        case relationshipHint = "relationship_hint"
+        case occasionHint = "occasion_hint"
+    }
 }
 
 private struct ChatRequestV2Extended: Encodable {
