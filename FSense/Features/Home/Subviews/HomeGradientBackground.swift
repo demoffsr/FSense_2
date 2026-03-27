@@ -13,7 +13,7 @@ struct HomeGradientBackground: View {
     // Animation parameters
     private let animationDuration: Double = 3.0
     private let offsetAmount: CGFloat = 35
-    
+
     // Opacity range for pulsing effect
     private let opacityMin: Double = 0.7
     private let opacityMax: Double = 1.4
@@ -71,6 +71,7 @@ struct HomeGradientBackground: View {
                             y: geo.size.height - 40 + (animateBlobs ? -offsetAmount * 0.8 : offsetAmount * 0.8)
                         )
                 }
+                .drawingGroup() // Rasterize blurred circles for better performance
 
                 // Layer 2: Noise texture overlay
                 Image("NoiseTexture")
