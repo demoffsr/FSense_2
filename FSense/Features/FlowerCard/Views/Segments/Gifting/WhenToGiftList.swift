@@ -70,7 +70,7 @@ struct WhenToGiftList: View {
         HStack(alignment: .center, spacing: 6) {
             Image(systemName: isPositive ? "checkmark.circle" : "xmark.circle")
                 .font(.system(size: 15))
-                .foregroundColor(isPositive ? Color(red: 0, green: 0.76, blue: 0.14) : .red)
+                .foregroundColor(isPositive ? Color("Success") : .red)
             
             Text(text)
                 .font(.system(size: 15))
@@ -100,5 +100,5 @@ struct WhenToGiftList: View {
         ]
     )
     .padding()
-    .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+    .background(Color("SecondaryBackground"))
 }
