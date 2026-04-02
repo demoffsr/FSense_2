@@ -6,26 +6,35 @@ import SwiftUI
 /// Includes noise texture overlay and subtle floating animation.
 
 struct HomeGradientBackground: View {
-    
+
+    // MARK: - Theme Observer
+    @StateObject private var themeManager = ThemeManager.shared
+
     // Animation state
     @State private var animateBlobs = false
     
     // Animation parameters
     private let animationDuration: Double = 3.0
     private let offsetAmount: CGFloat = 35
-    
+
     // Opacity range for pulsing effect
     private let opacityMin: Double = 0.7
     private let opacityMax: Double = 1.4
+
+    // MARK: - Computed Theme Colors
+
+    private var themeColors: GradientThemeColors {
+        themeManager.selectedTheme.colors
+    }
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 // Layer 1: Color blobs with floating + pulsing animation
                 ZStack {
-                    // Blob A: Top-left blue
+                    // Blob A: Top-left
                     Circle()
-                        .fill(Color(red: 0, green: 0.11, blue: 0.92))
+                        .fill(themeColors.blobA)
                         .frame(width: 350, height: 350)
                         .blur(radius: 80)
                         .opacity(animateBlobs ? opacityMax : opacityMin)
@@ -35,9 +44,9 @@ struct HomeGradientBackground: View {
                             y: 80 + (animateBlobs ? -offsetAmount * 0.7 : offsetAmount * 0.7)
                         )
 
-                    // Blob B: Top-right purple
+                    // Blob B: Top-right
                     Circle()
-                        .fill(Color(red: 0.55, green: 0, blue: 0.92))
+                        .fill(themeColors.blobB)
                         .frame(width: 320, height: 320)
                         .blur(radius: 80)
                         .opacity(animateBlobs ? opacityMin : opacityMax)
@@ -47,9 +56,9 @@ struct HomeGradientBackground: View {
                             y: 100 + (animateBlobs ? offsetAmount * 0.6 : -offsetAmount * 0.6)
                         )
 
-                    // Blob C: Center-left magenta
+                    // Blob C: Center-left
                     Circle()
-                        .fill(Color(red: 0.91, green: 0, blue: 0.89))
+                        .fill(themeColors.blobC)
                         .frame(width: 300, height: 300)
                         .blur(radius: 60)
                         .opacity(animateBlobs ? opacityMax * 0.9 : opacityMin * 1.1)
@@ -59,9 +68,9 @@ struct HomeGradientBackground: View {
                             y: geo.size.height - 80 + (animateBlobs ? offsetAmount * 0.9 : -offsetAmount * 0.9)
                         )
 
-                    // Blob D: Center-right orange
+                    // Blob D: Center-right
                     Circle()
-                        .fill(Color(red: 0.96, green: 0.29, blue: 0.05))
+                        .fill(themeColors.blobD)
                         .frame(width: 280, height: 280)
                         .blur(radius: 60)
                         .opacity(animateBlobs ? opacityMin * 1.2 : opacityMax)
@@ -71,6 +80,8 @@ struct HomeGradientBackground: View {
                             y: geo.size.height - 40 + (animateBlobs ? -offsetAmount * 0.8 : offsetAmount * 0.8)
                         )
                 }
+                .drawingGroup() // Rasterize blurred circles for better performance
+                .animation(.easeInOut(duration: 0.5), value: themeManager.selectedTheme)
 
                 // Layer 2: Noise texture overlay
                 Image("NoiseTexture")

@@ -51,5 +51,5 @@ struct TimingSensitivitySection: View {
         TimingSensitivity(timing: "Public settings", sensitivity: .moderate, note: "Consider if recipient would be comfortable")
     ])
     .padding()
-    .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+    .background(Color("SecondaryBackground"))
 }

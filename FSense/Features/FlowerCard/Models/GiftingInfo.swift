@@ -2,36 +2,36 @@ import Foundation
 
 // MARK: - Gift Suitability
 
-enum GiftSuitability: String, CaseIterable, Identifiable {
+enum GiftSuitability: String, CaseIterable, Identifiable, Codable {
     case excellent = "Excellent"
     case good = "Good"
     case moderate = "Moderate"
     case risky = "Risky"
     case notRecommended = "Not Recommended"
-    
+
     var id: String { rawValue }
 }
 
 // MARK: - Emotional Risk Level
 
-enum EmotionalRiskLevel: String, CaseIterable, Identifiable {
+enum EmotionalRiskLevel: String, CaseIterable, Identifiable, Codable {
     case none = "None"
     case low = "Low"
     case moderate = "Moderate"
     case high = "High"
     case veryHigh = "Very High"
-    
+
     var id: String { rawValue }
 }
 
 // MARK: - Recipient Type
 
-struct RecipientFit: Identifiable, Equatable, Hashable {
+struct RecipientFit: Identifiable, Equatable, Hashable, Codable {
     let id: UUID
     let recipientType: String
     let fitLevel: GiftSuitability
     let note: String?
-    
+
     init(
         id: UUID = UUID(),
         recipientType: String,
@@ -43,7 +43,7 @@ struct RecipientFit: Identifiable, Equatable, Hashable {
         self.fitLevel = fitLevel
         self.note = note
     }
-    
+
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
@@ -72,18 +72,18 @@ struct GiftingOccasion: Identifiable, Equatable, Hashable {
 
 // MARK: - Gifting Info Model
 
-struct GiftingInfo: Identifiable, Equatable, Hashable {
+struct GiftingInfo: Identifiable, Equatable, Hashable, Codable {
     let id: UUID
     let overallSuitability: GiftSuitability
     let suitabilityDescription: String
-    
+
     let emotionalRisk: EmotionalRiskLevel
     let emotionalRiskDescription: String
-    
+
     let whenToGiftItems: [String]
     let whenToAvoidItems: [String]
     let recipientFits: [RecipientFit]
-    
+
     init(
         id: UUID = UUID(),
         overallSuitability: GiftSuitability = .good,
@@ -103,7 +103,7 @@ struct GiftingInfo: Identifiable, Equatable, Hashable {
         self.whenToAvoidItems = whenToAvoidItems
         self.recipientFits = recipientFits
     }
-    
+
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 

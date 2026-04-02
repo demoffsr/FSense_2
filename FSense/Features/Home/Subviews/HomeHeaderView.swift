@@ -1,24 +1,33 @@
 import SwiftUI
 
+// MARK: - Navigation Destinations
+
+/// Type-safe navigation destinations for Home header
+enum HomeNavDestination: Hashable {
+    case profile
+    case search
+    case users
+}
+
 struct HomeHeaderView: View {
     var body: some View {
         GlassEffectContainer(spacing: 12) {
             HStack(alignment: .center, spacing: 12) {
-                
+
                 // 1) Profile button
-                NavigationLink(destination: ProfileView()) {
+                NavigationLink(value: HomeNavDestination.profile) {
                     ProfileButtonContent()
                 }
                 .buttonStyle(.plain)
-                
+
                 // 2) Search bar
-                NavigationLink(destination: SearchView()) {
+                NavigationLink(value: HomeNavDestination.search) {
                     SearchBarContent()
                 }
                 .buttonStyle(.plain)
-                
+
                 // 3) Users button
-                NavigationLink(destination: UsersView()) {
+                NavigationLink(value: HomeNavDestination.users) {
                     UsersButtonContent()
                 }
                 .buttonStyle(.plain)
@@ -86,9 +95,9 @@ struct UsersButtonContent: View {
             // Gradient background для preview
             LinearGradient(
                 colors: [
-                    Color(red: 0, green: 0.11, blue: 0.92),
-                    Color(red: 0.55, green: 0, blue: 0.92),
-                    Color(red: 0.91, green: 0, blue: 0.89)
+                    Color("GradientBlobBlue"),
+                    Color("GradientBlobPurple"),
+                    Color("GradientBlobMagenta")
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
