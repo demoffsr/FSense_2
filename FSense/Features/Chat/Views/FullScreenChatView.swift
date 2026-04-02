@@ -2,11 +2,11 @@ import SwiftUI
 
 /// Full-screen chat - optimized
 struct FullScreenChatView: View {
-    
+
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.themeAccent) private var themeAccent
     @StateObject private var viewModel = ChatViewModel()
     @FocusState private var isInputFocused: Bool
-    @Namespace private var bottomID
     
     @State private var selectedFlower: Flower?
     @State private var navigateToFlowerDetail = false
@@ -23,6 +23,7 @@ struct FullScreenChatView: View {
             .navigationDestination(isPresented: $navigateToFlowerDetail) {
                 if let flower = selectedFlower {
                     FlowerCardView(flower: flower)
+                        .id(flower.id) // Force view recreation on flower change
                 }
             }
         }
@@ -68,45 +69,53 @@ struct FullScreenChatView: View {
     // MARK: - Messages
     
     private var messagesScrollView: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 16) {
-                    ForEach(viewModel.orderedMessages) { message in
-                        MessageBubbleView(
-                            message: message,
-                            isThinkingExpanded: viewModel.isThinkingCardExpanded(message.id),
-                            onThinkingToggle: {
-                                viewModel.send(.toggleThinkingCard(message.id))
-                            },
-                            onExploreFlower: { recommendation in
+        ScrollView(showsIndicators: false) {
+            LazyVStack(spacing: 16) {
+                // Use indices to preserve LazyVStack laziness optimization
+                let messages = viewModel.orderedMessages
+                ForEach(messages.indices, id: \.self) { index in
+                    let message = messages[index]
+                    MessageBubbleView(
+                        message: message,
+                        steps: viewModel.pipelineSteps,
+                        isThinkingExpanded: viewModel.isThinkingCardExpanded(message.id),
+                        onThinkingToggle: {
+                            viewModel.send(.toggleThinkingCard(message.id))
+                        },
+                        onExploreFlower: { recommendation in
+                            print("[FullScreenChatView] onExploreFlower called for: \(recommendation.flowerName)")
+                            // Use real payload data from API
+                            if let payload = viewModel.lastPayload {
+                                print("[FullScreenChatView] Using real payload for: \(payload.header.name)")
+                                selectedFlower = payload.toFlower()
+                                print("[FullScreenChatView] Created flower with giftingInfo: \(selectedFlower?.giftingInfo != nil)")
+                            } else {
+                                print("[FullScreenChatView] WARNING: No payload! Using fallback")
+                                // Fallback if payload not available
                                 selectedFlower = Flower(
                                     name: recommendation.flowerName,
                                     imageAsset: recommendation.imageAsset,
-                                    meanings: ["Love", "Passion", "Romance"],
+                                    imageURL: recommendation.imageUrl.flatMap { URL(string: $0) },
+                                    imageCacheKey: recommendation.imageCacheKey,
+                                    meanings: ["Love", "Appreciation"],
                                     symbolismText: recommendation.explanation,
                                     whyThisFlowerText: recommendation.meaning,
-                                    moodIntensityValue: 0.85
+                                    moodIntensityValue: 0.7
                                 )
-                                navigateToFlowerDetail = true
                             }
-                        )
-                        .id(message.id)
-                    }
-                    
-                    Color.clear.frame(height: 1).id(bottomID)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 100)
-            }
-            .onChange(of: viewModel.messages.count) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(bottomID, anchor: .bottom)
-                    }
+                            navigateToFlowerDetail = true
+                        },
+                        onBudgetSelected: { viewModel.send(.budgetSelected($0)) },
+                        shouldAnimate: viewModel.shouldAnimateMessage(message.id)
+                    )
+                    .id(message.id)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 100)
         }
+        .defaultScrollAnchor(.bottom)
     }
     
     // MARK: - Input
@@ -140,7 +149,7 @@ struct FullScreenChatView: View {
                             .foregroundColor(.white)
                             .frame(width: 32, height: 32)
                             .background(
-                                Circle().fill(Color.purple.opacity(viewModel.canSendMessage ? 1 : 0.4))
+                                Circle().fill(themeAccent.opacity(viewModel.canSendMessage ? 1 : 0.4))
                             )
                     }
                     .disabled(!viewModel.canSendMessage)

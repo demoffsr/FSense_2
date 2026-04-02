@@ -1,0 +1,59 @@
+# FSense Backend - Python Dependencies
+# Version: v0.0.1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CORE DEPENDENCIES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# OpenAI API client
+openai>=1.0.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Data validation and serialization
+pydantic>=2.0.0
+
+# Database ORM
+sqlalchemy>=2.0.0
+
+# PostgreSQL driver (for Supabase)
+psycopg2-binary>=2.9.0
+
+# Supabase client (for Storage)
+supabase>=2.0.0
+
+# HTTP requests (for image download from DALL-E)
+requests>=2.31.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEVELOPMENT DEPENDENCIES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Type checking (optional)
+# mypy>=1.0.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HTTP API
+# ═══════════════════════════════════════════════════════════════════════════════
+
+fastapi>=0.100.0
+uvicorn>=0.23.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WEB SCRAPING (for flower product search)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+httpx>=0.27.0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RETRY/RESILIENCE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+tenacity>=8.0.0

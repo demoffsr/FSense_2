@@ -9,7 +9,7 @@ struct FlowerSegmentedControl: View {
     var body: some View {
         Picker("Segment", selection: $selectedSegment) {
             ForEach(FlowerCardSegment.allCases) { segment in
-                Text(segment.rawValue)
+                Text(segment.displayName)
                     .tag(segment)
             }
         }

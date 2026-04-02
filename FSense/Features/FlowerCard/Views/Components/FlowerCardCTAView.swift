@@ -1,22 +1,33 @@
 import SwiftUI
 
 struct FlowerCardCTAView: View {
-    
+
     let isProcessing: Bool
+    let hasProducts: Bool
     let onTap: () -> Void
-    
+
+    private var buttonText: String {
+        if isProcessing {
+            return "Searching..."
+        } else if hasProducts {
+            return "Show links"
+        } else {
+            return "Find Flowers"
+        }
+    }
+
     var body: some View {
         VStack(alignment: .center, spacing: 0) {
             Button(action: onTap) {
                 HStack(alignment: .center) {
                     Spacer()
-                    
+
                     if isProcessing {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .gray))
                     }
-                    
-                    Text(isProcessing ? "Processing..." : "Ask AI: is this a good choice?")
+
+                    Text(buttonText)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.black)
                     
@@ -46,10 +57,18 @@ struct FlowerCardCTAView: View {
     }
 }
 
-#Preview {
+#Preview("Find Flowers") {
     VStack {
         Spacer()
-        FlowerCardCTAView(isProcessing: false, onTap: {})
+        FlowerCardCTAView(isProcessing: false, hasProducts: false, onTap: {})
+    }
+    .background(Color(.systemGray6))
+}
+
+#Preview("Show Links") {
+    VStack {
+        Spacer()
+        FlowerCardCTAView(isProcessing: false, hasProducts: true, onTap: {})
     }
     .background(Color(.systemGray6))
 }
@@ -57,7 +76,7 @@ struct FlowerCardCTAView: View {
 #Preview("Processing") {
     VStack {
         Spacer()
-        FlowerCardCTAView(isProcessing: true, onTap: {})
+        FlowerCardCTAView(isProcessing: true, hasProducts: false, onTap: {})
     }
     .background(Color(.systemGray6))
 }
